@@ -8,7 +8,7 @@ def test_version_endpoint(client):
     response = client.get("/api/version")
     assert response.status_code == 200
     assert response.json()["name"] == "RedDock"
-    assert response.json()["version"] == "0.1.0"
+    assert response.json()["version"] == "0.2.0"
 
 
 def test_create_list_and_retrieve_dockyard(client):

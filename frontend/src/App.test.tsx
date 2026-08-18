@@ -82,7 +82,7 @@ function stubApi({ scope = [scopeEntry], assets = [], evaluation = allowed }: Op
 
       if (url.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (url.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.1.0", phase: "Phase 1 — Discovery" });
+        return json({ name: "RedDock", version: "0.2.0", phase: "Phase 1 — Discovery" });
       if (url.endsWith("/adapters")) return json(adapters);
       if (url.endsWith("/scope/evaluate")) return json(evaluation);
       if (url.endsWith("/scope")) return json(scope);
