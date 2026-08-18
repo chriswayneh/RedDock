@@ -4,5 +4,12 @@
 frontend/dist
 backend/.pytest_cache
 backend/.ruff_cache
+backend/.mypy_cache
 **/__pycache__
 data
+runtime
+logs
+reports
+*.db
+*.sqlite
+*.sqlite3

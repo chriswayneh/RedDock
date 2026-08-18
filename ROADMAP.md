@@ -1,14 +1,14 @@
 # RedDock roadmap
 
-## Phase 0 — Foundation — complete
+## Completed — Phase 0: Foundation
 
 Containerized application, React UI shell, FastAPI API, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
 
-## Phase 1 — Discovery
+## Next — Phase 1: Discovery
 
 DockGuard scope definitions, asset/service models, first non-invasive discovery adapters, and initial evidence capture. Complete when scoped discovery can produce auditable asset observations.
 
-## Phase 2 — Detection
+## Planned — Phase 2: Detection
 
 Normalized findings, detection adapter contracts, CVE enrichment, and deduplication. Complete when observations can become traceable findings without fabricating data.
 
@@ -35,4 +35,3 @@ Explicitly authorized lab-mode capabilities and a broader plugin ecosystem. Comp
 ## Phase 8 — Production polish
 
 RBAC, optional PostgreSQL, scaling work, release automation, ARM64 support, and production hardening. Complete when operational requirements are documented and validated.
-

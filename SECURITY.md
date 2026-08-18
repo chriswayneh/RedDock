@@ -19,5 +19,12 @@ Phase 0 cannot execute security tools. Future execution will require a requested
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a suspected security flaw. Contact the maintainers privately (add a project security contact before public release) with reproduction steps, affected versions, and impact. Until a contact is published, avoid submitting sensitive details to the public repository.
+Do not open a public issue for a suspected security flaw. When GitHub Private Vulnerability Reporting is enabled, use it for a concise report with reproduction steps, affected versions, and impact. Until then, avoid posting sensitive details publicly and ask the maintainers for a private reporting channel.
 
+## Supported versions
+
+| Version | Supported |
+| --- | --- |
+| 0.1.x | Yes — current Phase 0 foundation |
+
+Security fixes are evaluated for the latest published Phase 0 release. RedDock is a local, single-operator application in this phase; do not expose it to untrusted networks.
