@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reddock-backend"
+version = "0.1.0"
+description = "RedDock Core Phase 0 API"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi==0.115.12",
+  "sqlalchemy==2.0.40",
+  "uvicorn[standard]==0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "pytest==8.3.5",
+  "ruff==0.11.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+

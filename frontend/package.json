@@ -1,0 +1,33 @@
+{
+  "name": "reddock-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "check": "tsc -b --pretty false",
+    "lint": "eslint src --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "4.4.1",
+    "vite": "6.4.3",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.23.0",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.2.0",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.0.10",
+    "@types/react-dom": "19.0.4",
+    "eslint": "9.39.5",
+    "globals": "16.0.0",
+    "jsdom": "26.0.0",
+    "typescript": "5.8.2",
+    "typescript-eslint": "8.28.0",
+    "vitest": "3.2.7"
+  }
+}

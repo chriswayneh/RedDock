@@ -1,0 +1,20 @@
+services:
+  reddock:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      REDDOCK_DATABASE_URL: sqlite:////var/lib/reddock/reddock.db
+    volumes:
+      - reddock-data:/var/lib/reddock
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/health')"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  reddock-data:
+
