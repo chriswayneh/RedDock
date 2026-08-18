@@ -64,6 +64,7 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x | Yes — current published release |
+| 0.2.x | Yes — current published release |
+| 0.1.x | No — superseded by 0.2.0 |
 
 Security fixes are evaluated for the latest published release. RedDock is a local, single-operator application in this phase; do not expose it to untrusted networks.

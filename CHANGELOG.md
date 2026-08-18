@@ -2,7 +2,7 @@
 
 All notable changes to RedDock are documented here.
 
-## [Unreleased] — Phase 1 Discovery
+## [0.2.0] — Phase 1 Discovery
 
 ### Added
 

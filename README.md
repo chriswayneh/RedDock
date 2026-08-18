@@ -13,7 +13,7 @@ Container-native security assessment and validation platform with controlled exe
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/phase-1%20Discovery-C1121F)](ROADMAP.md)
 
-**Latest release:** [v0.1.0](https://github.com/chriswayneh/RedDock/tags) — Phase 0 Foundation · **On `master`:** Phase 1 Discovery, awaiting release
+**Current release:** [v0.2.0](https://github.com/chriswayneh/RedDock/tags) — Phase 1 Discovery · Active development
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -127,9 +127,9 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-**v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
+**v0.2.0 delivers Phase 1 — Discovery:** DockGuard scope enforcement, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation.
 
-**Phase 1 — Discovery is complete on `master` and awaiting release:** DockGuard scope enforcement, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation.
+**v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
 **Next: Phase 2 — Detection.** Normalized findings, detection adapter contracts, CVE enrichment, and deduplication are planned, not implemented. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
