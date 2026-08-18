@@ -41,13 +41,19 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | Persistence | SQLite and evidence stored in a named Docker volume |
 | Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
 
-## Dashboard
+## Screenshots
 
 <div align="center">
 
-<img src="docs/screenshots/dashboard.png" alt="RedDock dashboard with an empty Dockyard state" width="900">
+<img src="docs/screenshots/dashboard.png" alt="RedDock dashboard showing workspace metrics and a discovery run audit trail" width="900">
 
-<sub>RedDock running locally with an empty Dockyard state. This capture predates the Phase 1 discovery workspace.</sub>
+<sub>The dashboard: workspace metrics and the discovery audit trail, including a run DockGuard denied.</sub>
+
+<br><br>
+
+<img src="docs/screenshots/workspace.png" alt="RedDock Dockyard workspace showing the discovery launch flow beside a DockGuard ALLOWED decision" width="900">
+
+<sub>The Dockyard workspace: a target must pass DockGuard before discovery can be launched.</sub>
 
 </div>
 

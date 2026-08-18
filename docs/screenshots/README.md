@@ -1,5 +1,7 @@
 # Screenshots
 
-`dashboard.png` is a real, scrubbed capture of the running dashboard. It still shows the Phase 0 layout and should be recaptured against the Phase 1 dashboard and Dockyard workspace. When replacing it, use an empty Dockyard list or clearly fictional local sample data; do not capture host paths, browser tabs, personal information, or authorized-engagement details.
+`dashboard.png` and `workspace.png` are real, scrubbed captures of RedDock running locally against loopback. When replacing them, use an empty Dockyard list or clearly fictional local sample data; do not capture host paths, browser tabs, personal information, or authorized-engagement details.
+
+The current captures use two fictional workspaces, a loopback scope, and a deliberately out-of-scope target so the DockGuard denial is visible.
 
 The README intentionally does not present a mockup as a product screenshot.
