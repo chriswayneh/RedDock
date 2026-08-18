@@ -6,7 +6,7 @@ Containerized application, React UI shell, FastAPI API, SQLite Dockyards, safety
 
 ## Completed — Phase 1: Discovery
 
-DockGuard scope definitions, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation. Scoped discovery now produces auditable asset observations with hashed evidence. Released as v0.2.0.
+DockGuard scope definitions, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation. Scoped discovery now produces auditable asset observations with hashed evidence. Released as v0.2.0 and finalized in v0.2.1.
 
 ## Next — Phase 2: Detection
 

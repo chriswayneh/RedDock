@@ -30,7 +30,7 @@ from app.discovery.base import (
 from app.targets import Target, TargetKind
 
 HTTP_PROBE = "http_probe"
-USER_AGENT = "RedDock/0.1 (+https://github.com/chriswayneh/RedDock)"
+USER_AGENT = "RedDock/0.2.1 (+https://github.com/chriswayneh/RedDock)"
 
 # Headers worth retaining. Everything else is dropped so that cookies and other
 # session material a target may return are never written to evidence.

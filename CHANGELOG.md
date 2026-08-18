@@ -2,6 +2,20 @@
 
 All notable changes to RedDock are documented here.
 
+## [0.2.1] — Phase 1 Discovery, finalized
+
+Phase 1 remains as released in 0.2.0; this is a corrective patch release.
+
+### Changed
+
+- The application, API, and backend/frontend package metadata now all report the current release version
+- The HTTP probe User-Agent identifies the current RedDock version
+- README and screenshots present Phase 1 as released rather than pending
+
+### Notes
+
+- No change to DockGuard, discovery, inventory, or evidence behaviour
+
 ## [0.2.0] — Phase 1 Discovery
 
 ### Added
