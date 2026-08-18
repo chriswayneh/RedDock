@@ -1,6 +1,7 @@
 .git
 .github
 **/node_modules
+**/.venv
 frontend/dist
 backend/.pytest_cache
 backend/.ruff_cache

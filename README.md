@@ -11,9 +11,9 @@ Container-native security assessment and validation platform with controlled exe
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-0%20Foundation-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/phase-1%20Discovery-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.1.0](https://github.com/chriswayneh/RedDock/tags) — Phase 0 Foundation · Active development
+**Latest release:** [v0.1.0](https://github.com/chriswayneh/RedDock/tags) — Phase 0 Foundation · **On `master`:** Phase 1 Discovery, awaiting release
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -25,32 +25,35 @@ Container-native security assessment and validation platform with controlled exe
 
 RedDock explores how security tooling can become portable, container-native, policy-controlled, reproducible, and evidence-driven instead of a collection of host-specific scripts. It is designed for authorized environments and intentionally grows through small, verified phases.
 
-Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. Evidence proves.** Phase 0 establishes the foundation for that model; it includes no scanning, vulnerability detection, exploitation, credential attacks, payloads, AI integration, or autonomous offensive actions.
+Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. Evidence proves.** Phase 1 implements the middle two: an explicit authorized scope, a policy boundary called DockGuard that every target must pass, and non-invasive discovery adapters that produce hashed evidence. There is still no AI integration, vulnerability detection, exploitation, credential attack, or payload of any kind.
 
 ## What You Get
 
-| Capability | Phase 0 implementation |
+| Capability | Phase 1 implementation |
 | --- | --- |
 | Runtime | One Dockerized application that serves the UI and API on the same origin |
-| API | FastAPI health, version, and Dockyard endpoints with generated OpenAPI docs |
-| UI | React and TypeScript dashboard for the current workspace state |
-| Persistence | SQLite stored in a named Docker volume |
-| Workspaces | Create, list, and inspect Dockyards for authorized engagement organization |
-| Safety | A deliberately limited foundation with no active security execution |
+| Workspaces | Dockyards that own an explicit authorized scope |
+| Scope policy | DockGuard evaluates every target deterministically and fails closed |
+| Discovery | Nmap host and TCP service discovery, plus a single-request HTTP origin probe |
+| Inventory | Normalized assets and services that reconcile across repeat discovery |
+| Observations | Dated, adapter-attributed records of what was seen — never findings |
+| Evidence | Raw output, normalized result, and metadata per run, each SHA-256 hashed |
+| Persistence | SQLite and evidence stored in a named Docker volume |
+| Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
 
 ## Dashboard
 
 <div align="center">
 
-<img src="docs/screenshots/dashboard.png" alt="RedDock Phase 0 dashboard with an empty Dockyard state" width="900">
+<img src="docs/screenshots/dashboard.png" alt="RedDock dashboard with an empty Dockyard state" width="900">
 
-<sub>RedDock Phase 0 running locally with an empty Dockyard state.</sub>
+<sub>RedDock running locally with an empty Dockyard state. This capture predates the Phase 1 discovery workspace.</sub>
 
 </div>
 
 ## Quick Start
 
-Docker Engine or Docker Desktop with Docker Compose is the supported way to run Phase 0.
+Docker Engine or Docker Desktop with Docker Compose is the supported way to run RedDock. Nmap ships inside the image; nothing is installed on your host.
 
 ```bash
 git clone https://github.com/chriswayneh/RedDock.git
@@ -60,14 +63,17 @@ docker compose up --build
 
 Open [http://localhost:8080](http://localhost:8080). The health endpoint is [http://localhost:8080/api/health](http://localhost:8080/api/health), and interactive API documentation is at [http://localhost:8080/docs](http://localhost:8080/docs).
 
-Stop the application with `docker compose down`. The `reddock-data` volume survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
+Stop the application with `docker compose down`. The `reddock-data` volume holds both the database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
 ## How It Works
 
-1. Start RedDock with Docker Compose; the application initializes its local SQLite data store.
-2. Create a Dockyard to represent an authorized engagement workspace.
-3. The service validates and stores the Dockyard, and the dashboard reads the current state.
-4. Future phases will build scoped assessment workflows on this foundation only after their safety boundaries are implemented.
+1. Create a Dockyard to represent an authorized engagement workspace.
+2. Define its authorized scope: included targets, and exclusions that always win.
+3. Enter a target and ask DockGuard for a decision. It answers `ALLOWED` or a specific denial with the reason and the scope entry that decided it.
+4. Run a safe discovery profile. The server re-evaluates DockGuard immediately before the adapter is invoked, so an out-of-scope target is never reached.
+5. Results normalize into assets, services, and observations, and the run's raw output, normalized result, and metadata are retained and hashed.
+
+Run the same discovery again and RedDock updates what it already knows rather than duplicating it, while every observation is kept as history.
 
 ## Architecture
 
@@ -75,30 +81,36 @@ Stop the application with `docker compose down`. The `reddock-data` volume survi
 flowchart TB
   Browser[Browser] --> UI[React UI]
   UI --> API[FastAPI API]
-  API --> Service[Application and domain layer]
-  Service --> Database[(SQLite named Docker volume)]
+  API --> Guard{DockGuard}
+  Guard -->|denied| Audit[Recorded denial]
+  Guard -->|allowed| Adapter[Discovery adapter]
+  Adapter --> Normalize[Assets · Services · Observations]
+  Normalize --> Database[(SQLite named Docker volume)]
+  Adapter --> Evidence[(Hashed evidence)]
 ```
 
-The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. Phase 0 deliberately has no reverse proxy, separate frontend service, queue, or remote dependency. See [ARCHITECTURE.md](ARCHITECTURE.md) for system boundaries and planned seams.
+The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency; discovery runs on a small bounded thread pool inside the application. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, adapter boundary, and trust boundaries.
 
 ## Security by Design
 
 > **AI proposes. Policy authorizes. Tools execute. Evidence proves.**
 
-Phase 0 does not execute security tools. It establishes the technical and product boundaries future execution must respect:
+- **Scope is explicit and server-enforced.** DockGuard evaluates every target twice — when the run is requested and again immediately before the tool is invoked. The UI cannot bypass it.
+- **Denials are specific.** `denied_out_of_scope`, `denied_excluded`, `invalid_target`, and `unresolved` each carry the reason and the matching scope entry.
+- **Fail closed.** Anything DockGuard cannot positively place inside the authorized scope is denied, including a scope it cannot parse.
+- **Names and addresses stay separate.** A hostname is never authorized because it resolves into an authorized network, and there is no wildcard or subdomain expansion.
+- **Tools never receive operator flags.** Argument vectors are generated internally from a fixed table of safe options, executed without a shell, bounded by timeouts, and built only from targets normalized to a character set that cannot form an option.
+- **Dangerously broad scope is rejected.** A scope entry may not cover more than 256 addresses, and a default route is never valid.
+- **Observations are not findings.** RedDock records what an adapter saw and assigns no severity, score, or verdict.
 
-- Explicit scope and deny-by-default policy decisions before any action can run
-- Controlled execution paths, with approval where a risk policy requires it
-- Evidence capture and provenance for conclusions rather than unsupported claims
-- AI as an optional proposer, never an unrestricted operator
-
-Read [SECURITY.md](SECURITY.md) for responsible-use guidance and [ARCHITECTURE.md](ARCHITECTURE.md) for the future DockGuard, adapter, and evidence boundaries.
+Read [SECURITY.md](SECURITY.md) for the authorized-use policy and the full Phase 1 control list.
 
 ## Repository Structure
 
 ```text
-backend/       FastAPI API, domain logic, and SQLite persistence
+backend/       FastAPI API, DockGuard, discovery adapters, evidence, and SQLite persistence
 frontend/      React and TypeScript dashboard
+scripts/       Local end-to-end smoke test
 docs/          Architecture decisions and project documentation
 .github/       Continuous-integration workflow
 ```
@@ -111,13 +123,15 @@ docs/          Architecture decisions and project documentation
 | [Security](SECURITY.md) | Authorized-use policy and product safety model |
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
 | [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
-| [Changelog](CHANGELOG.md) | Phase 0 release history |
+| [Changelog](CHANGELOG.md) | Release history |
 
 ## Project Status
 
-**v0.1.0 delivers Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
+**v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next: Phase 1 — Discovery.** DockGuard scope definitions, foundational asset models, non-invasive discovery adapters, and initial evidence capture are planned, not implemented. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Phase 1 — Discovery is complete on `master` and awaiting release:** DockGuard scope enforcement, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation.
+
+**Next: Phase 2 — Detection.** Normalized findings, detection adapter contracts, CVE enrichment, and deduplication are planned, not implemented. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 
@@ -129,7 +143,7 @@ Contributions are welcome when they preserve the safety model and keep changes s
 
 ## Built With
 
-[Python](https://www.python.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Pydantic](https://docs.pydantic.dev/) · [SQLAlchemy](https://www.sqlalchemy.org/) · [SQLite](https://www.sqlite.org/) · [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [Vite](https://vite.dev/) · [Docker](https://www.docker.com/) · [GitHub Actions](https://github.com/features/actions)
+[Python](https://www.python.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Pydantic](https://docs.pydantic.dev/) · [SQLAlchemy](https://www.sqlalchemy.org/) · [SQLite](https://www.sqlite.org/) · [Nmap](https://nmap.org/) · [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [Vite](https://vite.dev/) · [Docker](https://www.docker.com/) · [GitHub Actions](https://github.com/features/actions)
 
 <br>
 

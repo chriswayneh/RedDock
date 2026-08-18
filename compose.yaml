@@ -3,10 +3,12 @@ services:
     build:
       context: .
     ports:
-      # Phase 0 is intentionally a local, single-operator application.
+      # RedDock is intentionally a local, single-operator application.
       - "127.0.0.1:8080:8080"
     environment:
       REDDOCK_DATABASE_URL: sqlite:////var/lib/reddock/reddock.db
+      # Discovery evidence lives beside the database in the same named volume.
+      REDDOCK_EVIDENCE_DIR: /var/lib/reddock/evidence
     volumes:
       - reddock-data:/var/lib/reddock
     healthcheck:

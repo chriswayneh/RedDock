@@ -4,11 +4,11 @@
 
 Containerized application, React UI shell, FastAPI API, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
 
-## Next — Phase 1: Discovery
+## Completed — Phase 1: Discovery
 
-DockGuard scope definitions, asset/service models, first non-invasive discovery adapters, and initial evidence capture. Complete when scoped discovery can produce auditable asset observations.
+DockGuard scope definitions, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation. Scoped discovery now produces auditable asset observations with hashed evidence; the work is complete on `master` and awaiting a release tag.
 
-## Planned — Phase 2: Detection
+## Next — Phase 2: Detection
 
 Normalized findings, detection adapter contracts, CVE enrichment, and deduplication. Complete when observations can become traceable findings without fabricating data.
 

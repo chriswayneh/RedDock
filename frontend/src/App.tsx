@@ -1,39 +1,84 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
-import type { Dockyard, Health, Version } from "./types";
+import {
+  DataTable,
+  DockyardPicker,
+  EmptyState,
+  Metric,
+  Planned,
+  StatusPill,
+} from "./components";
+import { formatBytes, formatDate } from "./format";
+import { AssetTable, Workspace } from "./Workspace";
+import type {
+  Adapter,
+  Asset,
+  DiscoveryRun,
+  Dockyard,
+  EvidenceRecord,
+  Health,
+  Version,
+} from "./types";
 
-type Page = "Dashboard" | "Dockyards" | "Assets" | "Findings" | "RedPath" | "RedLedger" | "Reports" | "Settings";
-const pages: Page[] = ["Dashboard", "Dockyards", "Assets", "Findings", "RedPath", "RedLedger", "Reports", "Settings"];
+type Page =
+  | "Dashboard"
+  | "Dockyards"
+  | "Assets"
+  | "Findings"
+  | "RedPath"
+  | "RedLedger"
+  | "Reports"
+  | "Settings";
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
-}
+const pages: Page[] = [
+  "Dashboard",
+  "Dockyards",
+  "Assets",
+  "Findings",
+  "RedPath",
+  "RedLedger",
+  "Reports",
+  "Settings",
+];
+
+// Phase 1 activates discovery and evidence; detection and correlation are not built.
+const availablePages = new Set<Page>(["Dashboard", "Dockyards", "Assets", "RedLedger"]);
 
 export function App() {
   const [page, setPage] = useState<Page>("Dashboard");
   const [dockyards, setDockyards] = useState<Dockyard[]>([]);
+  const [adapters, setAdapters] = useState<Adapter[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [version, setVersion] = useState<Version | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Dockyard | null>(null);
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     try {
-      const [nextHealth, nextVersion, nextDockyards] = await Promise.all([api.health(), api.version(), api.dockyards()]);
+      const [nextHealth, nextVersion, nextDockyards, nextAdapters] = await Promise.all([
+        api.health(),
+        api.version(),
+        api.dockyards(),
+        api.adapters(),
+      ]);
       setHealth(nextHealth);
       setVersion(nextVersion);
       setDockyards(nextDockyards);
+      setAdapters(nextAdapters);
       setError(null);
     } catch {
       setError("RedDock Core is unavailable. Check the container status and try again.");
     }
-  }
+  }, []);
 
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   async function createDockyard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const name = String(data.get("name") || "");
     const description = String(data.get("description") || "");
     if (!name.trim()) return;
@@ -41,58 +86,361 @@ export function App() {
       const created = await api.createDockyard(name, description);
       setDockyards((current) => [created, ...current]);
       setSelected(created);
-      event.currentTarget.reset();
+      form.reset();
       setError(null);
     } catch {
       setError("Could not create the Dockyard. Please try again.");
     }
   }
 
+  function open(item: Page) {
+    setPage(item);
+    setSelected(null);
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">R</span><span>RedDock</span></div>
+        <div className="brand">
+          <span className="brand-mark">R</span>
+          <span>RedDock</span>
+        </div>
         <p className="tagline">Discover. Validate. Prove.</p>
         <nav aria-label="Primary navigation">
-          {pages.map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => { setPage(item); setSelected(null); }}>{item}{!['Dashboard', 'Dockyards'].includes(item) && <span className="planned-dot" aria-label="Planned" />}</button>)}
+          {pages.map((item) => (
+            <button
+              key={item}
+              className={page === item ? "nav-item active" : "nav-item"}
+              onClick={() => open(item)}
+            >
+              {item}
+              {!availablePages.has(item) && <span className="planned-dot" aria-label="Planned" />}
+            </button>
+          ))}
         </nav>
-        <div className="sidebar-footer"><span className={health?.status === "healthy" ? "status-dot online" : "status-dot"} /> Core {health?.status === "healthy" ? "online" : "checking"}</div>
+        <div className="sidebar-footer">
+          <span className={health?.status === "healthy" ? "status-dot online" : "status-dot"} />{" "}
+          Core {health?.status === "healthy" ? "online" : "checking"}
+        </div>
       </aside>
       <main>
-        <header><div><p className="eyebrow">REDDOCK CORE {version ? `· v${version.version}` : ""}</p><h1>{page}</h1></div><span className="phase-pill">PHASE 0 · FOUNDATION</span></header>
-        {error && <div className="alert" role="alert">{error}</div>}
-        {page === "Dashboard" && <Dashboard dockyards={dockyards} health={health} openDockyards={() => setPage("Dockyards")} />}
-        {page === "Dockyards" && <Dockyards dockyards={dockyards} selected={selected} setSelected={setSelected} onCreate={createDockyard} />}
-        {!['Dashboard', 'Dockyards'].includes(page) && <Planned page={page} />}
+        <header>
+          <div>
+            <p className="eyebrow">REDDOCK CORE {version ? `· v${version.version}` : ""}</p>
+            <h1>{page}</h1>
+          </div>
+          <span className="phase-pill">
+            {(version?.phase ?? "Phase 1 — Discovery").toUpperCase()}
+          </span>
+        </header>
+        {error && (
+          <div className="alert" role="alert">
+            {error}
+          </div>
+        )}
+        {page === "Dashboard" && (
+          <Dashboard
+            dockyards={dockyards}
+            health={health}
+            openDockyards={() => open("Dockyards")}
+            onError={setError}
+          />
+        )}
+        {page === "Dockyards" &&
+          (selected ? (
+            <Workspace
+              dockyard={selected}
+              adapters={adapters}
+              onBack={() => setSelected(null)}
+              onError={setError}
+            />
+          ) : (
+            <Dockyards dockyards={dockyards} setSelected={setSelected} onCreate={createDockyard} />
+          ))}
+        {page === "Assets" && <AssetsPage dockyards={dockyards} onError={setError} />}
+        {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
+        {!availablePages.has(page) && <Planned page={page} />}
       </main>
     </div>
   );
 }
 
-function Dashboard({ dockyards, health, openDockyards }: { dockyards: Dockyard[]; health: Health | null; openDockyards: () => void }) {
-  return <>
-    <section className="hero"><div><p className="eyebrow">AUTHORIZED ASSESSMENT WORKSPACE</p><h2>A controlled foundation for security validation.</h2><p>RedDock is online, local, and intentionally limited to safe Phase 0 workflows.</p></div><button className="primary-button" onClick={openDockyards}>Manage Dockyards</button></section>
-    <section className="metrics">
-      <Metric label="System status" value={health?.status === "healthy" ? "Healthy" : "Checking"} tone="success" />
-      <Metric label="Dockyards" value={String(dockyards.length)} />
-      <Metric label="Security metrics" value="Unavailable" tone="warning" />
+function Dashboard({
+  dockyards,
+  health,
+  openDockyards,
+  onError,
+}: {
+  dockyards: Dockyard[];
+  health: Health | null;
+  openDockyards: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const [runs, setRuns] = useState<DiscoveryRun[]>([]);
+  const [assetCount, setAssetCount] = useState(0);
+
+  useEffect(() => {
+    if (!dockyards.length) return;
+    Promise.all(dockyards.map((dockyard) => api.discoveries(dockyard.id)))
+      .then((results) => setRuns(results.flat().sort((left, right) => right.id - left.id)))
+      .catch(() => onError("Could not load recent discovery activity."));
+    Promise.all(dockyards.map((dockyard) => api.assets(dockyard.id)))
+      .then((results) => setAssetCount(results.flat().length))
+      .catch(() => onError("Could not load the asset inventory."));
+  }, [dockyards, onError]);
+
+  return (
+    <>
+      <section className="hero">
+        <div>
+          <p className="eyebrow">AUTHORIZED ASSESSMENT WORKSPACE</p>
+          <h2>Scoped discovery, with evidence for every observation.</h2>
+          <p>
+            RedDock is online and limited to non-invasive discovery. Every target passes DockGuard
+            before a tool runs.
+          </p>
+        </div>
+        <button className="primary-button" onClick={openDockyards}>
+          Manage Dockyards
+        </button>
+      </section>
+      <section className="metrics">
+        <Metric
+          label="System status"
+          value={health?.status === "healthy" ? "Healthy" : "Checking"}
+          tone="success"
+        />
+        <Metric label="Dockyards" value={String(dockyards.length)} />
+        <Metric label="Assets discovered" value={String(assetCount)} />
+        <Metric
+          label="Discovery runs"
+          value={String(runs.length)}
+          note="Findings arrive in Phase 2"
+        />
+      </section>
+      <section className="panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">ENGAGEMENT WORKSPACES</p>
+            <h2>Recent Dockyards</h2>
+          </div>
+          <button className="text-button" onClick={openDockyards}>
+            View all
+          </button>
+        </div>
+        {dockyards.length ? (
+          <DockyardList dockyards={dockyards.slice(0, 5)} onSelect={openDockyards} />
+        ) : (
+          <EmptyState message="No Dockyards yet. Create an authorized engagement workspace to begin." />
+        )}
+      </section>
+      {runs.length > 0 && (
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">AUDIT TRAIL</p>
+              <h2>Recent discovery runs</h2>
+            </div>
+          </div>
+          <DataTable headers={["Run", "Target", "Adapter", "Status", "Requested"]}>
+            {runs.slice(0, 8).map((run) => (
+              <tr key={`${run.dockyard_id}-${run.id}`}>
+                <td>#{run.id}</td>
+                <td>
+                  <code>{run.normalized_target ?? run.requested_target}</code>
+                </td>
+                <td>{run.adapter}</td>
+                <td>
+                  <StatusPill status={run.status} />
+                </td>
+                <td>{formatDate(run.created_at)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        </section>
+      )}
+    </>
+  );
+}
+
+function Dockyards({
+  dockyards,
+  setSelected,
+  onCreate,
+}: {
+  dockyards: Dockyard[];
+  setSelected: (dockyard: Dockyard | null) => void;
+  onCreate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+}) {
+  return (
+    <section className="panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">AUTHORIZED WORKSPACES</p>
+          <h2>Dockyards</h2>
+        </div>
+        <span className="count-chip">{dockyards.length}</span>
+      </div>
+      <form className="dockyard-form" onSubmit={(event) => void onCreate(event)}>
+        <label>
+          Name
+          <input name="name" required maxLength={120} placeholder="e.g. Q3 application review" />
+        </label>
+        <label>
+          Description <span>(optional)</span>
+          <textarea
+            name="description"
+            maxLength={2000}
+            placeholder="A short, authorized engagement description."
+            rows={3}
+          />
+        </label>
+        <button className="primary-button" type="submit">
+          Create Dockyard
+        </button>
+      </form>
+      <div className="list-wrap">
+        {dockyards.length ? (
+          <DockyardList dockyards={dockyards} onSelect={setSelected} />
+        ) : (
+          <EmptyState message="This is where your authorized engagement workspaces will appear." />
+        )}
+      </div>
     </section>
-    <section className="panel"><div className="section-heading"><div><p className="eyebrow">ENGAGEMENT WORKSPACES</p><h2>Recent Dockyards</h2></div><button className="text-button" onClick={openDockyards}>View all</button></div>
-      {dockyards.length ? <DockyardList dockyards={dockyards.slice(0, 5)} onSelect={openDockyards} /> : <EmptyState message="No Dockyards yet. Create an authorized engagement workspace to begin." />}
-    </section>
-  </>;
+  );
 }
 
-function Dockyards({ dockyards, selected, setSelected, onCreate }: { dockyards: Dockyard[]; selected: Dockyard | null; setSelected: (dockyard: Dockyard | null) => void; onCreate: (event: FormEvent<HTMLFormElement>) => Promise<void> }) {
-  return <div className="dockyard-layout"><section className="panel"><div className="section-heading"><div><p className="eyebrow">AUTHORIZED WORKSPACES</p><h2>Dockyards</h2></div><span className="count-chip">{dockyards.length}</span></div><form className="dockyard-form" onSubmit={(event) => void onCreate(event)}><label>Name<input name="name" required maxLength={120} placeholder="e.g. Q3 application review" /></label><label>Description <span>(optional)</span><textarea name="description" maxLength={2000} placeholder="A short, authorized engagement description." rows={3} /></label><button className="primary-button" type="submit">Create Dockyard</button></form><div className="list-wrap">{dockyards.length ? <DockyardList dockyards={dockyards} onSelect={(dockyard) => setSelected(dockyard)} /> : <EmptyState message="This is where your authorized engagement workspaces will appear." />}</div></section>
-    <section className="panel detail-panel">{selected ? <><p className="eyebrow">DOCKYARD #{selected.id}</p><h2>{selected.name}</h2><span className="draft-pill">{selected.status}</span><p className="detail-copy">{selected.description || "No description provided."}</p><dl><div><dt>Created</dt><dd>{formatDate(selected.created_at)}</dd></div><div><dt>Scope</dt><dd>Not configured in Phase 0</dd></div><div><dt>Activity</dt><dd>No tools enabled</dd></div></dl></> : <EmptyState message="Select a Dockyard to view its Phase 0 details." />}</section></div>;
+function DockyardList({
+  dockyards,
+  onSelect,
+}: {
+  dockyards: Dockyard[];
+  onSelect: (dockyard: Dockyard) => void;
+}) {
+  return (
+    <div className="dockyard-list">
+      {dockyards.map((dockyard) => (
+        <button className="dockyard-row" key={dockyard.id} onClick={() => onSelect(dockyard)}>
+          <span className="row-icon">D</span>
+          <span className="row-main">
+            <strong>{dockyard.name}</strong>
+            <small>{dockyard.description || "No description"}</small>
+          </span>
+          <span className="row-meta">
+            <span className="draft-pill">{dockyard.status}</span>
+            <small>{formatDate(dockyard.updated_at)}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
-function DockyardList({ dockyards, onSelect }: { dockyards: Dockyard[]; onSelect: (dockyard: Dockyard) => void }) {
-  return <div className="dockyard-list">{dockyards.map((dockyard) => <button className="dockyard-row" key={dockyard.id} onClick={() => onSelect(dockyard)}><span className="row-icon">D</span><span className="row-main"><strong>{dockyard.name}</strong><small>{dockyard.description || "No description"}</small></span><span className="row-meta"><span className="draft-pill">{dockyard.status}</span><small>{formatDate(dockyard.updated_at)}</small></span></button>)}</div>;
+/** A Dockyard-scoped view reached from the top-level navigation. */
+function useDockyardScoped<T>(
+  dockyards: Dockyard[],
+  load: (id: number) => Promise<T[]>,
+  onError: (message: string | null) => void,
+) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [rows, setRows] = useState<T[]>([]);
+
+  useEffect(() => {
+    if (selected === null && dockyards.length) setSelected(dockyards[0].id);
+  }, [dockyards, selected]);
+
+  useEffect(() => {
+    if (selected === null) return;
+    load(selected)
+      .then(setRows)
+      .catch((problem) =>
+        onError(problem instanceof Error ? problem.message : "Could not load this Dockyard."),
+      );
+  }, [selected, load, onError]);
+
+  return { selected, setSelected, rows };
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: "success" | "warning" }) { return <article className="metric"><p>{label}</p><strong className={tone ? `tone-${tone}` : ""}>{value}</strong>{label === "Security metrics" && <small>Available after future detection work</small>}</article>; }
-function EmptyState({ message }: { message: string }) { return <div className="empty-state"><span>◇</span><p>{message}</p></div>; }
-function Planned({ page }: { page: Page }) { return <section className="planned-state"><span>◇</span><p className="eyebrow">PLANNED CAPABILITY</p><h2>{page} is not available yet.</h2><p>RedDock does not simulate security results. This module will arrive in a later roadmap phase with evidence and policy controls.</p></section>; }
+function AssetsPage({
+  dockyards,
+  onError,
+}: {
+  dockyards: Dockyard[];
+  onError: (message: string | null) => void;
+}) {
+  const load = useCallback((id: number) => api.assets(id), []);
+  const { selected, setSelected, rows } = useDockyardScoped<Asset>(dockyards, load, onError);
 
+  if (!dockyards.length) {
+    return (
+      <section className="panel">
+        <EmptyState message="Create a Dockyard and run discovery to populate the asset inventory." />
+      </section>
+    );
+  }
+  return (
+    <>
+      <div className="toolbar">
+        <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
+      </div>
+      <AssetTable assets={rows} />
+    </>
+  );
+}
+
+function LedgerPage({
+  dockyards,
+  onError,
+}: {
+  dockyards: Dockyard[];
+  onError: (message: string | null) => void;
+}) {
+  const load = useCallback((id: number) => api.evidence(id), []);
+  const { selected, setSelected, rows } = useDockyardScoped<EvidenceRecord>(
+    dockyards,
+    load,
+    onError,
+  );
+
+  if (!dockyards.length) {
+    return (
+      <section className="panel">
+        <EmptyState message="RedLedger records evidence produced by discovery runs." />
+      </section>
+    );
+  }
+  return (
+    <>
+      <div className="toolbar">
+        <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
+      </div>
+      <section className="panel">
+        <p className="hint">
+          Phase 1 retains the raw tool output, the normalized result and a metadata record for every
+          discovery run, each hashed with SHA-256. The full RedLedger experience arrives later.
+        </p>
+        {rows.length ? (
+          <DataTable headers={["Run", "Kind", "Artifact", "Size", "SHA-256", "Stored"]}>
+            {rows.map((record) => (
+              <tr key={record.id}>
+                <td>#{record.discovery_run_id}</td>
+                <td>{record.kind}</td>
+                <td>
+                  <code>{record.relative_path}</code>
+                  {record.truncated && <small className="row-error"> truncated</small>}
+                </td>
+                <td>{formatBytes(record.size_bytes)}</td>
+                <td>
+                  <code className="hash">{record.sha256.slice(0, 16)}…</code>
+                </td>
+                <td>{formatDate(record.created_at)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState message="No evidence retained yet for this Dockyard." />
+        )}
+      </section>
+    </>
+  );
+}

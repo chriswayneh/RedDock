@@ -8,10 +8,18 @@ RUN npm run build
 FROM python:3.13-slim@sha256:ffb752e139c0a19692a43af8d8523b274222dd68eebad5d583b45c2201c6e30a AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    REDDOCK_DATABASE_URL=sqlite:////var/lib/reddock/reddock.db
+    REDDOCK_DATABASE_URL=sqlite:////var/lib/reddock/reddock.db \
+    REDDOCK_EVIDENCE_DIR=/var/lib/reddock/evidence
 WORKDIR /app/backend
+# Nmap is RedDock's Phase 1 discovery adapter and ships inside this image so no
+# host installation is required. It is taken from the base image's Debian
+# repository rather than pinned, so security updates reach it; the exact version
+# used by a run is recorded in that run's evidence metadata.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nmap \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system reddock && useradd --system --gid reddock --home-dir /app reddock \
-    && mkdir -p /var/lib/reddock /app/static \
+    && mkdir -p /var/lib/reddock/evidence /app/static \
     && chown -R reddock:reddock /var/lib/reddock /app
 COPY backend/pyproject.toml backend/README.md ./
 COPY backend/app ./app

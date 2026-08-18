@@ -1,2 +1,1 @@
-"""RedDock Core Phase 0 application."""
-
+"""RedDock Core application."""

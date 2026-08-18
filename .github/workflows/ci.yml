@@ -48,6 +48,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker build -t reddock:ci .
       - run: docker run -d --name reddock -p 8080:8080 reddock:ci
-      - run: for attempt in {1..12}; do curl --fail http://localhost:8080/api/health && exit 0; sleep 2; done; exit 1
+      - name: Wait for the health endpoint
+        run: for attempt in {1..12}; do curl --fail http://localhost:8080/api/health && exit 0; sleep 2; done; exit 1
+      - name: Phase 1 discovery smoke test
+        # Scans the container's own loopback interface only; no external host is contacted.
+        run: python3 scripts/smoke_test.py
       - if: always()
         run: docker logs reddock

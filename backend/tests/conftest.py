@@ -1,26 +1,63 @@
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 @pytest.fixture()
-def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """Point RedDock at a throwaway database and evidence root."""
     monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
-    # Modules read settings at import time; isolate after changing the database URL.
+    monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    # Modules read settings at import time; isolate after changing the environment.
     import app.config
 
     app.config.get_settings.cache_clear()
     import app.database
+
+    app.database.configure_engine()
+    yield tmp_path
+    os.environ.pop("REDDOCK_DATABASE_URL", None)
+    os.environ.pop("REDDOCK_EVIDENCE_DIR", None)
+    app.config.get_settings.cache_clear()
+
+
+@pytest.fixture()
+def client(environment: Path) -> Iterator[TestClient]:
     import app.main
 
-    app.database.engine.dispose()
-    app.database.settings = app.config.get_settings()
-    app.database.engine = app.database.create_engine(
-        app.database.settings.database_url, connect_args={"check_same_thread": False}
-    )
-    app.database.SessionLocal.configure(bind=app.database.engine)
     with TestClient(app.main.app) as test_client:
         yield test_client
-    os.environ.pop("REDDOCK_DATABASE_URL", None)
+
+
+@pytest.fixture()
+def session(environment: Path) -> Iterator[Session]:
+    import app.database
+
+    app.database.initialize_database()
+    with app.database.SessionLocal() as db_session:
+        yield db_session
+
+
+@pytest.fixture()
+def dockyard_id(client: TestClient) -> int:
+    response = client.post("/api/dockyards", json={"name": "Authorized lab"})
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+@pytest.fixture()
+def add_scope(client: TestClient):
+    """Add one authorized scope entry through the API."""
+
+    def _add(dockyard: int, target: str, rule: str = "include") -> dict:
+        response = client.post(
+            f"/api/dockyards/{dockyard}/scope", json={"rule": rule, "target": target}
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    return _add

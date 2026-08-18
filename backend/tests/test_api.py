@@ -46,3 +46,26 @@ def test_missing_dockyard_returns_404(client):
 def test_dockyard_is_persisted_for_a_new_client(client):
     client.post("/api/dockyards", json={"name": "Persistent dockyard"})
     assert client.get("/api/dockyards").json()[0]["name"] == "Persistent dockyard"
+
+
+def test_version_reports_the_current_phase(client):
+    assert client.get("/api/version").json()["phase"].startswith("Phase 1")
+
+
+def test_adapters_are_advertised_with_their_safe_profiles(client):
+    adapters = client.get("/api/adapters").json()
+    assert response_names(adapters) == {"nmap", "http"}
+
+    nmap = next(item for item in adapters if item["name"] == "nmap")
+    assert {profile["name"] for profile in nmap["profiles"]} == {
+        "host_discovery",
+        "service_discovery",
+    }
+    # No adapter advertises an aggressive or exploitation profile.
+    for adapter in adapters:
+        for profile in adapter["profiles"]:
+            assert profile["name"] not in {"aggressive", "stealth", "attack", "exploit"}
+
+
+def response_names(adapters) -> set[str]:
+    return {adapter["name"] for adapter in adapters}

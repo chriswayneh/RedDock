@@ -1,4 +1,4 @@
-.PHONY: up down build logs test test-backend test-frontend lint reset-data
+.PHONY: up down build logs test test-backend test-frontend lint smoke reset-data
 
 up:
 	docker compose up --build
@@ -20,6 +20,10 @@ test-backend:
 
 test-frontend:
 	docker run --rm -v "$(CURDIR)/frontend:/workspace" -w /workspace node:22-alpine sh -c "npm ci && npm run check && npm run test && npm run build"
+
+smoke:
+	docker compose up -d --build
+	python scripts/smoke_test.py
 
 lint:
 	docker run --rm -v "$(CURDIR)/backend:/workspace" -w /workspace python:3.13-slim sh -c "pip install ruff && python -m ruff check app tests"
