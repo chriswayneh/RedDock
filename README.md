@@ -10,7 +10,9 @@ RedDock is a container-native security assessment and validation platform design
 
 > Phase 0 is a working foundation. It intentionally includes no scanning, vulnerability detection, exploitation, credential attacks, payloads, AI integration, or autonomous offensive actions.
 
-> **Screenshot:** add a real, scrubbed dashboard capture at `docs/screenshots/dashboard.png` before a public announcement. See [screenshot guidance](docs/screenshots/README.md).
+![RedDock Phase 0 dashboard](docs/screenshots/dashboard.png)
+
+*RedDock Phase 0 dashboard running locally with an empty Dockyard state. See [screenshot guidance](docs/screenshots/README.md).*
 
 ## Why I built RedDock
 
