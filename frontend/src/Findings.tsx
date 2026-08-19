@@ -40,6 +40,12 @@ export function FindingsPanel({
     void load();
   }, [load, refreshKey]);
 
+  // A finding belongs to one Dockyard. Changing workspace must not leave the
+  // previous one's finding open beside another workspace's list.
+  useEffect(() => {
+    setSelected(null);
+  }, [dockyardId]);
+
   async function open(finding: Finding) {
     try {
       setSelected(await api.finding(dockyardId, finding.id));
