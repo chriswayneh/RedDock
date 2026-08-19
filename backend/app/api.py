@@ -3,25 +3,36 @@ from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import get_session
+from app.detection import registry as detection_registry
+from app.detection import runner as detection_runner
+from app.detection.base import FindingStatus, Severity
 from app.discovery import registry
 from app.discovery import runner as discovery_runner
 from app.dockguard import Evaluation, ScopeRejected, evaluate, system_resolver
+from app.findings import get_finding, list_evidence, list_findings, set_status
 from app.inventory import get_asset, list_assets, list_observations, list_services
-from app.models import Dockyard, EvidenceRecord
+from app.models import Asset, Dockyard, EvidenceRecord, Finding, FindingEvidence, Service
 from app.schemas import (
     AdapterRead,
     AssetDetailRead,
     AssetRead,
+    DetectionCreate,
+    DetectionRunRead,
+    DetectorRead,
     DiscoveryCreate,
     DiscoveryRunRead,
     DockyardCreate,
     DockyardRead,
     EvidenceRecordRead,
+    FindingDetailRead,
+    FindingEvidenceRead,
+    FindingRead,
+    FindingStatusUpdate,
     HealthRead,
     ObservationRead,
     ProfileRead,
@@ -79,6 +90,21 @@ def health() -> HealthRead:
 def version() -> VersionRead:
     settings = get_settings()
     return VersionRead(name=settings.app_name, version=settings.version, phase=settings.phase)
+
+
+@router.get("/detectors", response_model=list[DetectorRead])
+def read_detectors() -> list[DetectorRead]:
+    """The fixed set of detectors. Nothing is loaded at runtime."""
+    return [
+        DetectorRead(
+            id=detector.id,
+            version=detector.version,
+            title=detector.title,
+            description=detector.description,
+            consumes=list(detector.consumes),
+        )
+        for detector in detection_registry.available_detectors()
+    ]
 
 
 @router.get("/adapters", response_model=list[AdapterRead])
@@ -277,3 +303,180 @@ def read_evidence(
         .limit(limit)
     )
     return list(session.scalars(statement))
+
+
+@router.get("/dockyards/{dockyard_id}/detections", response_model=list[DetectionRunRead])
+def read_detections(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[DetectionRunRead]:
+    require_dockyard(dockyard_id, session)
+    return detection_runner.list_runs(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/detections",
+    response_model=DetectionRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_detection(
+    dockyard_id: int,
+    payload: DetectionCreate,
+    session: Session = Depends(get_session),
+) -> DetectionRunRead:
+    """Run every registered detector over what this Dockyard already recorded.
+
+    Detection reads stored state and contacts nothing, so it runs to completion
+    within the request and the response describes a finished run. The request
+    body is empty by design: there is no target and no operator-supplied option
+    for a detector to act on.
+    """
+    require_dockyard(dockyard_id, session)
+    try:
+        run = detection_runner.start_detection(session, dockyard_id)
+    except detection_runner.RunRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    return DetectionRunRead.model_validate(run)
+
+
+@router.get("/dockyards/{dockyard_id}/detections/{run_id}", response_model=DetectionRunRead)
+def read_detection(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+) -> DetectionRunRead:
+    require_dockyard(dockyard_id, session)
+    run = detection_runner.get_run(session, dockyard_id, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Detection run not found")
+    return run
+
+
+@router.get("/dockyards/{dockyard_id}/findings", response_model=list[FindingRead])
+def read_findings(
+    dockyard_id: int,
+    finding_status: FindingStatus | None = Query(default=None, alias="status"),
+    severity: Severity | None = Query(default=None),
+    detector: str | None = Query(default=None, max_length=48),
+    asset_id: int | None = Query(default=None, ge=1),
+    service_id: int | None = Query(default=None, ge=1),
+    limit: int = ListLimit,
+    session: Session = Depends(get_session),
+) -> list[FindingRead]:
+    """Findings for one Dockyard.
+
+    Every filter is validated before it reaches a query, and the Dockyard is
+    always part of that query: a finding is never reachable from another
+    workspace.
+    """
+    require_dockyard(dockyard_id, session)
+    rows = list_findings(
+        session,
+        dockyard_id,
+        limit,
+        status=str(finding_status) if finding_status else None,
+        severity=str(severity) if severity else None,
+        detector=detector,
+        asset_id=asset_id,
+        service_id=service_id,
+    )
+    labels = _subject_labels(session, rows)
+    counts = _evidence_counts(session, rows)
+    return [_finding_body(FindingRead, finding, labels, counts) for finding in rows]
+
+
+@router.get("/dockyards/{dockyard_id}/findings/{finding_id}", response_model=FindingDetailRead)
+def read_finding(
+    dockyard_id: int, finding_id: int, session: Session = Depends(get_session)
+) -> FindingDetailRead:
+    require_dockyard(dockyard_id, session)
+    finding = get_finding(session, dockyard_id, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    evidence = list_evidence(session, finding.id)
+    labels = _subject_labels(session, [finding])
+    detail = _finding_body(FindingDetailRead, finding, labels, {finding.id: len(evidence)})
+    return detail.model_copy(update={"evidence": _evidence_bodies(session, evidence)})
+
+
+@router.patch("/dockyards/{dockyard_id}/findings/{finding_id}", response_model=FindingDetailRead)
+def update_finding(
+    dockyard_id: int,
+    finding_id: int,
+    payload: FindingStatusUpdate,
+    session: Session = Depends(get_session),
+) -> FindingDetailRead:
+    """Record an operator decision about a finding.
+
+    A finding is never deleted here. Suppressing or accepting one keeps it, its
+    history and its evidence; it only changes what RedDock treats as open.
+    """
+    require_dockyard(dockyard_id, session)
+    finding = get_finding(session, dockyard_id, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    set_status(session, finding, payload.status, payload.note)
+    return read_finding(dockyard_id, finding_id, session)
+
+
+def _subject_labels(session: Session, rows: list[Finding]) -> dict[str, dict[int, str]]:
+    """Readable asset and service labels for the findings being returned."""
+    asset_ids = {finding.asset_id for finding in rows if finding.asset_id}
+    service_ids = {finding.service_id for finding in rows if finding.service_id}
+    assets: dict[int, str] = {}
+    services: dict[int, str] = {}
+    if asset_ids:
+        for asset in session.scalars(select(Asset).where(Asset.id.in_(asset_ids))):
+            assets[asset.id] = asset.display_name
+    if service_ids:
+        for service in session.scalars(select(Service).where(Service.id.in_(service_ids))):
+            services[service.id] = f"{service.transport.upper()}/{service.port}"
+    return {"assets": assets, "services": services}
+
+
+def _evidence_counts(session: Session, rows: list[Finding]) -> dict[int, int]:
+    identifiers = [finding.id for finding in rows]
+    if not identifiers:
+        return {}
+    statement = (
+        select(FindingEvidence.finding_id, func.count())
+        .where(FindingEvidence.finding_id.in_(identifiers))
+        .group_by(FindingEvidence.finding_id)
+    )
+    return {finding_id: count for finding_id, count in session.execute(statement)}
+
+
+def _finding_body(model, finding: Finding, labels: dict, counts: dict[int, int]):
+    body = model.model_validate(finding)
+    return body.model_copy(
+        update={
+            "asset_label": labels["assets"].get(finding.asset_id),
+            "service_endpoint": labels["services"].get(finding.service_id),
+            "evidence_count": counts.get(finding.id, 0),
+        }
+    )
+
+
+def _evidence_bodies(
+    session: Session, evidence: list[FindingEvidence]
+) -> list[FindingEvidenceRead]:
+    """Evidence rows with the RedLedger artifact and hash behind each one."""
+    record_ids = {row.evidence_record_id for row in evidence if row.evidence_record_id}
+    records: dict[int, EvidenceRecord] = {}
+    if record_ids:
+        records = {
+            record.id: record
+            for record in session.scalars(
+                select(EvidenceRecord).where(EvidenceRecord.id.in_(record_ids))
+            )
+        }
+    bodies = []
+    for row in evidence:
+        record = records.get(row.evidence_record_id) if row.evidence_record_id else None
+        body = FindingEvidenceRead.model_validate(row)
+        bodies.append(
+            body.model_copy(
+                update={
+                    "evidence_path": record.relative_path if record else None,
+                    "sha256": record.sha256 if record else None,
+                }
+            )
+        )
+    return bodies
