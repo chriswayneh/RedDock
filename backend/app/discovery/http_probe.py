@@ -14,6 +14,7 @@ import ssl
 from dataclasses import dataclass
 from hashlib import sha256
 
+from app.config import get_settings
 from app.discovery.base import (
     AdapterError,
     AdapterRequest,
@@ -30,10 +31,13 @@ from app.discovery.base import (
 from app.targets import Target, TargetKind
 
 HTTP_PROBE = "http_probe"
-USER_AGENT = "RedDock/0.2.1 (+https://github.com/chriswayneh/RedDock)"
+PROJECT_URL = "https://github.com/chriswayneh/RedDock"
 
 # Headers worth retaining. Everything else is dropped so that cookies and other
-# session material a target may return are never written to evidence.
+# session material a target may return are never written to evidence. The
+# security-relevant entries exist because a Phase 2 detector has to be able to
+# tell "the endpoint did not send this header" from "RedDock never looked",
+# which is why the examined set is recorded alongside the response.
 _RECORDED_HEADERS = (
     "server",
     "content-type",
@@ -41,9 +45,19 @@ _RECORDED_HEADERS = (
     "location",
     "x-powered-by",
     "strict-transport-security",
+    "x-content-type-options",
+    "content-security-policy",
+    "x-frame-options",
 )
 _CONNECT_TIMEOUT = 10
 _MAX_HEADER_LENGTH = 255
+_MAX_VERIFY_MESSAGE = 200
+
+
+def user_agent() -> str:
+    """Identify RedDock honestly, with the version the application reports."""
+    settings = get_settings()
+    return f"{settings.app_name}/{settings.version} (+{PROJECT_URL})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +157,15 @@ class HttpProbeAdapter(DiscoveryAdapter):
                 confidence=Confidence.OBSERVED,
                 asset_identity=target.value,
                 service_port=("tcp", port),
-                detail={"status": outcome.status, "address": address},
+                detail={
+                    "status": outcome.status,
+                    "address": address,
+                    "scheme": target.scheme,
+                    # What RedDock looked for, so a later reader can separate an
+                    # absent header from one that was never examined.
+                    "headers_examined": list(_RECORDED_HEADERS),
+                    "headers_present": sorted(outcome.headers or {}),
+                },
             )
         ]
         for header, value in (outcome.headers or {}).items():
@@ -207,7 +229,7 @@ def _request(
         "/",
         headers={
             "Host": authority,
-            "User-Agent": USER_AGENT,
+            "User-Agent": user_agent(),
             "Accept": "*/*",
             "Connection": "close",
         },
@@ -231,12 +253,16 @@ def _start_tls(
 
     Verification is attempted first. When it fails the handshake is retried
     without verification so a self-signed lab endpoint can still be observed,
-    and the recorded evidence states that the certificate was not verified.
+    and the recorded evidence states that the certificate was not verified and
+    what the verification actually objected to. The reason matters: an
+    unverified handshake reveals nothing about the certificate's own fields,
+    because an unvalidated peer certificate is returned empty.
     """
     try:
         secure = ssl.create_default_context().wrap_socket(raw_socket, server_hostname=hostname)
         return secure, _tls_details(secure, verified=True)
-    except ssl.SSLError:
+    except ssl.SSLError as error:
+        failure = _verification_failure(error)
         raw_socket.close()
 
     context = ssl.create_default_context()
@@ -248,7 +274,7 @@ def _start_tls(
     except OSError:
         retry.close()
         raise
-    return secure, _tls_details(secure, verified=False)
+    return secure, _tls_details(secure, verified=False) | failure
 
 
 def _tls_details(secure: ssl.SSLSocket, *, verified: bool) -> dict[str, object]:
@@ -265,6 +291,20 @@ def _tls_details(secure: ssl.SSLSocket, *, verified: bool) -> dict[str, object]:
         details["issuer"] = _distinguished_name(certificate.get("issuer", ()))
         details["not_after"] = certificate.get("notAfter")
     return details
+
+
+def _verification_failure(error: ssl.SSLError) -> dict[str, object]:
+    """Record why verification failed, using OpenSSL's own wording.
+
+    The message and code come from OpenSSL's fixed table rather than from the
+    target, so this is bounded text rather than something the endpoint chose.
+    """
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return {
+            "verify_code": error.verify_code,
+            "verify_message": str(error.verify_message)[:_MAX_VERIFY_MESSAGE],
+        }
+    return {"verify_code": None, "verify_message": str(error.reason or error)[:_MAX_VERIFY_MESSAGE]}
 
 
 def _distinguished_name(parts: object) -> str:
