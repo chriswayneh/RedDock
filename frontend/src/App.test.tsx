@@ -26,6 +26,16 @@ const adapters = [
   },
 ];
 
+const detectors = [
+  {
+    id: "http.security_headers",
+    version: "1.0.0",
+    title: "HTTP security headers",
+    description: "Reports response-level protections the recorded response did not carry.",
+    consumes: ["http_response", "http_header"],
+  },
+];
+
 const scopeEntry = {
   id: 7,
   rule: "include",
@@ -45,6 +55,94 @@ const asset = {
   first_seen: "2026-08-18T12:00:00Z",
   last_seen: "2026-08-18T12:30:00Z",
   service_count: 1,
+};
+
+const observation = {
+  id: 11,
+  discovery_run_id: 2,
+  asset_id: 3,
+  service_id: 4,
+  adapter: "http",
+  observation_type: "http_response",
+  summary: "https://127.0.0.1:8443 returned HTTP 200",
+  detail: { status: 200 },
+  confidence: "observed",
+  raw_reference: "1/2",
+  observed_at: "2026-08-18T12:30:00Z",
+};
+
+const finding = {
+  id: 9,
+  fingerprint: "b8b1e0a2f4c6d8e0b8b1e0a2f4c6d8e0b8b1e0a2f4c6d8e0b8b1e0a2f4c6d8e0",
+  detector: "http.security_headers",
+  detector_version: "1.0.0",
+  rule_id: "hsts-not-set",
+  title: "https://127.0.0.1:8443 does not set Strict-Transport-Security",
+  category: "hardening",
+  severity: "low",
+  confidence: "high",
+  status: "open",
+  status_note: null,
+  asset_id: 3,
+  service_id: 4,
+  first_seen: "2026-08-18T12:30:00Z",
+  last_seen: "2026-08-18T12:30:00Z",
+  resolved_at: null,
+  first_detection_run_id: 5,
+  last_detection_run_id: 5,
+  cve_references: [],
+  asset_label: "https://127.0.0.1:8443",
+  service_endpoint: "TCP/8443",
+  evidence_count: 1,
+};
+
+const findingDetail = {
+  ...finding,
+  description: "The HTTPS response carried no Strict-Transport-Security header.",
+  remediation: "Send Strict-Transport-Security with a max-age the operator can commit to.",
+  detail: { status: 200 },
+  evidence: [
+    {
+      id: 21,
+      observation_id: 11,
+      discovery_run_id: 2,
+      detection_run_id: 5,
+      evidence_record_id: 31,
+      summary: "https://127.0.0.1:8443 returned HTTP 200",
+      created_at: "2026-08-18T12:30:00Z",
+      evidence_path: "normalized/result.json",
+      sha256: "a".repeat(64),
+    },
+  ],
+};
+
+const detectionRun = {
+  id: 5,
+  dockyard_id: 1,
+  status: "completed",
+  detectors: [
+    {
+      id: "http.security_headers",
+      version: "1.0.0",
+      status: "completed",
+      findings: 1,
+      error: null,
+    },
+  ],
+  enrichment: { id: "none", version: null, available: false, warning: null },
+  asset_count: 1,
+  service_count: 1,
+  observation_count: 3,
+  finding_count: 1,
+  new_finding_count: 1,
+  resolved_finding_count: 0,
+  error: null,
+  evidence_path: "1/detection/5",
+  metadata_sha256: "b".repeat(64),
+  result_sha256: "c".repeat(64),
+  created_at: "2026-08-18T12:31:00Z",
+  started_at: "2026-08-18T12:31:00Z",
+  completed_at: "2026-08-18T12:31:01Z",
 };
 
 const allowed = {
@@ -69,40 +167,87 @@ const denied = {
   allowed: false,
 };
 
-type Options = { scope?: unknown[]; assets?: unknown[]; evaluation?: unknown };
+type Options = {
+  scope?: unknown[];
+  assets?: unknown[];
+  evaluation?: unknown;
+  findings?: unknown[];
+  observations?: unknown[];
+};
 
-function stubApi({ scope = [scopeEntry], assets = [], evaluation = allowed }: Options = {}) {
-  const started = vi.fn();
+type Calls = {
+  discovery: ReturnType<typeof vi.fn>;
+  detection: ReturnType<typeof vi.fn>;
+  decision: ReturnType<typeof vi.fn>;
+};
+
+function stubApi({
+  scope = [scopeEntry],
+  assets = [],
+  evaluation = allowed,
+  findings = [],
+  observations = [],
+}: Options = {}): Calls {
+  const calls: Calls = { discovery: vi.fn(), detection: vi.fn(), decision: vi.fn() };
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
+      const url = new URL(String(input), "http://localhost");
+      const path = url.pathname;
       const json = (body: unknown, status = 200) =>
         Promise.resolve(new Response(JSON.stringify(body), { status }));
 
-      if (url.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
-      if (url.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.2.1", phase: "Phase 1 — Discovery" });
-      if (url.endsWith("/adapters")) return json(adapters);
-      if (url.endsWith("/scope/evaluate")) return json(evaluation);
-      if (url.endsWith("/scope")) return json(scope);
-      if (url.endsWith("/assets")) return json(assets);
-      if (url.endsWith("/services")) return json([]);
-      if (url.endsWith("/observations")) return json([]);
-      if (url.endsWith("/evidence")) return json([]);
-      if (url.endsWith("/discoveries")) {
+      if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
+      if (path.endsWith("/version"))
+        return json({ name: "RedDock", version: "0.3.0", phase: "Phase 2 — Detection" });
+      if (path.endsWith("/adapters")) return json(adapters);
+      if (path.endsWith("/detectors")) return json(detectors);
+      if (path.endsWith("/scope/evaluate")) return json(evaluation);
+      if (path.endsWith("/scope")) return json(scope);
+      if (path.endsWith("/assets")) return json(assets);
+      if (path.endsWith("/services")) return json([]);
+      if (path.endsWith("/observations")) return json(observations);
+      if (path.endsWith("/evidence")) return json([]);
+      if (/\/findings\/\d+$/.test(path)) {
+        if (init?.method === "PATCH") {
+          const body = JSON.parse(String(init.body));
+          calls.decision(body);
+          return json({ ...findingDetail, status: body.status, status_note: body.note });
+        }
+        return json(findingDetail);
+      }
+      if (path.endsWith("/findings")) {
+        const severity = url.searchParams.get("severity");
+        const status = url.searchParams.get("status");
+        return json(
+          findings.filter((row) => {
+            const item = row as { severity: string; status: string };
+            return (
+              (!severity || item.severity === severity) && (!status || item.status === status)
+            );
+          }),
+        );
+      }
+      if (path.endsWith("/detections")) {
         if (init?.method === "POST") {
-          started(JSON.parse(String(init.body)));
+          calls.detection(JSON.parse(String(init.body)));
+          return json(detectionRun, 201);
+        }
+        return json(findings.length ? [detectionRun] : []);
+      }
+      if (path.endsWith("/discoveries")) {
+        if (init?.method === "POST") {
+          calls.discovery(JSON.parse(String(init.body)));
           return json({ id: 5, dockyard_id: 1, status: "pending" }, 202);
         }
         return json([]);
       }
-      if (url.endsWith("/dockyards") && init?.method === "POST")
+      if (path.endsWith("/dockyards") && init?.method === "POST")
         return json({ ...dockyard, id: 2, name: JSON.parse(String(init.body)).name }, 201);
       return json([dockyard]);
     }),
   );
-  return started;
+  return calls;
 }
 
 async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
@@ -123,7 +268,7 @@ describe("RedDock application", () => {
   it("shows healthy status and the current phase", async () => {
     render(<App />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("PHASE 1 — DISCOVERY")).toBeInTheDocument();
+    expect(screen.getByText("PHASE 2 — DETECTION")).toBeInTheDocument();
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
@@ -152,7 +297,7 @@ describe("RedDock application", () => {
   });
 
   it("keeps discovery unavailable until DockGuard allows the target", async () => {
-    const started = stubApi({ evaluation: denied });
+    const calls = stubApi({ evaluation: denied });
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("Lab review");
@@ -167,11 +312,11 @@ describe("RedDock application", () => {
 
     expect(await screen.findByText("DENIED")).toBeInTheDocument();
     expect(run).toBeDisabled();
-    expect(started).not.toHaveBeenCalled();
+    expect(calls.discovery).not.toHaveBeenCalled();
   });
 
   it("launches discovery once the target is allowed", async () => {
-    const started = stubApi();
+    const calls = stubApi();
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("Lab review");
@@ -187,7 +332,7 @@ describe("RedDock application", () => {
     await user.click(run);
 
     await waitFor(() =>
-      expect(started).toHaveBeenCalledWith({
+      expect(calls.discovery).toHaveBeenCalledWith({
         target: "127.0.0.1",
         adapter: "nmap",
         profile: "host_discovery",
@@ -208,11 +353,154 @@ describe("RedDock application", () => {
     expect(within(table).queryByText(/critical|high|severity/i)).toBeNull();
   });
 
-  it("keeps Phase 2 capabilities visibly planned", async () => {
+  it("keeps unbuilt capabilities visibly planned", async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("Lab review");
-    await user.click(screen.getAllByRole("button", { name: /Findings/ })[0]);
-    expect(await screen.findByText("Findings is not available yet.")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: /RedPath/ })[0]);
+    expect(await screen.findByText("RedPath is not available yet.")).toBeInTheDocument();
+  });
+});
+
+describe("Phase 2 detection", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("counts open findings on the dashboard", async () => {
+    stubApi({ findings: [finding] });
+    render(<App />);
+
+    expect(await screen.findByText("Open findings")).toBeInTheDocument();
+    expect(
+      screen.getByText("Produced by a detector, from recorded observations"),
+    ).toBeInTheDocument();
+  });
+
+  it("lists findings with severity, confidence and status stated separately", async () => {
+    stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+
+    const table = await screen.findByRole("table");
+    const headers = within(table)
+      .getAllByRole("columnheader")
+      .map((cell) => cell.textContent);
+    expect(headers).toEqual([
+      "Finding",
+      "Severity",
+      "Confidence",
+      "Status",
+      "Affected",
+      "Detector",
+      "Seen",
+    ]);
+    expect(within(table).getByText("low")).toBeInTheDocument();
+    expect(within(table).getByText("High")).toBeInTheDocument();
+    expect(within(table).getByText("Open")).toBeInTheDocument();
+    expect(within(table).getByText(/last seen/)).toBeInTheDocument();
+    expect(within(table).getByText("https://127.0.0.1:8443")).toBeInTheDocument();
+  });
+
+  it("presents no risk score or aggregate rating", async () => {
+    stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+    await screen.findByRole("table");
+
+    expect(screen.queryByText(/risk score|cvss|overall rating|\d+\s*\/\s*10/i)).toBeNull();
+  });
+
+  it("shows the detector, the observation and the hash behind a finding", async () => {
+    stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+    await user.click(await screen.findByRole("button", { name: finding.title }));
+
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
+    expect(screen.getByText("hsts-not-set")).toBeInTheDocument();
+    expect(screen.getAllByText("http.security_headers").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Observation #11/)).toBeInTheDocument();
+    expect(screen.getByText(/discovery run #2/)).toBeInTheDocument();
+    expect(screen.getByText(/normalized\/result\.json · aaaaaaaaaaaaaaaa…/)).toBeInTheDocument();
+  });
+
+  it("records an operator decision without deleting the finding", async () => {
+    const calls = stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+    await user.click(await screen.findByRole("button", { name: finding.title }));
+    await user.click(await screen.findByRole("button", { name: "Suppressed" }));
+
+    await waitFor(() =>
+      expect(calls.decision).toHaveBeenCalledWith({ status: "suppressed", note: null }),
+    );
+    expect(screen.queryByRole("button", { name: "Resolved" })).toBeNull();
+  });
+
+  it("filters findings by severity through the API", async () => {
+    stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+    await screen.findByRole("table");
+
+    await user.selectOptions(screen.getByLabelText("Severity"), "critical");
+    await waitFor(() =>
+      expect(
+        screen.getByText(/No findings match this view/),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("runs detection from the Dockyard workspace without sending a target", async () => {
+    const calls = stubApi({ findings: [finding], observations: [observation] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await openWorkspace(user);
+    await user.click(await screen.findByRole("button", { name: "Detection" }));
+
+    expect(await screen.findByText("HTTP security headers")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Run detection" }));
+
+    await waitFor(() => expect(calls.detection).toHaveBeenCalledWith({}));
+  });
+
+  it("shows detection runs with what they read and what they produced", async () => {
+    stubApi({ findings: [finding], observations: [observation] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await openWorkspace(user);
+    await user.click(await screen.findByRole("button", { name: "Detection" }));
+
+    expect(await screen.findByText("Detection runs")).toBeInTheDocument();
+    expect(screen.getByText(/1 assets · 3 observations/)).toBeInTheDocument();
+    expect(screen.getByText(/1 produced · 1 new · 0 resolved/)).toBeInTheDocument();
+    expect(screen.getByText(/cccccccccccccccc…/)).toBeInTheDocument();
+  });
+
+  it("keeps observations described as records rather than findings", async () => {
+    stubApi({ observations: [observation] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await openWorkspace(user);
+    await user.click(await screen.findByRole("button", { name: "Observations" }));
+
+    expect(
+      await screen.findByText(/It carries no severity and no verdict/),
+    ).toBeInTheDocument();
   });
 });

@@ -45,9 +45,11 @@ export function Metric({
   );
 }
 
+const OK_STATUSES = new Set(["completed", "resolved"]);
+const STOP_STATUSES = new Set(["denied", "failed", "open"]);
+
 export function StatusPill({ status }: { status: string }) {
-  const tone =
-    status === "completed" ? "ok" : status === "denied" || status === "failed" ? "stop" : "busy";
+  const tone = OK_STATUSES.has(status) ? "ok" : STOP_STATUSES.has(status) ? "stop" : "busy";
   return <span className={`status-pill ${tone}`}>{humanize(status)}</span>;
 }
 

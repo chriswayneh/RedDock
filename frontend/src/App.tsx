@@ -8,14 +8,17 @@ import {
   Planned,
   StatusPill,
 } from "./components";
+import { FindingsPanel } from "./Findings";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
 import type {
   Adapter,
   Asset,
+  Detector,
   DiscoveryRun,
   Dockyard,
   EvidenceRecord,
+  Finding,
   Health,
   Version,
 } from "./types";
@@ -41,13 +44,20 @@ const pages: Page[] = [
   "Settings",
 ];
 
-// Phase 1 activates discovery and evidence; detection and correlation are not built.
-const availablePages = new Set<Page>(["Dashboard", "Dockyards", "Assets", "RedLedger"]);
+// Phase 2 activates detection and findings; correlation and reporting are not built.
+const availablePages = new Set<Page>([
+  "Dashboard",
+  "Dockyards",
+  "Assets",
+  "Findings",
+  "RedLedger",
+]);
 
 export function App() {
   const [page, setPage] = useState<Page>("Dashboard");
   const [dockyards, setDockyards] = useState<Dockyard[]>([]);
   const [adapters, setAdapters] = useState<Adapter[]>([]);
+  const [detectors, setDetectors] = useState<Detector[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [version, setVersion] = useState<Version | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -55,16 +65,19 @@ export function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [nextHealth, nextVersion, nextDockyards, nextAdapters] = await Promise.all([
-        api.health(),
-        api.version(),
-        api.dockyards(),
-        api.adapters(),
-      ]);
+      const [nextHealth, nextVersion, nextDockyards, nextAdapters, nextDetectors] =
+        await Promise.all([
+          api.health(),
+          api.version(),
+          api.dockyards(),
+          api.adapters(),
+          api.detectors(),
+        ]);
       setHealth(nextHealth);
       setVersion(nextVersion);
       setDockyards(nextDockyards);
       setAdapters(nextAdapters);
+      setDetectors(nextDetectors);
       setError(null);
     } catch {
       setError("RedDock Core is unavailable. Check the container status and try again.");
@@ -130,7 +143,7 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 1 — Discovery").toUpperCase()}
+            {(version?.phase ?? "Phase 2 — Detection").toUpperCase()}
           </span>
         </header>
         {error && (
@@ -151,6 +164,7 @@ export function App() {
             <Workspace
               dockyard={selected}
               adapters={adapters}
+              detectors={detectors}
               onBack={() => setSelected(null)}
               onError={setError}
             />
@@ -158,6 +172,7 @@ export function App() {
             <Dockyards dockyards={dockyards} setSelected={setSelected} onCreate={createDockyard} />
           ))}
         {page === "Assets" && <AssetsPage dockyards={dockyards} onError={setError} />}
+        {page === "Findings" && <FindingsPage dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
         {!availablePages.has(page) && <Planned page={page} />}
       </main>
@@ -178,6 +193,7 @@ function Dashboard({
 }) {
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [assetCount, setAssetCount] = useState(0);
+  const [findings, setFindings] = useState<Finding[]>([]);
 
   useEffect(() => {
     if (!dockyards.length) return;
@@ -187,6 +203,9 @@ function Dashboard({
     Promise.all(dockyards.map((dockyard) => api.assets(dockyard.id)))
       .then((results) => setAssetCount(results.flat().length))
       .catch(() => onError("Could not load the asset inventory."));
+    Promise.all(dockyards.map((dockyard) => api.findings(dockyard.id, { status: "open" })))
+      .then((results) => setFindings(results.flat()))
+      .catch(() => onError("Could not load open findings."));
   }, [dockyards, onError]);
 
   return (
@@ -194,10 +213,10 @@ function Dashboard({
       <section className="hero">
         <div>
           <p className="eyebrow">AUTHORIZED ASSESSMENT WORKSPACE</p>
-          <h2>Scoped discovery, with evidence for every observation.</h2>
+          <h2>Scoped discovery, with evidence for every finding.</h2>
           <p>
             RedDock is online and limited to non-invasive discovery. Every target passes DockGuard
-            before a tool runs.
+            before a tool runs, and detection reads only what was already recorded.
           </p>
         </div>
         <button className="primary-button" onClick={openDockyards}>
@@ -212,10 +231,11 @@ function Dashboard({
         />
         <Metric label="Dockyards" value={String(dockyards.length)} />
         <Metric label="Assets discovered" value={String(assetCount)} />
+        <Metric label="Discovery runs" value={String(runs.length)} />
         <Metric
-          label="Discovery runs"
-          value={String(runs.length)}
-          note="Findings arrive in Phase 2"
+          label="Open findings"
+          value={String(findings.length)}
+          note="Produced by a detector, from recorded observations"
         />
       </section>
       <section className="panel">
@@ -388,6 +408,38 @@ function AssetsPage({
   );
 }
 
+function FindingsPage({
+  dockyards,
+  onError,
+}: {
+  dockyards: Dockyard[];
+  onError: (message: string | null) => void;
+}) {
+  const [selected, setSelected] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (selected === null && dockyards.length) setSelected(dockyards[0].id);
+  }, [dockyards, selected]);
+
+  if (!dockyards.length) {
+    return (
+      <section className="panel">
+        <EmptyState message="Create a Dockyard, run discovery, then run detection to produce findings." />
+      </section>
+    );
+  }
+  return (
+    <>
+      <div className="toolbar">
+        <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
+      </div>
+      {selected !== null && (
+        <FindingsPanel dockyardId={selected} refreshKey={selected} onError={onError} />
+      )}
+    </>
+  );
+}
+
 function LedgerPage({
   dockyards,
   onError,
@@ -416,8 +468,10 @@ function LedgerPage({
       </div>
       <section className="panel">
         <p className="hint">
-          Phase 1 retains the raw tool output, the normalized result and a metadata record for every
-          discovery run, each hashed with SHA-256. The full RedLedger experience arrives later.
+          RedDock retains the raw tool output, the normalized result and a metadata record for every
+          discovery run, each hashed with SHA-256. A detection run retains its own normalized result
+          and metadata under the same evidence root, and every finding names the observations and
+          hashes behind it. The full RedLedger experience arrives later.
         </p>
         {rows.length ? (
           <DataTable headers={["Run", "Kind", "Artifact", "Size", "SHA-256", "Stored"]}>

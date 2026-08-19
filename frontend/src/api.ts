@@ -1,9 +1,13 @@
 import type {
   Adapter,
   Asset,
+  DetectionRun,
+  Detector,
   Dockyard,
   DiscoveryRun,
   EvidenceRecord,
+  Finding,
+  FindingDetail,
   Health,
   Observation,
   ScopeEntry,
@@ -40,6 +44,16 @@ function post<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
 
+/** Only the filters the API accepts, and only when they are set. */
+function query(filters: Record<string, string | undefined>): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) parameters.set(key, value);
+  }
+  const rendered = parameters.toString();
+  return rendered ? `?${rendered}` : "";
+}
+
 /** A discovery request that DockGuard denied is a result, not a transport error. */
 export type DiscoveryOutcome =
   | { accepted: boolean; run: DiscoveryRun }
@@ -67,6 +81,21 @@ export const api = {
   services: (id: number) => request<ServiceRow[]>(`/dockyards/${id}/services`),
   observations: (id: number) => request<Observation[]>(`/dockyards/${id}/observations`),
   evidence: (id: number) => request<EvidenceRecord[]>(`/dockyards/${id}/evidence`),
+
+  detectors: () => request<Detector[]>("/detectors"),
+  detections: (id: number) => request<DetectionRun[]>(`/dockyards/${id}/detections`),
+  /** Detection takes no target and no options, so the request carries nothing. */
+  startDetection: (id: number) => post<DetectionRun>(`/dockyards/${id}/detections`, {}),
+
+  findings: (id: number, filters: { severity?: string; status?: string } = {}) =>
+    request<Finding[]>(`/dockyards/${id}/findings${query(filters)}`),
+  finding: (id: number, findingId: number) =>
+    request<FindingDetail>(`/dockyards/${id}/findings/${findingId}`),
+  updateFinding: (id: number, findingId: number, status: string, note?: string) =>
+    request<FindingDetail>(`/dockyards/${id}/findings/${findingId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, note: note ?? null }),
+    }),
 
   discoveries: (id: number) => request<DiscoveryRun[]>(`/dockyards/${id}/discoveries`),
   discovery: (id: number, runId: number) =>
