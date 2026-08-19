@@ -22,6 +22,7 @@ Two rules hold every path through here together:
 import json
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -246,7 +247,45 @@ def _validated(
         _check_subject(finding, context)
         _check_evidence(finding, known_observations, settings.max_evidence_per_finding)
         _check_detail(finding)
+    _check_distinct(detector, produced, context)
     return tuple(sorted(produced, key=lambda item: _order_key(item, context)))
+
+
+def _check_distinct(
+    detector: Detector, produced: Sequence[DetectedFinding], context: DetectionContext
+) -> None:
+    """Two findings in one run may not claim the same identity.
+
+    Deduplication keys on the fingerprint, so a detector that emits the same
+    rule twice for one service would quietly overwrite its own first finding and
+    leave the run reporting more findings than exist. That is the detector
+    failing to distinguish two things it believes are different, which is a
+    `scope_key` it did not set, so it is refused rather than absorbed.
+    """
+    seen: dict[str, str] = {}
+    for finding in produced:
+        identity = _identity(detector.id, finding, context)
+        if identity in seen:
+            raise DetectorOutputError(
+                f"{detector.id} returned {finding.rule_id} and {seen[identity]} with the same "
+                "identity; a rule that can fire twice for one service needs a scope key"
+            )
+        seen[identity] = finding.rule_id
+
+
+def _identity(detector_id: str, finding: DetectedFinding, context: DetectionContext) -> str:
+    """The fingerprint of one detected finding, resolved against the snapshot."""
+    asset = context.asset(finding.asset_id)
+    service = context.service(finding.service_id)
+    return compute_fingerprint(
+        detector=detector_id,
+        rule_id=finding.rule_id,
+        asset_type=asset.asset_type if asset else None,
+        asset_identity=asset.identity if asset else None,
+        transport=service.transport if service else None,
+        port=service.port if service else None,
+        scope_key=finding.scope_key,
+    )
 
 
 def _check_subject(finding: DetectedFinding, context: DetectionContext) -> None:
@@ -315,17 +354,7 @@ def _store(
         if not outcome.ok:
             continue
         for detected in outcome.findings:
-            asset = context.asset(detected.asset_id)
-            service = context.service(detected.service_id)
-            identity = compute_fingerprint(
-                detector=detector.id,
-                rule_id=detected.rule_id,
-                asset_type=asset.asset_type if asset else None,
-                asset_identity=asset.identity if asset else None,
-                transport=service.transport if service else None,
-                port=service.port if service else None,
-                scope_key=detected.scope_key,
-            )
+            identity = _identity(detector.id, detected, context)
             finding, created = upsert_finding(
                 session,
                 dockyard_id=run.dockyard_id,
