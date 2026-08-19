@@ -1,19 +1,32 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { DataTable, DecisionPanel, EmptyState, StatusPill } from "./components";
+import { DetectionPanel, FindingsPanel } from "./Findings";
 import { formatDate, humanize, kindLabel, plural } from "./format";
 import type {
   Adapter,
   Asset,
+  DetectionRun,
+  Detector,
   DiscoveryRun,
   Dockyard,
+  Finding,
   Observation,
   ScopeEntry,
   ScopeEvaluation,
   ServiceRow,
 } from "./types";
 
-const tabs = ["Scope", "Discovery", "Assets", "Services", "Observations", "Runs"] as const;
+const tabs = [
+  "Scope",
+  "Discovery",
+  "Assets",
+  "Services",
+  "Observations",
+  "Detection",
+  "Findings",
+  "Runs",
+] as const;
 type Tab = (typeof tabs)[number];
 
 const ACTIVE = new Set(["pending", "running"]);
@@ -21,11 +34,13 @@ const ACTIVE = new Set(["pending", "running"]);
 export function Workspace({
   dockyard,
   adapters,
+  detectors,
   onBack,
   onError,
 }: {
   dockyard: Dockyard;
   adapters: Adapter[];
+  detectors: Detector[];
   onBack: () => void;
   onError: (message: string | null) => void;
 }) {
@@ -35,21 +50,39 @@ export function Workspace({
   const [services, setServices] = useState<ServiceRow[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
+  const [detections, setDetections] = useState<DetectionRun[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
+  // Detection completes inside its request, so the findings view reloads on a
+  // counter rather than by polling.
+  const [detected, setDetected] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
-      const [nextScope, nextAssets, nextServices, nextObservations, nextRuns] = await Promise.all([
+      const [
+        nextScope,
+        nextAssets,
+        nextServices,
+        nextObservations,
+        nextRuns,
+        nextDetections,
+        nextFindings,
+      ] = await Promise.all([
         api.scope(dockyard.id),
         api.assets(dockyard.id),
         api.services(dockyard.id),
         api.observations(dockyard.id),
         api.discoveries(dockyard.id),
+        api.detections(dockyard.id),
+        api.findings(dockyard.id),
       ]);
       setScope(nextScope);
       setAssets(nextAssets);
       setServices(nextServices);
       setObservations(nextObservations);
       setRuns(nextRuns);
+      setDetections(nextDetections);
+      setFindings(nextFindings);
+      setDetected((current) => current + 1);
       onError(null);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Could not load the Dockyard workspace.");
@@ -82,6 +115,7 @@ export function Workspace({
           <span>{plural(assets.length, "asset")}</span>
           <span>{plural(services.length, "service")}</span>
           <span>{plural(runs.length, "discovery run")}</span>
+          <span>{plural(findings.length, "finding")}</span>
         </div>
       </section>
 
@@ -113,6 +147,19 @@ export function Workspace({
           onStarted={refresh}
           onError={onError}
         />
+      )}
+      {tab === "Detection" && (
+        <DetectionPanel
+          dockyardId={dockyard.id}
+          detectors={detectors}
+          runs={detections}
+          observationCount={observations.length}
+          onRan={refresh}
+          onError={onError}
+        />
+      )}
+      {tab === "Findings" && (
+        <FindingsPanel dockyardId={dockyard.id} refreshKey={detected} onError={onError} />
       )}
       {tab === "Assets" && <AssetTable assets={assets} />}
       {tab === "Services" && <ServiceTable services={services} />}
@@ -208,7 +255,7 @@ function ScopePanel({
           </button>
         </form>
         <p className="hint">
-          Phase 1 accepts an IPv4 or IPv6 address, a network no larger than 256 addresses, an exact
+          A scope entry is an IPv4 or IPv6 address, a network no larger than 256 addresses, an exact
           hostname or an HTTP origin. Hostnames match exactly; there is no wildcard expansion.
         </p>
 
@@ -482,8 +529,8 @@ function ObservationList({ observations }: { observations: Observation[] }) {
   return (
     <section className="panel">
       <p className="hint">
-        An observation records what an adapter saw. It is not a finding and carries no severity;
-        interpretation arrives in a later phase.
+        An observation records what an adapter saw. It carries no severity and no verdict: a
+        detector turns observations into findings, and this record stays what it was.
       </p>
       <DataTable headers={["Observed", "Adapter", "Type", "Summary", "Confidence", "Run"]}>
         {observations.map((observation) => (

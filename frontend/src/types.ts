@@ -115,3 +115,101 @@ export type Adapter = {
   profiles: AdapterProfile[];
   target_kinds: string[];
 };
+
+export type Detector = {
+  id: string;
+  version: string;
+  title: string;
+  description: string;
+  consumes: string[];
+};
+
+export type DetectorOutcome = {
+  id: string;
+  version: string;
+  status: string;
+  findings: number;
+  error: string | null;
+};
+
+export type DetectionRun = {
+  id: number;
+  dockyard_id: number;
+  status: string;
+  detectors: DetectorOutcome[] | null;
+  enrichment: {
+    id: string;
+    version: string | null;
+    available: boolean;
+    warning: string | null;
+  } | null;
+  asset_count: number;
+  service_count: number;
+  observation_count: number;
+  finding_count: number;
+  new_finding_count: number;
+  resolved_finding_count: number;
+  error: string | null;
+  evidence_path: string | null;
+  metadata_sha256: string | null;
+  result_sha256: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+/** Enrichment, not proof: a catalogue matched a reported product and version. */
+export type CveReference = {
+  cve_id: string;
+  source: string;
+  source_version: string | null;
+  match_type: string;
+  matched_product: string;
+  matched_version: string;
+  url: string | null;
+};
+
+export type Finding = {
+  id: number;
+  fingerprint: string;
+  detector: string;
+  detector_version: string;
+  rule_id: string;
+  title: string;
+  category: string;
+  severity: string;
+  confidence: string;
+  status: string;
+  status_note: string | null;
+  asset_id: number | null;
+  service_id: number | null;
+  first_seen: string;
+  last_seen: string;
+  resolved_at: string | null;
+  first_detection_run_id: number | null;
+  last_detection_run_id: number | null;
+  cve_references: CveReference[];
+  asset_label: string | null;
+  service_endpoint: string | null;
+  evidence_count: number;
+};
+
+/** One observation that supported a finding, with the hash that proves it. */
+export type FindingEvidence = {
+  id: number;
+  observation_id: number;
+  discovery_run_id: number | null;
+  detection_run_id: number | null;
+  evidence_record_id: number | null;
+  summary: string;
+  created_at: string;
+  evidence_path: string | null;
+  sha256: string | null;
+};
+
+export type FindingDetail = Finding & {
+  description: string;
+  remediation: string | null;
+  detail: Record<string, unknown> | null;
+  evidence: FindingEvidence[];
+};
