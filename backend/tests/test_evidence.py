@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.evidence import EvidenceError, EvidenceStore
+from app.evidence import DETECTION_SCOPE, EvidenceError, EvidenceStore
 
 
 def test_artifacts_are_written_under_the_run_directory_and_hashed(environment: Path):
@@ -50,3 +50,28 @@ def test_run_directories_are_isolated_by_dockyard_and_run(environment: Path):
     store = EvidenceStore()
     assert store.relative_run_path(4, 9) == "4/9"
     assert store.run_directory(4, 9) == (environment / "evidence" / "4" / "9").resolve()
+
+
+def test_detection_evidence_is_written_under_its_own_scope(environment: Path):
+    """A detection run and a discovery run may share an id but never a directory."""
+    store = EvidenceStore()
+    store.write_metadata(1, 4, {"kind": "discovery"})
+    detection = store.write_metadata(1, 4, {"kind": "detection"}, DETECTION_SCOPE)
+
+    assert store.relative_run_path(1, 4, DETECTION_SCOPE) == "1/detection/4"
+    assert detection.sha256 != store.write_metadata(1, 4, {"kind": "discovery"}).sha256
+    assert (environment / "evidence" / "1" / "4" / "metadata.json").exists()
+    assert (environment / "evidence" / "1" / "detection" / "4" / "metadata.json").exists()
+
+
+def test_an_unknown_evidence_scope_is_refused(environment: Path):
+    with pytest.raises(EvidenceError):
+        EvidenceStore().write_metadata(1, 1, {}, "../../escape")
+
+
+def test_a_document_hashes_the_same_every_time(environment: Path):
+    store = EvidenceStore()
+    document = {"b": 2, "a": [3, 1]}
+    assert store.write_normalized(9, 1, document).sha256 == store.write_normalized(
+        9, 2, dict(reversed(list(document.items())))
+    ).sha256

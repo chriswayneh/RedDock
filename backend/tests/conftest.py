@@ -61,3 +61,13 @@ def add_scope(client: TestClient):
         return response.json()
 
     return _add
+
+
+@pytest.fixture()
+def recorder(dockyard_id: int):
+    """Record Phase 1 state for a Dockyard so detection has something to read."""
+    import app.database
+    from tests.phase1 import Recorder
+
+    with app.database.SessionLocal() as db_session:
+        yield Recorder(db_session, dockyard_id)
