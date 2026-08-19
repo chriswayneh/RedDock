@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from app.discovery.base import AdapterRequest, AssetType, Confidence
-from app.discovery.http_probe import HTTP_PROBE, HttpProbeAdapter
+from app.discovery.http_probe import HTTP_PROBE, PROJECT_URL, HttpProbeAdapter
 from app.targets import normalize_target
 
 
@@ -31,9 +31,35 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
+class SecureHandler(Handler):
+    """A handler that sends the response-level protections a detector looks for."""
+
+    def do_HEAD(self) -> None:  # method name is fixed by BaseHTTPRequestHandler
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", "0")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", "default-src 'self'")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Set-Cookie", "session=must-not-be-recorded")
+        self.end_headers()
+
+
 @pytest.fixture()
 def origin() -> Iterator[str]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture()
+def secure_origin() -> Iterator[str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SecureHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -101,3 +127,49 @@ def test_the_adapter_only_accepts_url_targets():
     assert adapter.supports(normalize_target("http://127.0.0.1:8080"))
     assert not adapter.supports(normalize_target("127.0.0.1"))
     assert not adapter.supports(normalize_target("192.168.1.0/24"))
+
+
+def test_the_response_states_which_headers_were_examined(origin: str):
+    """A later reader must be able to tell an absent header from an unexamined one."""
+    result = HttpProbeAdapter().run(request(origin))
+    response = next(
+        observation
+        for observation in result.observations
+        if observation.observation_type == "http_response"
+    )
+
+    examined = response.detail["headers_examined"]
+    assert {
+        "strict-transport-security",
+        "x-content-type-options",
+        "content-security-policy",
+        "x-frame-options",
+    } <= set(examined)
+    assert response.detail["scheme"] == "http"
+    assert response.detail["headers_present"] == sorted(
+        observation.detail["header"]
+        for observation in result.observations
+        if observation.observation_type == "http_header"
+    )
+
+
+def test_security_headers_are_retained_when_the_endpoint_sends_them(secure_origin: str):
+    result = HttpProbeAdapter().run(request(secure_origin))
+    headers = {
+        observation.detail["header"]: observation.detail["value"]
+        for observation in result.observations
+        if observation.observation_type == "http_header"
+    }
+
+    assert headers["x-content-type-options"] == "nosniff"
+    assert headers["content-security-policy"] == "default-src 'self'"
+    assert headers["x-frame-options"] == "DENY"
+    assert "set-cookie" not in headers
+
+
+def test_the_user_agent_reports_the_version_the_application_reports():
+    """A hard-coded version would drift the moment RedDock is released again."""
+    from app.config import get_settings
+    from app.discovery.http_probe import user_agent
+
+    assert user_agent() == f"RedDock/{get_settings().version} (+{PROJECT_URL})"
