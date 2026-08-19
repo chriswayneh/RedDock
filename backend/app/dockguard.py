@@ -71,7 +71,7 @@ def normalize_scope_value(raw: str) -> Target:
     network = target.network()
     if network is not None and network.num_addresses > get_settings().max_network_addresses:
         raise ScopeRejected(
-            f"{target.value} covers {network.num_addresses} addresses; Phase 1 allows at most "
+            f"{target.value} covers {network.num_addresses} addresses; RedDock allows at most "
             f"{get_settings().max_network_addresses} per scope entry (IPv4 /24 or IPv6 /120)"
         )
     return target

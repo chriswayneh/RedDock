@@ -146,7 +146,9 @@ class Observation(Base):
     """A recorded signal.
 
     An Observation is not a Finding. It states what an adapter saw, never what
-    that means for risk; interpretation belongs to a later phase.
+    that means for risk. Interpretation belongs to a detector, which reads these
+    rows and produces a separate Finding that cites them; nothing here is ever
+    rewritten by that.
     """
 
     __tablename__ = "observations"

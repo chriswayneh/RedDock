@@ -1,3 +1,14 @@
+import json
+import tomllib
+from pathlib import Path
+
+import pytest
+
+from app.config import get_settings
+
+BACKEND = Path(__file__).resolve().parents[1]
+
+
 def test_health_endpoint(client):
     response = client.get("/api/health")
     assert response.status_code == 200
@@ -8,7 +19,7 @@ def test_version_endpoint(client):
     response = client.get("/api/version")
     assert response.status_code == 200
     assert response.json()["name"] == "RedDock"
-    assert response.json()["version"] == "0.2.1"
+    assert response.json()["version"] == get_settings().version
 
 
 def test_create_list_and_retrieve_dockyard(client):
@@ -49,7 +60,27 @@ def test_dockyard_is_persisted_for_a_new_client(client):
 
 
 def test_version_reports_the_current_phase(client):
-    assert client.get("/api/version").json()["phase"].startswith("Phase 1")
+    assert client.get("/api/version").json()["phase"].startswith("Phase 2")
+
+
+def test_the_application_and_both_packages_report_one_version(client):
+    """A release aligns the application, the API and the packages, or it is not one."""
+    reported = client.get("/api/version").json()["version"]
+    backend = tomllib.loads(BACKEND.joinpath("pyproject.toml").read_bytes().decode())
+    assert reported == backend["project"]["version"]
+
+    package = BACKEND.parent / "frontend" / "package.json"
+    if not package.exists():  # the backend test image mounts backend/ alone
+        pytest.skip("The frontend package is not present in this checkout")
+    assert reported == json.loads(package.read_text(encoding="utf-8"))["version"]
+
+
+def test_detectors_are_advertised_without_an_offensive_capability(client):
+    detectors = client.get("/api/detectors").json()
+    assert detectors
+    for detector in detectors:
+        assert detector["id"] and detector["version"] and detector["consumes"]
+        assert not {"exploit", "attack", "bruteforce"} & set(detector["id"].split("."))
 
 
 def test_adapters_are_advertised_with_their_safe_profiles(client):

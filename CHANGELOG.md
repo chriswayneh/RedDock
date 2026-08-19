@@ -2,6 +2,54 @@
 
 All notable changes to RedDock are documented here.
 
+## [0.3.0] — Phase 2 Detection
+
+Observations can now become findings. They remain separate concepts: an observation states what an adapter saw, a finding states what one named detector concluded from one or more of them, and a finding that cites no observation is refused rather than stored.
+
+### Added
+
+- Detector contract: a detector receives an immutable snapshot of one Dockyard and returns value objects, with no database session, socket, subprocess, target, or operator-supplied option in reach
+- Detector registry with an explicit, fixed set; nothing is discovered, imported by name, or loaded from a plugin directory at runtime
+- DetectionRun: an auditable record of which detectors ran, what each did or failed to do, how much state was read, what was produced and resolved, and which enrichment source was in effect
+- Finding model with separate severity and confidence, a stable SHA-256 fingerprint, and links to the observations that support it
+- Finding lifecycle: `open`, `resolved`, `suppressed`, and `accepted`, where resolution is RedDock's answer about the data and suppression and acceptance are the operator's
+- FindingEvidence linking each finding to its observations, their discovery run, and the hashed RedLedger artifact behind them
+- `http.security_headers` detector: plaintext transport and absent response-level protections, for the headers the probe recorded that it examined
+- `service.rules` detector: a fixed table of protocol rules over services RedDock identified, plus disclosed product versions
+- `tls.certificates` detector: what certificate verification objected to, using the code and message OpenSSL gave
+- CVE enrichment boundary with an optional local catalogue behind `REDDOCK_CVE_CATALOG`
+- API for detectors, detection runs, findings, finding detail with evidence, and operator status decisions
+- Findings and Detection sections in the workspace, and a Dockyard-scoped Findings page
+- ADR 0006 (detection boundary) and ADR 0007 (CVE enrichment is an association)
+
+### Changed
+
+- The HTTP probe records the header set it examined alongside the headers that were present, so a detector can tell an absent header from one RedDock never looked for
+- The HTTP probe records the code and message OpenSSL gave when certificate verification failed, because an unverified handshake returns an empty peer certificate
+- The HTTP probe retains `x-content-type-options`, `content-security-policy`, and `x-frame-options` in addition to the previous allowlist
+- The HTTP probe User-Agent is derived from the application version rather than repeated as a literal
+- The evidence store writes detection documents under a `detection` scope, so a detection run and a discovery run that share an identifier cannot share a directory
+- The dashboard reports open findings; the observations view states that a detector, not the observation, produces interpretation
+
+### Security
+
+- Detection contacts nothing and takes no operator parameters: the request body is empty by design, so no operator string reaches a detector
+- A detector that raises, returns malformed output, or names data outside its Dockyard is failed as a whole; its results are discarded and it resolves nothing
+- Findings are never deleted, and an operator cannot declare one resolved
+- Severity is stated conservatively and separately from confidence; RedDock produces no risk score, CVSS vector, or aggregate rating
+- No CVE data is downloaded, matching is exact-version only, and an association never changes a severity, confidence, or status
+- Detection snapshots, per-detector output, per-finding evidence references, and an operator-supplied catalogue are all bounded
+
+### Testing
+
+- Structural tests that parse the detection package and fail the build if a detector could reach a network, a process, the filesystem, or the database
+- Detection orchestration tests for deduplication, resolution, reopening, operator decisions, detector failure isolation, malformed output, Dockyard isolation, and deterministic evidence
+- A fingerprint test that runs in separate processes under different `PYTHONHASHSEED` values
+- Detector tests covering false-positive avoidance: unexamined headers, redirects, server errors, scheme handling, and port numbers without an identification
+- Schema-upgrade test proving a 0.2.1-shaped database upgrades in place and runs a full detection on data the previous release wrote
+- A version test asserting the application, the API, and both packages report one version
+- The end-to-end smoke test now covers detection, findings, evidence traceability, and deduplication
+
 ## [0.2.1] — Phase 1 Discovery, finalized
 
 Phase 1 remains as released in 0.2.0; this is a corrective patch release.

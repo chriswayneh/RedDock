@@ -9,8 +9,8 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.2.1"
-    phase: str = "Phase 1 — Discovery"
+    version: str = "0.3.0"
+    phase: str = "Phase 2 — Detection"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
@@ -18,7 +18,7 @@ class Settings(BaseModel):
     # downloads CVE data; see app/detection/enrichment.py.
     cve_catalog_path: str | None = None
 
-    # Phase 1 safety bounds. These are constants rather than environment
+    # Scope and execution bounds. These are constants rather than environment
     # settings because relaxing them would weaken the exact guarantees
     # DockGuard exists to provide; an operator who needs a wider engagement
     # adds more narrow scope entries instead of one broad one.

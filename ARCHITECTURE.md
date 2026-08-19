@@ -4,9 +4,15 @@
 
 ```text
 Browser → React UI (static files) → FastAPI → DockGuard → discovery adapter
-                                        ↓                        ↓
-                                     SQLite                  evidence files
+                                        │                        ↓
+                                        │            SQLite ← evidence files
+                                        ↓               ↓
+                                    detector ←── snapshot of stored state
+                                        ↓
+                                    findings
 ```
+
+Two paths leave the API and only one of them touches a network. Discovery goes out through DockGuard to a target and records what it saw. Detection goes the other way: it reads what is already stored, concludes something about it, and writes findings back. A detector never reaches a target, which is what makes the second path safe to run without a scope decision.
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
 
@@ -18,6 +24,8 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/services.py`: Dockyard and scope operations.
 - `backend/app/inventory.py`: asset, service, and observation persistence rules.
 - `backend/app/discovery/`: the adapter contract, adapters, registry, and run orchestration.
+- `backend/app/detection/`: the detector contract, detectors, registry, fingerprints, CVE enrichment, and run orchestration.
+- `backend/app/findings.py`: finding persistence, deduplication, and lifecycle rules.
 - `backend/app/evidence.py`: the evidence store.
 - `backend/app/models.py` and `schemas.py`: persistence mappings and input/output contracts.
 - `frontend/src`: presentation and API client only.
@@ -29,7 +37,7 @@ Every operator-supplied target passes through `normalize_target` before anything
 - IPv4 and IPv6 addresses in strict textual form only — integer, packed, and zero-padded forms are refused so `3232235777` can never quietly become `192.168.1.1`.
 - Networks canonicalized to their network address (`192.168.1.37/24` → `192.168.1.0/24`).
 - Hostnames lowercased, stripped of a trailing dot, IDNA-encoded per label, and validated.
-- URLs reduced to an origin: scheme, host, and port. Paths, queries, fragments, and embedded credentials are rejected or dropped, because Phase 1 probes an origin and not a location.
+- URLs reduced to an origin: scheme, host, and port. Paths, queries, fragments, and embedded credentials are rejected or dropped, because RedDock probes an origin and not a location.
 
 A canonical target may contain only `[A-Za-z0-9._:/-]` and can never begin with `-`. This is what makes argument injection through a target string impossible rather than merely unlikely.
 
@@ -91,25 +99,80 @@ prepare → execute → parse → normalize → artifacts
 - **Service** — a transport endpoint on an asset, unique on `(asset, transport, port)`. `service_name`, `product`, and `version` stay null until an adapter actually identified them. A conventional port number is not evidence: nmap's port-table guess is discarded, so TCP/22 open is recorded as TCP/22 open and nothing more.
 - **Observation** — a dated, adapter-attributed statement of what was seen, with a confidence of `observed` (RedDock saw it) or `reported` (the target said so). Observations accumulate as history and are never reconciled.
 - **DiscoveryRun** — one auditable request: adapter, profile, requested and normalized target, DockGuard decision and reason, status, counts, and evidence path. Denied requests are stored too, because an audit trail that only records successes is not an audit trail.
-- **EvidenceRecord** — a hashed pointer to one retained artifact.
+- **DetectionRun** — one auditable detection: which detectors ran, what each of them did or failed to do, how much state was read, how many findings were produced, created and resolved, which enrichment source was in effect, and the hashes of the two documents it retained. It has no target and no DockGuard decision, because it contacts nothing.
+- **Finding** — a normalized security-relevant conclusion one named detector drew. Identity is a SHA-256 `fingerprint` over the detector, the rule, and the asset and service concerned, unique within a Dockyard, so repeated detection updates one row instead of accumulating duplicates. Severity and confidence are separate fields: how much this would matter, and how sure RedDock is that it is true, are different questions and blending them loses both.
+- **FindingEvidence** — one row per observation that supported a finding, carrying the discovery run and the hashed `EvidenceRecord` that observation came from.
+- **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
-**Observation ≠ Finding.** An observation says what happened; a finding says what it means. RedDock records the former and, in Phase 1, deliberately refuses to imply the latter. Findings, severity, and scoring belong to Phase 2.
+**Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
 
-## Evidence flow (RedLedger foundation)
-
-Every completed run writes:
+### Finding lifecycle
 
 ```text
-evidence/<dockyard-id>/<run-id>/
+                  detector reproduces it
+        (new) ──────────────► open ◄──────────── operator reopens
+                               │  ▲
+   detector no longer          │  │  detector reproduces it again
+   reproduces it               ▼  │
+                            resolved
+                               │
+        operator decides ──────┴──────► suppressed / accepted
+```
+
+Four states, and only three of them are an operator's to set. `resolved` is RedDock's answer to a question about the data — is this still reproduced? — so the API refuses to let an operator declare it, and nothing here ever deletes a finding: an issue that stopped being reproduced is more useful recorded as resolved than erased. `suppressed` and `accepted` are decisions a person took responsibility for, so a later run leaves them alone even when it sees the issue again.
+
+Resolution is scoped to the detector that just ran successfully. A detector that raised, or that returned output RedDock refused, resolves nothing, because not running is not evidence that an issue went away.
+
+## Detection boundary
+
+A detector is deliberately weaker than a discovery adapter. An adapter may contact a target; a detector may not contact anything. It receives an immutable snapshot of one Dockyard's assets, services and observations and returns value objects — no session, no socket, no subprocess, no target string, no operator-supplied option. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could reach outside the process or touch the database, so the boundary is checked rather than asserted.
+
+```text
+snapshot → detect → validate → normalize → findings
+```
+
+Everything except `detect` belongs to the runner. It builds the snapshot, validates what came back, computes identity, reconciles against what is known, resolves what is absent and writes evidence. A detector that returns something malformed — an unknown severity, a rule id that is not a rule id, a finding about another Dockyard's asset, a finding citing no observation — is failed as a whole and its results are discarded, and the other detectors still run.
+
+| Detector | Reads | Reports |
+| --- | --- | --- |
+| `http.security_headers` | `http_response`, `http_header` | Plaintext transport, and response-level protections the response did not carry, for the headers the probe examined |
+| `service.rules` | `service_identified` and the service inventory | A fixed table of protocol rules over services RedDock identified, and disclosed product versions |
+| `tls.certificates` | `tls_session` | What certificate verification objected to |
+
+Three things keep this from producing the usual noise. A header is only reported when the probe recorded that it looked for it, so "RedDock did not look" is never rendered as "the server did not send it". Content-level headers are only judged on a response that represents how an endpoint normally answers, so a 301 to HTTPS carrying no Content-Security-Policy is not a finding. And a service rule needs an identification observation, so a port number alone still says nothing: TCP/23 open is TCP/23 open.
+
+The scope is also narrower than it could look. RedDock does not enumerate supported TLS versions or cipher suites — the HTTP probe negotiates with a default client, so it can only ever record a version a current client accepted — and a rule about obsolete protocol versions would therefore never be able to fire from RedDock's own data. It is left out rather than shipped as decoration.
+
+## CVE enrichment
+
+RedDock fetches no CVE data and has no vulnerability feed. Phase 2 ships the boundary and a local catalogue reader behind it, enabled only when an operator sets `REDDOCK_CVE_CATALOG` to a JSON file. A match requires an exactly equal product and version; version ranges are not interpreted, because a range is an inference and an inference printed beside a CVE identifier reads as a result.
+
+An association never creates a finding, never changes a severity, a confidence or a status, and is attached to the version-disclosure finding that already stood on its own evidence. A catalogue that is missing, oversized or malformed is recorded as a warning on the detection run rather than failing it, and each detection run states which enrichment source was in effect so a finding with no CVE reference can be told apart from one RedDock could not enrich. See [ADR 0007](docs/adr/0007-cve-enrichment-is-an-association.md).
+
+## Evidence flow (RedLedger)
+
+Every completed run writes through the same store:
+
+```text
+evidence/<dockyard-id>/<discovery-run-id>/
   metadata.json          adapter, tool version, profile, targets, DockGuard decision,
                          invocation, timestamps, counts, artifact hashes
   raw/                   unmodified tool output
   normalized/result.json the normalized assets and observations
+
+evidence/<dockyard-id>/detection/<detection-run-id>/
+  metadata.json          detectors and their outcomes, enrichment source, inputs read,
+                         counts, timestamps, artifact hashes
+  normalized/result.json the findings produced and the fingerprints resolved
 ```
 
-Paths are built from integer identifiers and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Each artifact is SHA-256 hashed and recorded as an `EvidenceRecord`. Session material such as cookies is deliberately never retained.
+Paths are built from integer identifiers, a fixed scope name and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Every artifact is SHA-256 hashed. Session material such as cookies is deliberately never retained, and detection has nothing raw to retain because it contacts nothing.
 
-This is the foundation only. Validation state, evidence packages, and portable exports belong to later phases.
+A finding is therefore checkable end to end. `FindingEvidence` names the observations it was drawn from; each of those names its discovery run and that run's hashed `EvidenceRecord`; the detection run records the hash of the normalized result the finding appears in. Which detector produced it, from what observation, during which run, and which hash verifies it are all answerable without leaving the database.
+
+Detection artifact hashes are recorded as columns on the detection run rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and Phase 2 stays purely additive; relaxing it would be the first destructive schema change, and this architecture already says that comes with versioned migrations rather than an ad hoc alteration. Unifying both halves behind one table is the first job of that migration.
+
+Evidence packages and portable exports still belong to later phases.
 
 ## Trust boundaries
 
@@ -119,17 +182,30 @@ This is the foundation only. Validation state, evidence packages, and portable e
 | API → DockGuard | Every target, always, server-side. |
 | DockGuard → adapter | Only normalized targets and internally generated options cross. Operator strings never become flags. |
 | Adapter → target | Non-invasive profiles only, without a shell, under a timeout, with output bounds. |
-| Target → RedDock | Tool output and HTTP headers are untrusted data. They are stored and displayed as text, never executed, and self-reported values are marked `reported`. |
+| Target → RedDock | Tool output and HTTP headers are untrusted data. They are stored and displayed as text, never executed, and self-reported values are marked `reported`. A detector reads that same data and may draw a conclusion from it; it still cannot act on it. |
+| API → detector | Only an immutable snapshot of one Dockyard crosses. No session, socket, subprocess, target or operator option is reachable from a detector, and its output is validated before any of it is stored. |
 | RedDock → disk | Writes confined to the database file and the evidence root. |
 
 ## Concurrency and restart
 
-Discovery runs on a `ThreadPoolExecutor` bounded to the concurrent-run limit; Phase 1 introduces no Redis, queue, or worker service. If the process stops while a run is in flight, startup marks that run failed with "Interrupted by a RedDock restart" rather than leaving it looking active or pretending it completed.
+Discovery runs on a `ThreadPoolExecutor` bounded to the concurrent-run limit; there is no Redis, queue, or worker service. If the process stops while a run is in flight, startup marks that run failed with "Interrupted by a RedDock restart" rather than leaving it looking active or pretending it completed.
+
+Detection is synchronous. It reads stored state and contacts nothing, so there is nothing to wait on: the run completes inside the request, the response describes a finished run, and there is no in-flight detection state for a restart to recover. A second detection run on the same Dockyard while one is in flight is refused rather than interleaved.
+
+| Detection limit | Value | Why |
+| --- | --- | --- |
+| Assets per snapshot | 2 000 | A snapshot cannot grow without bound |
+| Observations per snapshot | 20 000 | The newest are read, so a long history stays bounded |
+| Findings per detector per run | 500 | A detector that exceeds it fails rather than being silently truncated |
+| Evidence references per finding per run | 20 | A finding cannot drag an unbounded citation list behind it |
+| CVE catalogue | 5 MiB, 20 000 entries | An operator-supplied file is still input |
 
 ## Persistence evolution
 
-Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 1 is purely additive — it adds tables and changes no existing column — so `create_all` upgrades a Phase 0 database in place without data loss, which `tests/test_schema_upgrade.py` verifies against a real 0.1.0-shaped database. Before the first destructive schema change, introduce versioned Alembic migrations rather than altering deployed tables ad hoc.
+Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Every phase so far is purely additive — it adds tables and changes no existing column — so `create_all` upgrades a deployed database in place without data loss. `tests/test_schema_upgrade.py` verifies that against real 0.1.0-shaped and 0.2.1-shaped databases, including running a full detection over data written by the previous release. Before the first destructive schema change, introduce versioned Alembic migrations rather than altering deployed tables ad hoc.
+
+That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
 ## AI boundary
 
-AI is not integrated in Phase 1 and is optional thereafter. It may propose structured actions, but DockGuard evaluates them exactly as it evaluates an operator's, and it never receives shell access or the ability to widen scope. RedDock must remain useful with no AI provider configured.
+AI is still not integrated, and remains optional whenever it arrives. It may propose structured actions, but DockGuard evaluates them exactly as it evaluates an operator's, and it never receives shell access or the ability to widen scope. Nothing in detection is AI-driven: every detector is a deterministic rule over recorded data, and the same input produces the same findings. RedDock must remain useful with no AI provider configured.
