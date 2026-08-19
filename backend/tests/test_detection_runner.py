@@ -672,3 +672,22 @@ def test_detection_uses_the_snapshot_time_for_seen_timestamps(
     stored = finding.first_seen.replace(tzinfo=UTC)
     assert finding.first_seen == finding.last_seen
     assert stored >= before.replace(microsecond=0)
+
+
+def test_a_detection_run_interrupted_by_a_restart_is_marked_and_unblocks_the_next(
+    endpoint: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """An overlapping run is refused, so a stale active run must not be permanent."""
+    from app.models import DetectionRun
+
+    stale = DetectionRun(dockyard_id=endpoint.dockyard_id, status="running")
+    endpoint.session.add(stale)
+    endpoint.session.commit()
+
+    assert detection_runner.recover_interrupted_runs(endpoint.session) == 1
+    endpoint.session.refresh(stale)
+    assert stale.status == "failed"
+    assert "restart" in stale.error
+
+    install(monkeypatch, StubDetector())
+    assert detect(endpoint).status == "completed"

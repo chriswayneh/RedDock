@@ -123,6 +123,25 @@ def get_run(session: Session, dockyard_id: int, run_id: int) -> DetectionRun | N
     )
 
 
+def recover_interrupted_runs(session: Session) -> int:
+    """Mark detection runs that a restart interrupted.
+
+    A detection run completes inside its request, so one still marked active at
+    startup did not finish. Saying so matters twice over: the record is honest,
+    and an overlapping run is refused while one looks active, so a run left
+    behind by a crash would otherwise block this Dockyard's detection for good.
+    """
+    interrupted = list(
+        session.scalars(select(DetectionRun).where(DetectionRun.status.in_(ACTIVE_STATUSES)))
+    )
+    for run in interrupted:
+        run.status = str(DetectionRunStatus.FAILED)
+        run.error = "Interrupted by a RedDock restart"
+        run.completed_at = datetime.now(UTC)
+    session.commit()
+    return len(interrupted)
+
+
 def execute_run(session: Session, run: DetectionRun) -> DetectionRun:
     """Run every registered detector over the Dockyard snapshot. Never raises."""
     run.status = str(DetectionRunStatus.RUNNING)

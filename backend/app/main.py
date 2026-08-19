@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import router
 from app.config import get_settings
 from app.database import SessionLocal, initialize_database
+from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
 
 STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
@@ -21,10 +22,14 @@ async def lifespan(_: FastAPI):
     initialize_database()
     with SessionLocal() as session:
         # A run that was in flight when the process stopped did not finish.
-        # Saying so is more useful than leaving it looking active forever.
+        # Saying so is more useful than leaving it looking active forever, and a
+        # detection run left active would keep refusing the next one.
         interrupted = recover_interrupted_runs(session)
+        detections = recover_interrupted_detections(session)
     if interrupted:
         logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
+    if detections:
+        logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
     yield
 
 
