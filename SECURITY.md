@@ -4,13 +4,13 @@
 
 RedDock is for systems owned by the operator or assessed with explicit authorization. It is appropriate for authorized engagements, labs, cyber ranges, CTFs, and training environments. Do not use it to access systems outside approved scope.
 
-From Phase 1 onward RedDock can contact a network target. Scoping a target in RedDock is a statement that you are authorized to assess it. The product enforces the scope you declare; it cannot verify that you were entitled to declare it.
+RedDock can contact a network target. Scoping a target in RedDock is a statement that you are authorized to assess it. The product enforces the scope you declare; it cannot verify that you were entitled to declare it.
 
 ## Product safety model
 
 Every action passes DockGuard before a tool runs, and DockGuard fails closed: anything it cannot positively place inside the Dockyard's authorized scope is denied. AI will never receive unrestricted shell access or the ability to expand target scope.
 
-## Phase 1 safety controls
+## Safety controls
 
 **Scope enforcement**
 
@@ -36,12 +36,24 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Only non-invasive profiles exist. Nmap runs without NSE scripts, brute force, credential guessing, exploit scripts, OS detection, UDP scanning, fragmentation, decoys, spoofing, source-port manipulation, or `-A`.
 - The HTTP probe issues one request per origin, follows no redirects, reads no response body, and does not crawl, fuzz, submit forms, or test for vulnerabilities.
 
+**Detection**
+
+- Detection reads only what RedDock already recorded. A detector receives an immutable snapshot of one Dockyard and is given no database session, no socket, no subprocess, no target, and no operator-supplied option, so there is nothing for it to reach, execute, or widen. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could.
+- A detection request carries no parameters at all. There is no target field, no detector selection, and no options, so no operator string reaches a detector.
+- Detectors are registered explicitly in code. Nothing is loaded from a path, a plugin directory, or configuration, and there is no dynamic import, `eval`, or `exec` anywhere in the detection package.
+- Every finding must cite at least one observation from the snapshot it was drawn from. A finding that cites none, names another Dockyard's data, or carries an unknown severity, confidence, or category is refused, and the detector that produced it is failed as a whole rather than partially trusted.
+- A detector that fails resolves nothing. Not running is never treated as evidence that an issue went away.
+- Findings are never deleted. An issue that a later run no longer reproduces is marked resolved; an operator may suppress, accept, or reopen one but may not declare it resolved.
+- Ratings are stated conservatively and separately. Severity and confidence are distinct fields, missing hardening headers are reported as `low`, and RedDock produces no risk score, CVSS vector, or aggregate rating because it does not compute one.
+- RedDock downloads no CVE data. Enrichment is off unless an operator supplies a local catalogue, matches only an exact product and version, and never changes a finding's severity, confidence, or status.
+
 **Evidence and data**
 
 - Evidence paths are built from integer identifiers and a validated artifact name, and each resolved destination is confirmed to be inside its run directory before a write.
 - Raw artifacts are capped at 2 MiB and marked when truncated.
 - Only a small allowlist of response headers is retained; cookies and other session material are never written to evidence.
-- Every stored artifact is SHA-256 hashed and recorded.
+- Every stored artifact is SHA-256 hashed and recorded, for detection runs as well as discovery runs.
+- Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
 **Runtime**
 
@@ -50,11 +62,14 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
 - Concurrent runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active.
+- Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
 
 ## What RedDock does not do
 
-Phase 1 contains no vulnerability scanning, CVE matching, findings, severity scoring, exploitation, credential testing, injection testing, post-exploitation, attack-path analysis, AI reasoning, automated remediation, or report generation. Observations record what was seen and assign no verdict.
+RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, AI reasoning, automated remediation, or report generation. No operator-supplied script or shell command is executed anywhere in the product.
+
+It also performs no active vulnerability testing. Detection reasons over data an earlier, non-invasive discovery already recorded; it sends nothing, and it confirms nothing by attempting it. A finding therefore states what RedDock concluded from what it saw, not what it proved by trying — which is why a version banner is reported as a disclosure rather than a vulnerability, and why a CVE association from a local catalogue is never a statement that a service is exploitable. Demonstrating that a finding is real, safely and with an approval gate, is Phase 3.
 
 ## Reporting a vulnerability
 
@@ -64,7 +79,8 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.2.x | Yes — current published release |
+| 0.3.x | Yes — current published release |
+| 0.2.x | No — superseded by 0.3.0 |
 | 0.1.x | No — superseded by 0.2.0 |
 
 Security fixes are evaluated for the latest published release. RedDock is a local, single-operator application in this phase; do not expose it to untrusted networks.

@@ -46,8 +46,8 @@ def get_session() -> Iterator[Session]:
 
 
 def initialize_database() -> None:
-    # Import before metadata creation so every model is registered. Phase 1 only
-    # adds tables, so an existing Phase 0 database upgrades in place.
+    # Import before metadata creation so every model is registered. Every phase
+    # so far only adds tables, so a deployed database upgrades in place.
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

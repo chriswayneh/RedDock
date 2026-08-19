@@ -8,11 +8,13 @@ Containerized application, React UI shell, FastAPI API, SQLite Dockyards, safety
 
 DockGuard scope definitions, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation. Scoped discovery now produces auditable asset observations with hashed evidence. Released as v0.2.0 and finalized in v0.2.1.
 
-## Next — Phase 2: Detection
+## Completed — Phase 2: Detection
 
-Normalized findings, detection adapter contracts, CVE enrichment, and deduplication. Complete when observations can become traceable findings without fabricating data.
+Normalized findings, the detector contract and registry, detection runs, deduplication by stable fingerprint, a finding lifecycle that resolves rather than deletes, and the CVE enrichment boundary. Observations now become traceable findings without fabricating data: a finding names the detector and rule that produced it, cites the observations it was drawn from, and carries the hashes that verify them. Released as v0.3.0.
 
-## Phase 3 — Validation
+RedDock ships no CVE data. Enrichment is a boundary with a local, operator-supplied catalogue behind it, and a catalogue match is an association rather than a conclusion. See [ADR 0007](docs/adr/0007-cve-enrichment-is-an-association.md).
+
+## Next — Phase 3: Validation
 
 Controlled non-destructive validation, confidence scoring, approval gates, and evidence packages. Complete when validation actions require scope and policy decisions.
 

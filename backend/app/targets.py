@@ -125,7 +125,7 @@ def _normalize_url(text: str) -> Target:
         host = _normalize_hostname(hostname)
         rendered = host
 
-    # Paths, queries and fragments are dropped: Phase 1 probes an origin and
+    # Paths, queries and fragments are dropped: RedDock probes an origin and
     # never a location, so retaining them would imply a capability RedDock does
     # not have and would widen what a stored target string can carry.
     port_suffix = "" if port in (None, _DEFAULT_PORTS[scheme]) else f":{port}"
