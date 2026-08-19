@@ -14,6 +14,9 @@ class Settings(BaseModel):
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
+    # Optional, local, and off unless an operator supplies it. RedDock never
+    # downloads CVE data; see app/detection/enrichment.py.
+    cve_catalog_path: str | None = None
 
     # Phase 1 safety bounds. These are constants rather than environment
     # settings because relaxing them would weaken the exact guarantees
@@ -26,6 +29,17 @@ class Settings(BaseModel):
     max_evidence_bytes: int = 2 * 1024 * 1024
     max_resolved_addresses: int = 4
 
+    # Phase 2 detection bounds. Detection only reads what RedDock already
+    # stored, so these bound work rather than reach: a snapshot cannot grow
+    # without limit, a detector cannot flood the findings table, and a finding
+    # cannot drag an unbounded number of evidence links behind it.
+    max_detection_assets: int = 2_000
+    max_detection_observations: int = 20_000
+    max_findings_per_detector: int = 500
+    max_evidence_per_finding: int = 20
+    max_cve_catalog_bytes: int = 5 * 1024 * 1024
+    max_cve_catalog_entries: int = 20_000
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -37,4 +51,5 @@ def get_settings() -> Settings:
         database_url=database_url,
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),
         nmap_path=os.getenv("REDDOCK_NMAP_PATH") or None,
+        cve_catalog_path=os.getenv("REDDOCK_CVE_CATALOG") or None,
     )

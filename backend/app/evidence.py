@@ -1,10 +1,17 @@
-"""RedLedger foundation: retained, hashed discovery evidence.
+"""RedLedger: retained, hashed evidence.
 
-Phase 1 keeps only what is needed to re-read a discovery run later: the raw
-tool output, the normalized result and a metadata record describing how they
-were produced. Every path is derived from integer identifiers and a validated
+RedDock keeps what is needed to re-read a run later: the raw tool output, the
+normalized result and a metadata record describing how they were produced. Every
+path is derived from integer identifiers, a fixed scope name and a validated
 artifact name, so no operator input can direct a write outside the evidence
 root.
+
+Detection uses the same store rather than a second one. Its documents sit under
+a `detection` scope so that a detection run and a discovery run that happen to
+share an identifier cannot share a directory:
+
+    evidence/<dockyard-id>/<discovery-run-id>/
+    evidence/<dockyard-id>/detection/<detection-run-id>/
 """
 
 import json
@@ -19,7 +26,13 @@ METADATA_FILE = "metadata.json"
 NORMALIZED_FILE = "normalized/result.json"
 EVIDENCE_SCHEMA = "reddock.evidence/1"
 
+#: Discovery keeps the original layout so existing evidence stays where it is.
+DISCOVERY_SCOPE = ""
+DETECTION_SCOPE = "detection"
+
 _ARTIFACT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+#: A closed set, so a scope can never become a path fragment an operator chose.
+_SCOPES = frozenset({DISCOVERY_SCOPE, DETECTION_SCOPE})
 
 
 class EvidenceError(RuntimeError):
@@ -44,11 +57,15 @@ class EvidenceStore:
         self.root = (root or Path(settings.evidence_dir)).resolve()
         self.max_bytes = max_bytes or settings.max_evidence_bytes
 
-    def run_directory(self, dockyard_id: int, run_id: int) -> Path:
-        return self.root / str(int(dockyard_id)) / str(int(run_id))
+    def run_directory(self, dockyard_id: int, run_id: int, scope: str = DISCOVERY_SCOPE) -> Path:
+        base = self.root / str(int(dockyard_id))
+        if _checked_scope(scope):
+            base = base / scope
+        return base / str(int(run_id))
 
-    def relative_run_path(self, dockyard_id: int, run_id: int) -> str:
-        return f"{int(dockyard_id)}/{int(run_id)}"
+    def relative_run_path(self, dockyard_id: int, run_id: int, scope: str = DISCOVERY_SCOPE) -> str:
+        prefix = f"{scope}/" if _checked_scope(scope) else ""
+        return f"{int(dockyard_id)}/{prefix}{int(run_id)}"
 
     def write_raw(
         self, dockyard_id: int, run_id: int, name: str, media_type: str, content: bytes
@@ -61,16 +78,34 @@ class EvidenceStore:
             dockyard_id, run_id, "raw", f"raw/{name}", media_type, payload, truncated
         )
 
-    def write_normalized(self, dockyard_id: int, run_id: int, document: dict) -> StoredArtifact:
-        payload = json.dumps(document, indent=2, sort_keys=True, default=str).encode()
+    def write_normalized(
+        self, dockyard_id: int, run_id: int, document: dict, scope: str = DISCOVERY_SCOPE
+    ) -> StoredArtifact:
+        payload = _document(document)
         return self._write(
-            dockyard_id, run_id, "normalized", NORMALIZED_FILE, "application/json", payload, False
+            dockyard_id,
+            run_id,
+            "normalized",
+            NORMALIZED_FILE,
+            "application/json",
+            payload,
+            False,
+            scope,
         )
 
-    def write_metadata(self, dockyard_id: int, run_id: int, document: dict) -> StoredArtifact:
-        payload = json.dumps(document, indent=2, sort_keys=True, default=str).encode()
+    def write_metadata(
+        self, dockyard_id: int, run_id: int, document: dict, scope: str = DISCOVERY_SCOPE
+    ) -> StoredArtifact:
+        payload = _document(document)
         return self._write(
-            dockyard_id, run_id, "metadata", METADATA_FILE, "application/json", payload, False
+            dockyard_id,
+            run_id,
+            "metadata",
+            METADATA_FILE,
+            "application/json",
+            payload,
+            False,
+            scope,
         )
 
     def _write(
@@ -82,8 +117,9 @@ class EvidenceStore:
         media_type: str,
         payload: bytes,
         truncated: bool,
+        scope: str = DISCOVERY_SCOPE,
     ) -> StoredArtifact:
-        directory = self.run_directory(dockyard_id, run_id)
+        directory = self.run_directory(dockyard_id, run_id, scope)
         destination = (directory / relative_path).resolve()
         if not destination.is_relative_to(directory.resolve()):
             raise EvidenceError(f"Evidence path escapes its run directory: {relative_path}")
@@ -97,3 +133,14 @@ class EvidenceStore:
             sha256=sha256(payload).hexdigest(),
             truncated=truncated,
         )
+
+
+def _checked_scope(scope: str) -> str:
+    if scope not in _SCOPES:
+        raise EvidenceError(f"Unknown evidence scope: {scope!r}")
+    return scope
+
+
+def _document(document: dict) -> bytes:
+    """Serialize deterministically, so the same result always hashes the same."""
+    return json.dumps(document, indent=2, sort_keys=True, default=str).encode()

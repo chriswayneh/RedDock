@@ -194,3 +194,141 @@ class EvidenceRecord(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     truncated: Mapped[bool] = mapped_column(nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DetectionRun(Base):
+    """One auditable detection request.
+
+    A detection run is separate from a DiscoveryRun on purpose: discovery
+    contacts a target, detection only reads what discovery already recorded.
+    A run therefore has no target, no adapter and no DockGuard decision, and it
+    takes no operator parameters at all.
+    """
+
+    __tablename__ = "detection_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    detectors: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Which enrichment source was in effect, and why it was not, so a finding
+    # that carries no CVE reference can be told apart from one RedDock could
+    # not enrich.
+    enrichment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    asset_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    service_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    observation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    new_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    resolved_finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # RedLedger hashes for this run's two retained documents. They are columns
+    # rather than evidence_records rows because that table's discovery_run_id is
+    # NOT NULL and Phase 2 stays additive; see ARCHITECTURE.md.
+    metadata_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Finding(Base):
+    """A normalized security-relevant conclusion drawn by one named detector.
+
+    A Finding is not an Observation. An observation states what an adapter saw;
+    a finding states what a specific detector concluded from one or more
+    observations, and it cannot exist without them. Identity is the fingerprint:
+    within a Dockyard the same underlying issue is one row whose last_seen and
+    evidence grow, never a new row per detection run.
+    """
+
+    __tablename__ = "findings"
+    __table_args__ = (
+        UniqueConstraint("dockyard_id", "fingerprint", name="uq_finding_fingerprint"),
+        Index("ix_finding_dockyard_status", "dockyard_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    detector: Mapped[str] = mapped_column(String(48), nullable=False)
+    detector_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    rule_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Severity and confidence are deliberately separate: how much this would
+    # matter, and how sure RedDock is that it is true, are different questions.
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    status_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    asset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    service_id: Mapped[int | None] = mapped_column(
+        ForeignKey("services.id", ondelete="CASCADE"), nullable=True
+    )
+    remediation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Enrichment, never proof: a CVE association describes a catalogue entry
+    # that matched an observed product and version, not a confirmed weakness.
+    cve_references: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    first_detection_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("detection_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    last_detection_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("detection_runs.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    evidence: Mapped[list["FindingEvidence"]] = relationship(
+        back_populates="finding", cascade="all, delete-orphan"
+    )
+
+
+class FindingEvidence(Base):
+    """The link that makes a finding checkable.
+
+    One row per observation that supported a finding, carrying the hashed
+    RedLedger artifact that observation came from. A finding with no rows here
+    is refused by the detection runner, because a conclusion without evidence is
+    exactly what RedDock exists not to produce.
+    """
+
+    __tablename__ = "finding_evidence"
+    __table_args__ = (
+        UniqueConstraint("finding_id", "observation_id", name="uq_finding_evidence"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    observation_id: Mapped[int] = mapped_column(
+        ForeignKey("observations.id", ondelete="CASCADE"), nullable=False
+    )
+    detection_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("detection_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    discovery_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discovery_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    evidence_record_id: Mapped[int | None] = mapped_column(
+        ForeignKey("evidence_records.id", ondelete="SET NULL"), nullable=True
+    )
+    summary: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    finding: Mapped[Finding] = relationship(back_populates="evidence")
