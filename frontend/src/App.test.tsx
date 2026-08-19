@@ -244,7 +244,7 @@ function stubApi({
       }
       if (path.endsWith("/dockyards") && init?.method === "POST")
         return json({ ...dockyard, id: 2, name: JSON.parse(String(init.body)).name }, 201);
-      return json([dockyard]);
+      return json([dockyard, { ...dockyard, id: 2, name: "Second workspace" }]);
     }),
   );
   return calls;
@@ -445,6 +445,19 @@ describe("Phase 2 detection", () => {
       expect(calls.decision).toHaveBeenCalledWith({ status: "suppressed", note: null }),
     );
     expect(screen.queryByRole("button", { name: "Resolved" })).toBeNull();
+  });
+
+  it("closes a finding when the Dockyard changes", async () => {
+    stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: /^Findings/ })[0]);
+    await user.click(await screen.findByRole("button", { name: finding.title }));
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Dockyard"), "2");
+    await waitFor(() => expect(screen.queryByText(findingDetail.description)).toBeNull());
   });
 
   it("filters findings by severity through the API", async () => {
