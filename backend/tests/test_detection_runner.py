@@ -691,3 +691,40 @@ def test_a_detection_run_interrupted_by_a_restart_is_marked_and_unblocks_the_nex
 
     install(monkeypatch, StubDetector())
     assert detect(endpoint).status == "completed"
+
+
+def test_two_findings_claiming_one_identity_fail_the_detector(
+    endpoint: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """Deduplication keys on the fingerprint, so a collision is a detector bug."""
+
+    def collide(context):
+        base = _one_finding(context)[0]
+        return (base, base)
+
+    install(monkeypatch, StubDetector(produce=collide))
+    run = detect(endpoint)
+
+    assert run.status == "failed"
+    assert "same identity" in run.error
+    assert findings_of(endpoint) == []
+
+
+def test_a_scope_key_lets_one_rule_fire_twice_for_one_service(
+    endpoint: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """The discriminator exists for rules that legitimately repeat."""
+    import dataclasses
+
+    def twice(context):
+        base = _one_finding(context)[0]
+        return (
+            dataclasses.replace(base, scope_key="first"),
+            dataclasses.replace(base, scope_key="second"),
+        )
+
+    install(monkeypatch, StubDetector(produce=twice))
+    run = detect(endpoint)
+
+    assert run.status == "completed"
+    assert len(findings_of(endpoint)) == 2
