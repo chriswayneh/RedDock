@@ -114,6 +114,33 @@ const findingDetail = {
       sha256: "a".repeat(64),
     },
   ],
+  validations: [],
+};
+
+const validationRun = {
+  id: 12,
+  dockyard_id: 1,
+  finding_id: finding.id,
+  validator: "http.origin_recheck",
+  validator_version: "1.0.0",
+  target: "https://127.0.0.1:8443",
+  status: "pending_approval",
+  decision: "allowed",
+  decision_reason: "Target is covered by authorized scope entry 127.0.0.1",
+  approval_note: null,
+  outcome: null,
+  confidence: null,
+  summary: null,
+  detail: null,
+  error: null,
+  evidence_path: null,
+  metadata_sha256: null,
+  result_sha256: null,
+  manifest_sha256: null,
+  created_at: "2026-08-18T12:32:00Z",
+  approved_at: null,
+  started_at: null,
+  completed_at: null,
 };
 
 const detectionRun = {
@@ -173,12 +200,15 @@ type Options = {
   evaluation?: unknown;
   findings?: unknown[];
   observations?: unknown[];
+  validations?: unknown[];
 };
 
 type Calls = {
   discovery: ReturnType<typeof vi.fn>;
   detection: ReturnType<typeof vi.fn>;
   decision: ReturnType<typeof vi.fn>;
+  validationRequest: ReturnType<typeof vi.fn>;
+  validationApproval: ReturnType<typeof vi.fn>;
 };
 
 function stubApi({
@@ -187,8 +217,15 @@ function stubApi({
   evaluation = allowed,
   findings = [],
   observations = [],
+  validations = [],
 }: Options = {}): Calls {
-  const calls: Calls = { discovery: vi.fn(), detection: vi.fn(), decision: vi.fn() };
+  const calls: Calls = {
+    discovery: vi.fn(),
+    detection: vi.fn(),
+    decision: vi.fn(),
+    validationRequest: vi.fn(),
+    validationApproval: vi.fn(),
+  };
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -199,7 +236,7 @@ function stubApi({
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.3.0", phase: "Phase 2 — Detection" });
+        return json({ name: "RedDock", version: "0.4.0", phase: "Phase 3 — Validation" });
       if (path.endsWith("/adapters")) return json(adapters);
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);
@@ -208,6 +245,15 @@ function stubApi({
       if (path.endsWith("/services")) return json([]);
       if (path.endsWith("/observations")) return json(observations);
       if (path.endsWith("/evidence")) return json([]);
+      if (/\/findings\/\d+\/validations$/.test(path) && init?.method === "POST") {
+        calls.validationRequest(JSON.parse(String(init.body)));
+        return json(validationRun, 201);
+      }
+      if (/\/validations\/\d+\/approve$/.test(path) && init?.method === "POST") {
+        calls.validationApproval(JSON.parse(String(init.body)));
+        return json({ ...validationRun, status: "completed", outcome: "confirmed" });
+      }
+      if (path.endsWith("/validations")) return json(validations);
       if (/\/findings\/\d+$/.test(path)) {
         if (init?.method === "PATCH") {
           const body = JSON.parse(String(init.body));
@@ -268,7 +314,7 @@ describe("RedDock application", () => {
   it("shows healthy status and the current phase", async () => {
     render(<App />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("PHASE 2 — DETECTION")).toBeInTheDocument();
+    expect(screen.getByText("PHASE 3 — VALIDATION")).toBeInTheDocument();
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
@@ -515,5 +561,48 @@ describe("Phase 2 detection", () => {
     expect(
       await screen.findByText(/It carries no severity and no verdict/),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Phase 3 validation", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("requests an eligible finding without approving it", async () => {
+    const calls = stubApi({ findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await openWorkspace(user);
+    await user.click(await screen.findByRole("button", { name: "Validation" }));
+
+    expect(await screen.findByText("Request a bounded recheck")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Request validation" }));
+    await waitFor(() => expect(calls.validationRequest).toHaveBeenCalledWith({}));
+    expect(calls.validationApproval).not.toHaveBeenCalled();
+  });
+
+  it("requires an approval note before it invokes the recheck endpoint", async () => {
+    const calls = stubApi({ findings: [finding], validations: [validationRun] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await openWorkspace(user);
+    await user.click(await screen.findByRole("button", { name: "Validation" }));
+
+    await user.click(await screen.findByRole("button", { name: "Approve and recheck" }));
+    expect(calls.validationApproval).not.toHaveBeenCalled();
+    await user.type(
+      screen.getByLabelText("Approval note for validation 12"),
+      "Confirm this authorized recheck.",
+    );
+    await user.click(screen.getByRole("button", { name: "Approve and recheck" }));
+    await waitFor(() =>
+      expect(calls.validationApproval).toHaveBeenCalledWith({
+        note: "Confirm this authorized recheck.",
+      }),
+    );
   });
 });

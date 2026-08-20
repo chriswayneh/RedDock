@@ -14,7 +14,7 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 
 **Scope enforcement**
 
-- DockGuard is evaluated on the server for every discovery request, and again immediately before the adapter is invoked. Frontend checks are convenience only.
+- DockGuard is evaluated on the server for every discovery request, and again immediately before the adapter is invoked. A validation request is also re-evaluated at approval time, immediately before its fixed recheck. Frontend checks are convenience only.
 - Exclusions always override inclusions, and a Dockyard with no scope denies everything.
 - Denials are specific and explained: `denied_out_of_scope`, `denied_excluded`, `invalid_target`, `unresolved`.
 - Denied requests are persisted as discovery runs so refused attempts remain auditable.
@@ -36,6 +36,14 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Only non-invasive profiles exist. Nmap runs without NSE scripts, brute force, credential guessing, exploit scripts, OS detection, UDP scanning, fragmentation, decoys, spoofing, source-port manipulation, or `-A`.
 - The HTTP probe issues one request per origin, follows no redirects, reads no response body, and does not crawl, fuzz, submit forms, or test for vulnerabilities.
 
+**Validation**
+
+- Phase 3 validation is not a target-entry or tool-selection feature. It can only recheck an eligible, open `http.security_headers` finding at the HTTP origin already recorded on that finding.
+- Requesting validation stores intent and makes no network contact. A separate local operator approval note is required before RedDock makes the recheck, and that approval does not itself prove authorization to assess a system.
+- At approval time RedDock evaluates DockGuard again. If scope was removed or now denies the origin, the denied attempt remains in the audit trail and no connection is attempted.
+- The validator reuses the fixed HTTP probe: a bodyless `HEAD`, with one standards-required `GET` fallback for `405` or `501`; it accepts no URL, payload, credential, cookie, command, flag, redirect, response body, crawler, or browser automation.
+- A result is `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. It never changes the original finding's severity, confidence, or operator status.
+
 **Detection**
 
 - Detection reads only what RedDock already recorded. A detector receives an immutable snapshot of one Dockyard and is given no database session, no socket, no subprocess, no target, and no operator-supplied option, so there is nothing for it to reach, execute, or widen. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could.
@@ -52,7 +60,7 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Evidence paths are built from integer identifiers and a validated artifact name, and each resolved destination is confirmed to be inside its run directory before a write.
 - Raw artifacts are capped at 2 MiB and marked when truncated.
 - Only a small allowlist of response headers is retained; cookies and other session material are never written to evidence.
-- Every stored artifact is SHA-256 hashed and recorded, for detection runs as well as discovery runs.
+- Every stored artifact is SHA-256 hashed and recorded, for detection runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
 - Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
 **Runtime**
@@ -61,7 +69,7 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - SQLite data and evidence are held in a named volume, not baked into the image.
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
-- Concurrent runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active.
+- Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation requests are bounded per Dockyard and run synchronously only after approval.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
 
@@ -69,7 +77,7 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 
 RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, AI reasoning, automated remediation, or report generation. No operator-supplied script or shell command is executed anywhere in the product.
 
-It also performs no active vulnerability testing. Detection reasons over data an earlier, non-invasive discovery already recorded; it sends nothing, and it confirms nothing by attempting it. A finding therefore states what RedDock concluded from what it saw, not what it proved by trying — which is why a version banner is reported as a disclosure rather than a vulnerability, and why a CVE association from a local catalogue is never a statement that a service is exploitable. Demonstrating that a finding is real, safely and with an approval gate, is Phase 3.
+It performs no exploitation or broad active vulnerability testing. Detection reasons over data an earlier, non-invasive discovery already recorded; it sends nothing. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association from a local catalogue is never a statement that a service is exploitable.
 
 ## Reporting a vulnerability
 
@@ -79,7 +87,8 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.3.x | Yes — current published release |
+| 0.4.x | Yes — current development version; no release tag yet |
+| 0.3.x | No — superseded by the current development version |
 | 0.2.x | No — superseded by 0.3.0 |
 | 0.1.x | No — superseded by 0.2.0 |
 

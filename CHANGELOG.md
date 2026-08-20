@@ -2,6 +2,30 @@
 
 All notable changes to RedDock are documented here.
 
+## [0.4.0] — Phase 3 Validation (development)
+
+Phase 3 adds a deliberately narrow path to recheck a conclusion without turning
+RedDock into a general-purpose scanner. It is not a tagged release yet.
+
+### Added
+
+- `ValidationRun`, an auditable request/approval/result record linked to one finding
+- A fixed `http.origin_recheck` validator for eligible open `http.security_headers` findings only
+- Separate request and approval API endpoints; the request contacts nothing, while approval requires a 3–500 character note
+- A second DockGuard decision immediately before contact, with denied validation attempts retained in the audit trail
+- `confirmed`, `not_reproduced`, and `indeterminate` outcomes with confidence kept separate from the original finding's severity and confidence
+- A validation evidence package containing `raw/http-recheck.json`, `normalized/result.json`, `metadata.json`, and `raw/manifest.json`, with SHA-256 hashes recorded on the run
+- A Validation workspace tab for requests, approvals, outcomes, DockGuard decisions, and evidence hashes
+- Tests for the approval boundary, successful evidence package, scope revocation, unsupported findings, and additive schema upgrade
+- ADR 0008 documenting why validation is approval-gated and bounded
+
+### Security
+
+- Validation accepts no operator-selected URL, payload, credential, cookie, command, or tool option; it uses a finding's recorded origin and the existing fixed HTTP probe
+- It follows no redirects, reads no response body, performs no crawling or browser automation, and is limited to one/two safe HTTP requests (a `HEAD` and only a standards-required `GET` fallback)
+- Only an open eligible finding may be requested, requests are bounded per Dockyard, and scope removal between request and approval denies the attempt before any contact
+- An approval is a local audit assertion, not proof of external authorization; DockGuard remains the technical scope boundary
+
 ## [0.3.0] — Phase 2 Detection
 
 Observations can now become findings. They remain separate concepts: an observation states what an adapter saw, a finding states what one named detector concluded from one or more of them, and a finding that cites no observation is refused rather than stored.

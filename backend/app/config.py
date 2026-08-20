@@ -9,8 +9,8 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.3.0"
-    phase: str = "Phase 2 — Detection"
+    version: str = "0.4.0"
+    phase: str = "Phase 3 — Validation"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
@@ -39,6 +39,10 @@ class Settings(BaseModel):
     max_evidence_per_finding: int = 20
     max_cve_catalog_bytes: int = 5 * 1024 * 1024
     max_cve_catalog_entries: int = 20_000
+
+    # Phase 3 validation is intentionally narrower than discovery: one
+    # approved HTTP-origin recheck, with the existing fixed request profile.
+    max_validation_runs_per_dockyard: int = 500
 
 
 @lru_cache

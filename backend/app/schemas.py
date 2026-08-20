@@ -279,11 +279,48 @@ class FindingEvidenceRead(BaseModel):
     sha256: str | None = None
 
 
+class ValidationApprovalCreate(BaseModel):
+    """A local operator's explicit second gate before RedDock rechecks an origin."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = Field(min_length=3, max_length=500)
+
+
+class ValidationRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    finding_id: int
+    validator: str
+    validator_version: str
+    target: str
+    status: str
+    decision: str | None
+    decision_reason: str | None
+    approval_note: str | None
+    outcome: str | None
+    confidence: str | None
+    summary: str | None
+    detail: dict | None
+    error: str | None
+    evidence_path: str | None
+    metadata_sha256: str | None
+    result_sha256: str | None
+    manifest_sha256: str | None
+    created_at: UtcDatetime
+    approved_at: UtcDatetime | None
+    started_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
+
+
 class FindingDetailRead(FindingRead):
     description: str
     remediation: str | None
     detail: dict | None
     evidence: list[FindingEvidenceRead] = Field(default_factory=list)
+    validations: list[ValidationRunRead] = Field(default_factory=list)
 
 
 class FindingStatusUpdate(BaseModel):

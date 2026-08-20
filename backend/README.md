@@ -10,6 +10,7 @@ app/inventory.py    asset, service, and observation persistence rules
 app/discovery/      adapter contract, adapters, registry, and run orchestration
 app/detection/      detector contract, detectors, registry, enrichment, and run orchestration
 app/findings.py     finding persistence, deduplication, and lifecycle rules
+app/validation/     approval-gated, fixed HTTP-origin validation orchestration
 app/evidence.py     hashed evidence storage
 ```
 
@@ -18,3 +19,10 @@ may not contact anything: it is handed a frozen snapshot of one Dockyard and
 returns value objects, with no session, socket, subprocess or operator input in
 reach. `tests/test_detection_contract.py` reads the detection package and fails
 if that stops being true.
+
+Validation is not a general-purpose testing interface. It can recheck only an
+eligible open HTTP security-header finding at its recorded origin. Requesting
+one records intent without contacting a target; a separate approval note
+re-evaluates DockGuard and then reuses the fixed, bodyless HTTP probe. The
+raw result, normalized conclusion, metadata, and manifest are retained with
+SHA-256 hashes.

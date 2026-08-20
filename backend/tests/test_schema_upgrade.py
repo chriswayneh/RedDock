@@ -259,6 +259,17 @@ def test_every_phase_2_table_is_created(phase_1_database: Path):
     assert {"detection_runs", "findings", "finding_evidence"} <= tables
 
 
+def test_every_phase_3_table_is_created(phase_1_database: Path):
+    """Phase 3 remains additive when upgrading a prior persisted Dockyard."""
+    import app.database
+
+    app.database.initialize_database()
+    with sqlite3.connect(phase_1_database) as connection:
+        rows = connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = {row[0] for row in rows}
+    assert "validation_runs" in tables
+
+
 def test_phase_2_changes_no_phase_1_column(phase_1_database: Path):
     """The upgrade is additive, so every Phase 1 table keeps the shape it had."""
     import app.database

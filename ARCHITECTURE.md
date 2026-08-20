@@ -9,10 +9,10 @@ Browser → React UI (static files) → FastAPI → DockGuard → discovery adap
                                         ↓               ↓
                                     detector ←── snapshot of stored state
                                         ↓
-                                    findings
+                                    findings → validation request → approval → DockGuard → fixed HTTP recheck
 ```
 
-Two paths leave the API and only one of them touches a network. Discovery goes out through DockGuard to a target and records what it saw. Detection goes the other way: it reads what is already stored, concludes something about it, and writes findings back. A detector never reaches a target, which is what makes the second path safe to run without a scope decision.
+Three paths leave the API. Discovery goes through DockGuard to a target and records what it saw. Detection goes the other way: it reads stored state, concludes something about it, and writes findings back without ever reaching a target. The third begins with a validation request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. The network boundary is therefore limited to discovery and the narrowly bounded recheck.
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
 
@@ -26,6 +26,7 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/discovery/`: the adapter contract, adapters, registry, and run orchestration.
 - `backend/app/detection/`: the detector contract, detectors, registry, fingerprints, CVE enrichment, and run orchestration.
 - `backend/app/findings.py`: finding persistence, deduplication, and lifecycle rules.
+- `backend/app/validation/`: approval-gated validation orchestration and the fixed HTTP-origin profile.
 - `backend/app/evidence.py`: the evidence store.
 - `backend/app/models.py` and `schemas.py`: persistence mappings and input/output contracts.
 - `frontend/src`: presentation and API client only.
@@ -102,6 +103,7 @@ prepare → execute → parse → normalize → artifacts
 - **DetectionRun** — one auditable detection: which detectors ran, what each of them did or failed to do, how much state was read, how many findings were produced, created and resolved, which enrichment source was in effect, and the hashes of the two documents it retained. It has no target and no DockGuard decision, because it contacts nothing.
 - **Finding** — a normalized security-relevant conclusion one named detector drew. Identity is a SHA-256 `fingerprint` over the detector, the rule, and the asset and service concerned, unique within a Dockyard, so repeated detection updates one row instead of accumulating duplicates. Severity and confidence are separate fields: how much this would matter, and how sure RedDock is that it is true, are different questions and blending them loses both.
 - **FindingEvidence** — one row per observation that supported a finding, carrying the discovery run and the hashed `EvidenceRecord` that observation came from.
+- **ValidationRun** — one request to recheck one eligible finding. It records target, validator version, both the request-time and approval-time policy outcome, the approval note, a bounded result, and hashes for its evidence package. Denied requests are complete audit records because no target was contacted.
 - **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
@@ -143,6 +145,16 @@ Three things keep this from producing the usual noise. A header is only reported
 
 The scope is also narrower than it could look. RedDock does not enumerate supported TLS versions or cipher suites — the HTTP probe negotiates with a default client, so it can only ever record a version a current client accepted — and a rule about obsolete protocol versions would therefore never be able to fire from RedDock's own data. It is left out rather than shipped as decoration.
 
+## Validation boundary
+
+Phase 3 does not make every finding executable. The only profile, `http.origin_recheck`, applies only to an open `http.security_headers` finding for `plaintext-http`, missing HSTS, missing `nosniff`, missing content security policy, or missing frame protection. The target comes from the linked web asset's normalized identity; neither the browser nor an API client supplies a target, URL path, header, payload, credential, cookie, command, tool flag, or parser.
+
+```text
+finding → request (no contact) → DockGuard decision → approval note → DockGuard decision → fixed HTTP probe → result + evidence package
+```
+
+The approval action must include a short note. It records the operator's decision but is not an authorization bypass: the second DockGuard decision happens immediately before the probe and wins if scope has changed. The runner reuses `HttpProbeAdapter`, so it makes a bodyless `HEAD` request and only falls back to one `GET` for `405` or `501`; it follows no redirects and reads no response body. Outcomes are `confirmed`, `not_reproduced`, or `indeterminate`; result confidence is separate from both the original finding's severity and its detection confidence. See [ADR 0008](docs/adr/0008-validation-is-approval-gated.md).
+
 ## CVE enrichment
 
 RedDock fetches no CVE data and has no vulnerability feed. Phase 2 ships the boundary and a local catalogue reader behind it, enabled only when an operator sets `REDDOCK_CVE_CATALOG` to a JSON file. A match requires an exactly equal product and version; version ranges are not interpreted, because a range is an inference and an inference printed beside a CVE identifier reads as a result.
@@ -164,15 +176,22 @@ evidence/<dockyard-id>/detection/<detection-run-id>/
   metadata.json          detectors and their outcomes, enrichment source, inputs read,
                          counts, timestamps, artifact hashes
   normalized/result.json the findings produced and the fingerprints resolved
+
+evidence/<dockyard-id>/validation/<validation-run-id>/
+  raw/http-recheck.json  fixed HTTP probe's bounded, filtered response record
+  normalized/result.json finding, rule, outcome, confidence, and response summary
+  metadata.json          request/approval timestamps, approval note, DockGuard decision,
+                         target, validator version, and artifact hashes
+  raw/manifest.json      package membership and SHA-256 for the other artifacts
 ```
 
 Paths are built from integer identifiers, a fixed scope name and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Every artifact is SHA-256 hashed. Session material such as cookies is deliberately never retained, and detection has nothing raw to retain because it contacts nothing.
 
 A finding is therefore checkable end to end. `FindingEvidence` names the observations it was drawn from; each of those names its discovery run and that run's hashed `EvidenceRecord`; the detection run records the hash of the normalized result the finding appears in. Which detector produced it, from what observation, during which run, and which hash verifies it are all answerable without leaving the database.
 
-Detection artifact hashes are recorded as columns on the detection run rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and Phase 2 stays purely additive; relaxing it would be the first destructive schema change, and this architecture already says that comes with versioned migrations rather than an ad hoc alteration. Unifying both halves behind one table is the first job of that migration.
+Detection and validation artifact hashes are recorded as columns on their runs rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and keeping the evolution additive avoids relaxing it in place. Unifying them behind one table is the first job of a future versioned migration.
 
-Evidence packages and portable exports still belong to later phases.
+Portable exports still belong to later phases; the Phase 3 package is retained locally and is not an export format.
 
 ## Trust boundaries
 
@@ -184,6 +203,8 @@ Evidence packages and portable exports still belong to later phases.
 | Adapter → target | Non-invasive profiles only, without a shell, under a timeout, with output bounds. |
 | Target → RedDock | Tool output and HTTP headers are untrusted data. They are stored and displayed as text, never executed, and self-reported values are marked `reported`. A detector reads that same data and may draw a conclusion from it; it still cannot act on it. |
 | API → detector | Only an immutable snapshot of one Dockyard crosses. No session, socket, subprocess, target or operator option is reachable from a detector, and its output is validated before any of it is stored. |
+| API → validation runner | One finding identifier and an approval note only; the runner derives the origin from persisted state and has no arbitrary target or tool option. |
+| Validation runner → target | DockGuard must allow the recorded origin at approval time; the only contact is the fixed bounded HTTP probe. |
 | RedDock → disk | Writes confined to the database file and the evidence root. |
 
 ## Concurrency and restart
@@ -191,6 +212,8 @@ Evidence packages and portable exports still belong to later phases.
 Discovery runs on a `ThreadPoolExecutor` bounded to the concurrent-run limit; there is no Redis, queue, or worker service. If the process stops while a run is in flight, startup marks that run failed with "Interrupted by a RedDock restart" rather than leaving it looking active or pretending it completed.
 
 Detection is synchronous. It reads stored state and contacts nothing, so there is nothing to wait on: the run completes inside the request, the response describes a finished run, and there is no in-flight detection state for a restart to recover. A second detection run on the same Dockyard while one is in flight is refused rather than interleaved.
+
+Validation is synchronous only after approval. It is bounded to 500 retained requests per Dockyard, makes at most the two requests owned by the HTTP probe, and records a failed outcome if the process-level probe cannot complete. There is no background retry or task queue.
 
 | Detection limit | Value | Why |
 | --- | --- | --- |

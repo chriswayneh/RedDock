@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { DataTable, DecisionPanel, EmptyState, StatusPill } from "./components";
-import { DetectionPanel, FindingsPanel } from "./Findings";
+import { DetectionPanel, FindingsPanel, ValidationPanel } from "./Findings";
 import { formatDate, humanize, kindLabel, plural } from "./format";
 import type {
   Adapter,
@@ -15,6 +15,7 @@ import type {
   ScopeEntry,
   ScopeEvaluation,
   ServiceRow,
+  ValidationRun,
 } from "./types";
 
 const tabs = [
@@ -25,6 +26,7 @@ const tabs = [
   "Observations",
   "Detection",
   "Findings",
+  "Validation",
   "Runs",
 ] as const;
 type Tab = (typeof tabs)[number];
@@ -52,6 +54,7 @@ export function Workspace({
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [detections, setDetections] = useState<DetectionRun[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [validations, setValidations] = useState<ValidationRun[]>([]);
   // Detection completes inside its request, so the findings view reloads on a
   // counter rather than by polling.
   const [detected, setDetected] = useState(0);
@@ -66,6 +69,7 @@ export function Workspace({
         nextRuns,
         nextDetections,
         nextFindings,
+        nextValidations,
       ] = await Promise.all([
         api.scope(dockyard.id),
         api.assets(dockyard.id),
@@ -74,6 +78,7 @@ export function Workspace({
         api.discoveries(dockyard.id),
         api.detections(dockyard.id),
         api.findings(dockyard.id),
+        api.validations(dockyard.id),
       ]);
       setScope(nextScope);
       setAssets(nextAssets);
@@ -82,6 +87,7 @@ export function Workspace({
       setRuns(nextRuns);
       setDetections(nextDetections);
       setFindings(nextFindings);
+      setValidations(nextValidations);
       setDetected((current) => current + 1);
       onError(null);
     } catch (error) {
@@ -116,6 +122,7 @@ export function Workspace({
           <span>{plural(services.length, "service")}</span>
           <span>{plural(runs.length, "discovery run")}</span>
           <span>{plural(findings.length, "finding")}</span>
+          <span>{plural(validations.length, "validation")}</span>
         </div>
       </section>
 
@@ -160,6 +167,15 @@ export function Workspace({
       )}
       {tab === "Findings" && (
         <FindingsPanel dockyardId={dockyard.id} refreshKey={detected} onError={onError} />
+      )}
+      {tab === "Validation" && (
+        <ValidationPanel
+          dockyardId={dockyard.id}
+          findings={findings}
+          runs={validations}
+          onChanged={refresh}
+          onError={onError}
+        />
       )}
       {tab === "Assets" && <AssetTable assets={assets} />}
       {tab === "Services" && <ServiceTable services={services} />}

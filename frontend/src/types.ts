@@ -207,9 +207,37 @@ export type FindingEvidence = {
   sha256: string | null;
 };
 
+/** A separately approved, bounded recheck of one finding's recorded HTTP origin. */
+export type ValidationRun = {
+  id: number;
+  dockyard_id: number;
+  finding_id: number;
+  validator: string;
+  validator_version: string;
+  target: string;
+  status: string;
+  decision: string;
+  decision_reason: string;
+  approval_note: string | null;
+  outcome: string | null;
+  confidence: string | null;
+  summary: string | null;
+  detail: Record<string, unknown> | null;
+  error: string | null;
+  evidence_path: string | null;
+  metadata_sha256: string | null;
+  result_sha256: string | null;
+  manifest_sha256: string | null;
+  created_at: string;
+  approved_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
 export type FindingDetail = Finding & {
   description: string;
   remediation: string | null;
   detail: Record<string, unknown> | null;
   evidence: FindingEvidence[];
+  validations: ValidationRun[];
 };

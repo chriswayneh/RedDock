@@ -237,6 +237,47 @@ class DetectionRun(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ValidationRun(Base):
+    """One approval-gated, non-destructive recheck of an eligible finding.
+
+    Validation is intentionally separate from both discovery and detection.
+    It may contact one already-authorized origin, only after a stored finding
+    has been explicitly approved for recheck. Its result is an outcome about
+    that one rule, not a new discovery record or a broad assessment.
+    """
+
+    __tablename__ = "validation_runs"
+    __table_args__ = (Index("ix_validation_dockyard_finding", "dockyard_id", "finding_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    validator: Mapped[str] = mapped_column(String(48), nullable=False)
+    validator_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    target: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    decision_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    approval_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    confidence: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Finding(Base):
     """A normalized security-relevant conclusion drawn by one named detector.
 
@@ -298,6 +339,7 @@ class Finding(Base):
     evidence: Mapped[list["FindingEvidence"]] = relationship(
         back_populates="finding", cascade="all, delete-orphan"
     )
+    validations: Mapped[list["ValidationRun"]] = relationship(cascade="all, delete-orphan")
 
 
 class FindingEvidence(Base):

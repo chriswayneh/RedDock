@@ -13,6 +13,7 @@ import type {
   ScopeEntry,
   ScopeEvaluation,
   ServiceRow,
+  ValidationRun,
   Version,
 } from "./types";
 
@@ -96,6 +97,13 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status, note: note ?? null }),
     }),
+
+  validations: (id: number) => request<ValidationRun[]>(`/dockyards/${id}/validations`),
+  /** This records a request only; a separate approval makes the bounded recheck. */
+  requestValidation: (id: number, findingId: number) =>
+    post<ValidationRun>(`/dockyards/${id}/findings/${findingId}/validations`, {}),
+  approveValidation: (id: number, runId: number, note: string) =>
+    post<ValidationRun>(`/dockyards/${id}/validations/${runId}/approve`, { note }),
 
   discoveries: (id: number) => request<DiscoveryRun[]>(`/dockyards/${id}/discoveries`),
   discovery: (id: number, runId: number) =>

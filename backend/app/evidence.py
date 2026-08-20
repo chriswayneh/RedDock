@@ -6,12 +6,13 @@ path is derived from integer identifiers, a fixed scope name and a validated
 artifact name, so no operator input can direct a write outside the evidence
 root.
 
-Detection uses the same store rather than a second one. Its documents sit under
-a `detection` scope so that a detection run and a discovery run that happen to
-share an identifier cannot share a directory:
+Detection and validation use the same store rather than separate writers. Their
+documents sit under fixed scopes so that runs from different domains that happen
+to share an identifier cannot share a directory:
 
     evidence/<dockyard-id>/<discovery-run-id>/
     evidence/<dockyard-id>/detection/<detection-run-id>/
+    evidence/<dockyard-id>/validation/<validation-run-id>/
 """
 
 import json
@@ -29,10 +30,11 @@ EVIDENCE_SCHEMA = "reddock.evidence/1"
 #: Discovery keeps the original layout so existing evidence stays where it is.
 DISCOVERY_SCOPE = ""
 DETECTION_SCOPE = "detection"
+VALIDATION_SCOPE = "validation"
 
 _ARTIFACT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 #: A closed set, so a scope can never become a path fragment an operator chose.
-_SCOPES = frozenset({DISCOVERY_SCOPE, DETECTION_SCOPE})
+_SCOPES = frozenset({DISCOVERY_SCOPE, DETECTION_SCOPE, VALIDATION_SCOPE})
 
 
 class EvidenceError(RuntimeError):
@@ -50,7 +52,7 @@ class StoredArtifact:
 
 
 class EvidenceStore:
-    """Writes discovery evidence beneath a single application-owned root."""
+    """Writes evidence beneath a single application-owned root."""
 
     def __init__(self, root: Path | None = None, max_bytes: int | None = None) -> None:
         settings = get_settings()
@@ -68,14 +70,20 @@ class EvidenceStore:
         return f"{int(dockyard_id)}/{prefix}{int(run_id)}"
 
     def write_raw(
-        self, dockyard_id: int, run_id: int, name: str, media_type: str, content: bytes
+        self,
+        dockyard_id: int,
+        run_id: int,
+        name: str,
+        media_type: str,
+        content: bytes,
+        scope: str = DISCOVERY_SCOPE,
     ) -> StoredArtifact:
         if not _ARTIFACT_NAME.match(name):
             raise EvidenceError(f"Unsafe evidence artifact name: {name!r}")
         truncated = len(content) > self.max_bytes
         payload = content[: self.max_bytes] if truncated else content
         return self._write(
-            dockyard_id, run_id, "raw", f"raw/{name}", media_type, payload, truncated
+            dockyard_id, run_id, "raw", f"raw/{name}", media_type, payload, truncated, scope
         )
 
     def write_normalized(

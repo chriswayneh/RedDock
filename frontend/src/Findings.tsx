@@ -2,12 +2,19 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { DataTable, EmptyState, StatusPill } from "./components";
 import { formatCompact, formatDate, humanize } from "./format";
-import type { DetectionRun, Detector, Finding, FindingDetail } from "./types";
+import type { DetectionRun, Detector, Finding, FindingDetail, ValidationRun } from "./types";
 
 const SEVERITIES = ["critical", "high", "medium", "low", "informational"] as const;
 const STATUSES = ["open", "resolved", "suppressed", "accepted"] as const;
 /** An operator states a decision; whether an issue is still there is not one. */
 const DECISIONS = ["open", "suppressed", "accepted"] as const;
+const VALIDATION_RULES = new Set([
+  "plaintext-http",
+  "hsts-not-set",
+  "content-type-options-not-nosniff",
+  "content-security-policy-not-set",
+  "frame-protection-not-set",
+]);
 
 export function SeverityTag({ severity }: { severity: string }) {
   return <span className={`severity ${severity}`}>{severity}</span>;
@@ -306,6 +313,194 @@ function FindingDetailView({
           suppressing or accepting one records your decision and keeps its history.
         </p>
       </div>
+    </>
+  );
+}
+
+/**
+ * Phase 3 intentionally offers one small validation profile instead of a
+ * general-purpose testing surface. Requesting a run stores intent; approving
+ * it immediately rechecks DockGuard and makes the fixed HTTP-origin probe.
+ */
+export function ValidationPanel({
+  dockyardId,
+  findings,
+  runs,
+  onChanged,
+  onError,
+}: {
+  dockyardId: number;
+  findings: Finding[];
+  runs: ValidationRun[];
+  onChanged: () => Promise<void>;
+  onError: (message: string | null) => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+  const [notes, setNotes] = useState<Record<number, string>>({});
+  const eligible = findings.filter(
+    (finding) => finding.detector === "http.security_headers" && VALIDATION_RULES.has(finding.rule_id),
+  );
+  const pending = runs.filter((run) => run.status === "pending_approval");
+
+  async function requestRun(finding: Finding) {
+    setBusy(finding.id);
+    try {
+      await api.requestValidation(dockyardId, finding.id);
+      onError(null);
+      await onChanged();
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "Could not request validation.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function approve(runId: number) {
+    const note = (notes[runId] ?? "").trim();
+    if (note.length < 3) {
+      onError("An approval note of at least three characters is required.");
+      return;
+    }
+    setBusy(runId);
+    try {
+      await api.approveValidation(dockyardId, runId, note);
+      onError(null);
+      await onChanged();
+    } catch (error) {
+      // A 403 can mean DockGuard revoked scope between request and approval;
+      // reload so that retained denial becomes visible in the audit trail.
+      onError(error instanceof Error ? error.message : "Could not approve validation.");
+      await onChanged();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="split-layout">
+        <section className="panel">
+          <p className="eyebrow">VALIDATION CANDIDATES</p>
+          <h2>Request a bounded recheck</h2>
+          <p className="hint">
+            Phase 3 can only recheck an open HTTP security-header finding at its recorded origin.
+            Requesting a run makes no network contact. A separate, documented approval is required
+            before RedDock re-evaluates DockGuard and sends its fixed safe HTTP probe.
+          </p>
+          {eligible.length ? (
+            <DataTable headers={["Finding", "Affected origin", "Rule", "Action"]}>
+              {eligible.map((finding) => (
+                <tr key={finding.id}>
+                  <td>{finding.title}</td>
+                  <td>
+                    <code>{finding.asset_label ?? "—"}</code>
+                  </td>
+                  <td>
+                    <code>{finding.rule_id}</code>
+                  </td>
+                  <td>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={finding.status !== "open" || busy === finding.id}
+                      onClick={() => void requestRun(finding)}
+                    >
+                      {busy === finding.id ? "Requesting…" : "Request validation"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </DataTable>
+          ) : (
+            <EmptyState message="No open HTTP security-header findings are eligible for this Phase 3 profile." />
+          )}
+        </section>
+        <section className="panel detail-panel">
+          <p className="eyebrow">BOUNDARIES</p>
+          <h2>What this does not do</h2>
+          <ul className="scope-list">
+            <li>No arbitrary URLs, commands, payloads, credentials, or browser automation.</li>
+            <li>No redirects, request bodies, cookies, or authentication.</li>
+            <li>Scope is checked again at approval time, immediately before contact.</li>
+            <li>Raw, normalized, metadata, and hash manifest artifacts form one evidence package.</li>
+          </ul>
+        </section>
+      </div>
+
+      <section className="panel detection-runs">
+        <p className="eyebrow">APPROVAL GATE</p>
+        <h2>Pending validation requests</h2>
+        {pending.length ? (
+          <DataTable headers={["Run", "Finding", "Target", "Approval note", "Action"]}>
+            {pending.map((run) => (
+              <tr key={run.id}>
+                <td>#{run.id}</td>
+                <td>Finding #{run.finding_id}</td>
+                <td>
+                  <code>{run.target}</code>
+                </td>
+                <td>
+                  <input
+                    aria-label={`Approval note for validation ${run.id}`}
+                    value={notes[run.id] ?? ""}
+                    maxLength={500}
+                    placeholder="Why this recheck is authorized"
+                    onChange={(event) =>
+                      setNotes((current) => ({ ...current, [run.id]: event.target.value }))
+                    }
+                  />
+                </td>
+                <td>
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={busy === run.id}
+                    onClick={() => void approve(run.id)}
+                  >
+                    {busy === run.id ? "Approving…" : "Approve and recheck"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState message="No validation requests await approval." />
+        )}
+      </section>
+
+      <section className="panel detection-runs">
+        <p className="eyebrow">VALIDATION AUDIT TRAIL</p>
+        <h2>Validation runs</h2>
+        {runs.length ? (
+          <DataTable headers={["Run", "Finding", "Status", "Outcome", "DockGuard", "Evidence", "Completed"]}>
+            {runs.map((run) => (
+              <tr key={run.id}>
+                <td>#{run.id}</td>
+                <td>#{run.finding_id}</td>
+                <td>
+                  <StatusPill status={run.status} />
+                  {run.error && <div className="row-error">{run.error}</div>}
+                </td>
+                <td>
+                  {run.outcome ? `${humanize(run.outcome)} · ${humanize(run.confidence ?? "")}` : "—"}
+                  {run.summary && <div>{run.summary}</div>}
+                </td>
+                <td title={run.decision_reason}>{humanize(run.decision)}</td>
+                <td>
+                  {run.manifest_sha256 ? (
+                    <code className="hash">{run.manifest_sha256.slice(0, 16)}…</code>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>{formatDate(run.completed_at ?? run.created_at)}</td>
+              </tr>
+            ))}
+          </DataTable>
+        ) : (
+          <EmptyState message="No validation history yet." />
+        )}
+      </section>
     </>
   );
 }

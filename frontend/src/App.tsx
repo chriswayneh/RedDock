@@ -44,7 +44,7 @@ const pages: Page[] = [
   "Settings",
 ];
 
-// Phase 2 activates detection and findings; correlation and reporting are not built.
+// Phase 3 adds approval-gated validation inside each Dockyard; correlation and reporting remain planned.
 const availablePages = new Set<Page>([
   "Dashboard",
   "Dockyards",
@@ -143,7 +143,7 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 2 — Detection").toUpperCase()}
+            {(version?.phase ?? "Phase 3 — Validation").toUpperCase()}
           </span>
         </header>
         {error && (
@@ -213,10 +213,11 @@ function Dashboard({
       <section className="hero">
         <div>
           <p className="eyebrow">AUTHORIZED ASSESSMENT WORKSPACE</p>
-          <h2>Scoped discovery, with evidence for every finding.</h2>
+          <h2>Scoped discovery, evidence-backed findings, and controlled validation.</h2>
           <p>
-            RedDock is online and limited to non-invasive discovery. Every target passes DockGuard
-            before a tool runs, and detection reads only what was already recorded.
+            Every target passes DockGuard before contact. Detection reads only recorded evidence,
+            while validation requires a separately documented approval and rechecks scope just before
+            its fixed, non-destructive HTTP-origin probe.
           </p>
         </div>
         <button className="primary-button" onClick={openDockyards}>

@@ -128,7 +128,8 @@ def main(base: str) -> None:
     check("repeat discovery did not duplicate assets", len(repeated) == len(assets))
 
     print("\nPhase 1 discovery verified.\n")
-    detection_checks(base, dockyard_id)
+    findings = detection_checks(base, dockyard_id)
+    validation_checks(base, dockyard_id, findings)
     print("\nSmoke test passed.")
 
 
@@ -141,7 +142,7 @@ def wait_for_runs(base: str, dockyard_id: int) -> None:
         time.sleep(2)
 
 
-def detection_checks(base: str, dockyard_id: int) -> None:
+def detection_checks(base: str, dockyard_id: int) -> list[dict]:
     """Phase 2: observations become findings, and only through a detector."""
     # RedDock probes its own origin. Nothing outside this container is contacted.
     status, entry = call(
@@ -217,6 +218,43 @@ def detection_checks(base: str, dockyard_id: int) -> None:
         base, "POST", f"/api/dockyards/{dockyard_id}/detections", {"target": "10.0.0.5"}
     )
     check("detection accepts no operator parameters", status == 422, refused["detail"][0]["msg"])
+    return findings
+
+
+def validation_checks(base: str, dockyard_id: int, findings: list[dict]) -> None:
+    """Phase 3: request first, then approval-gated fixed-origin recheck."""
+    finding = next(item for item in findings if item["rule_id"] == "plaintext-http")
+    status, requested = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/findings/{finding['id']}/validations",
+        {},
+    )
+    check(
+        "validation request records no-contact pending state",
+        status == 201 and requested["status"] == "pending_approval" and requested["outcome"] is None,
+        f"run={requested['id']}",
+    )
+
+    status, approved = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/validations/{requested['id']}/approve",
+        {"note": "Verify the RedDock loopback transport response."},
+    )
+    check(
+        "approved validation completes the fixed origin recheck",
+        status == 200 and approved["status"] == "completed" and approved["outcome"] == "confirmed",
+        approved.get("summary") or "",
+    )
+    check(
+        "validation retains a hashed evidence package",
+        all(
+            len(approved.get(field) or "") == 64
+            for field in ("metadata_sha256", "result_sha256", "manifest_sha256")
+        ),
+        approved.get("evidence_path") or "",
+    )
 
 
 if __name__ == "__main__":

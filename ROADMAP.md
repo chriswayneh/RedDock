@@ -14,9 +14,9 @@ Normalized findings, the detector contract and registry, detection runs, dedupli
 
 RedDock ships no CVE data. Enrichment is a boundary with a local, operator-supplied catalogue behind it, and a catalogue match is an association rather than a conclusion. See [ADR 0007](docs/adr/0007-cve-enrichment-is-an-association.md).
 
-## Next — Phase 3: Validation
+## Completed — Phase 3: Validation
 
-Controlled non-destructive validation, confidence scoring, approval gates, and evidence packages. Complete when validation actions require scope and policy decisions.
+Controlled non-destructive validation is now limited to one fixed HTTP-origin recheck for an eligible open `http.security_headers` finding. Creating a request makes no network contact; a separate local approval note is required, DockGuard re-evaluates the recorded origin immediately before the probe, and a raw/normalized/metadata/manifest evidence package is SHA-256 hashed. Outcomes are `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. There are no payloads, credentials, arbitrary URLs, redirects, response bodies, or commands. Implemented in development version 0.4.0; no release tag has been created.
 
 ## Phase 4 — Correlation
 

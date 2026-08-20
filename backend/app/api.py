@@ -42,6 +42,8 @@ from app.schemas import (
     ScopeEvaluationRead,
     ServiceRead,
     ServiceRowRead,
+    ValidationApprovalCreate,
+    ValidationRunRead,
     VersionRead,
 )
 from app.services import (
@@ -54,6 +56,7 @@ from app.services import (
     scope_rules,
 )
 from app.targets import TargetError
+from app.validation import runner as validation_runner
 
 router = APIRouter(prefix="/api", tags=["RedDock Core"])
 
@@ -349,6 +352,73 @@ def read_detection(
     return run
 
 
+@router.get("/dockyards/{dockyard_id}/validations", response_model=list[ValidationRunRead])
+def read_validations(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[ValidationRunRead]:
+    require_dockyard(dockyard_id, session)
+    return validation_runner.list_runs(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/findings/{finding_id}/validations",
+    response_model=ValidationRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def request_validation(
+    dockyard_id: int, finding_id: int, session: Session = Depends(get_session)
+) -> ValidationRunRead:
+    """Request, but do not yet run, a finding's one safe validation profile."""
+    require_dockyard(dockyard_id, session)
+    finding = get_finding(session, dockyard_id, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    try:
+        return validation_runner.create_run(session, dockyard_id, finding)
+    except validation_runner.ValidationRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.get(
+    "/dockyards/{dockyard_id}/validations/{run_id}", response_model=ValidationRunRead
+)
+def read_validation(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+) -> ValidationRunRead:
+    require_dockyard(dockyard_id, session)
+    run = validation_runner.get_run(session, dockyard_id, run_id)
+    if run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Validation run not found"
+        )
+    return run
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/validations/{run_id}/approve",
+    response_model=ValidationRunRead,
+    responses={403: {"model": ValidationRunRead, "description": "DockGuard denied the recheck"}},
+)
+def approve_validation(
+    dockyard_id: int,
+    run_id: int,
+    payload: ValidationApprovalCreate,
+    session: Session = Depends(get_session),
+) -> Response | ValidationRunRead:
+    """Apply the explicit local approval gate, then re-evaluate DockGuard."""
+    require_dockyard(dockyard_id, session)
+    try:
+        run = validation_runner.approve_run(session, dockyard_id, run_id, payload.note)
+    except validation_runner.ValidationRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+    if run.status == validation_runner.DENIED:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content=jsonable_encoder(ValidationRunRead.model_validate(run)),
+        )
+    return ValidationRunRead.model_validate(run)
+
+
 @router.get("/dockyards/{dockyard_id}/findings", response_model=list[FindingRead])
 def read_findings(
     dockyard_id: int,
@@ -393,7 +463,13 @@ def read_finding(
     evidence = list_evidence(session, finding.id)
     labels = _subject_labels(session, [finding])
     detail = _finding_body(FindingDetailRead, finding, labels, {finding.id: len(evidence)})
-    return detail.model_copy(update={"evidence": _evidence_bodies(session, evidence)})
+    validations = [
+        ValidationRunRead.model_validate(run)
+        for run in validation_runner.list_for_finding(session, finding.id)
+    ]
+    return detail.model_copy(
+        update={"evidence": _evidence_bodies(session, evidence), "validations": validations}
+    )
 
 
 @router.patch("/dockyards/{dockyard_id}/findings/{finding_id}", response_model=FindingDetailRead)
