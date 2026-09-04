@@ -224,6 +224,70 @@ class DetectionRunRead(BaseModel):
     completed_at: UtcDatetime | None
 
 
+class CorrelationCreate(BaseModel):
+    """Correlation has no target, selectors, weights, or operator options."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CorrelationRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    status: str
+    asset_count: int
+    finding_count: int
+    asset_relationship_count: int
+    finding_correlation_count: int
+    framework_mapping_count: int
+    error: str | None
+    evidence_path: str | None
+    metadata_sha256: str | None
+    result_sha256: str | None
+    created_at: UtcDatetime
+    started_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
+
+
+class RedPathNodeRead(BaseModel):
+    id: str
+    kind: str
+    label: str
+    subtitle: str
+    status: str | None
+    severity: str | None
+
+
+class RedPathEdgeRead(BaseModel):
+    id: str
+    source: str
+    target: str
+    kind: str
+    label: str
+    confidence: str
+    basis: str
+    evidence_sha256: list[str]
+
+
+class FrameworkMappingRead(BaseModel):
+    id: int
+    finding_id: int
+    framework: str
+    external_id: str
+    title: str
+    basis: str
+    mapping_version: str
+    evidence_sha256: str
+
+
+class RedPathGraphRead(BaseModel):
+    run: CorrelationRunRead | None
+    nodes: list[RedPathNodeRead]
+    edges: list[RedPathEdgeRead]
+    mappings: list[FrameworkMappingRead]
+
+
 class CveReferenceRead(BaseModel):
     cve_id: str
     source: str

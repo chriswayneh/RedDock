@@ -1,6 +1,7 @@
 import type {
   Adapter,
   Asset,
+  CorrelationRun,
   DetectionRun,
   Detector,
   Dockyard,
@@ -10,6 +11,7 @@ import type {
   FindingDetail,
   Health,
   Observation,
+  RedPathGraph,
   ScopeEntry,
   ScopeEvaluation,
   ServiceRow,
@@ -87,6 +89,11 @@ export const api = {
   detections: (id: number) => request<DetectionRun[]>(`/dockyards/${id}/detections`),
   /** Detection takes no target and no options, so the request carries nothing. */
   startDetection: (id: number) => post<DetectionRun>(`/dockyards/${id}/detections`, {}),
+
+  correlations: (id: number) => request<CorrelationRun[]>(`/dockyards/${id}/correlations`),
+  /** Correlation reads stored state only and accepts no selectors or weights. */
+  startCorrelation: (id: number) => post<CorrelationRun>(`/dockyards/${id}/correlations`, {}),
+  redpath: (id: number) => request<RedPathGraph>(`/dockyards/${id}/redpath`),
 
   findings: (id: number, filters: { severity?: string; status?: string } = {}) =>
     request<Finding[]>(`/dockyards/${id}/findings${query(filters)}`),

@@ -9,10 +9,12 @@ Browser → React UI (static files) → FastAPI → DockGuard → discovery adap
                                         ↓               ↓
                                     detector ←── snapshot of stored state
                                         ↓
-                                    findings → validation request → approval → DockGuard → fixed HTTP recheck
+                                    findings → correlation → RedPath
+                                        ↓
+                                    validation request → approval → DockGuard → fixed HTTP recheck
 ```
 
-Three paths leave the API. Discovery goes through DockGuard to a target and records what it saw. Detection goes the other way: it reads stored state, concludes something about it, and writes findings back without ever reaching a target. The third begins with a validation request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. The network boundary is therefore limited to discovery and the narrowly bounded recheck.
+Discovery goes through DockGuard to a target and records what it saw. Detection and correlation go the other way: they read stored state and write findings or relationship snapshots without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. The network boundary is therefore limited to discovery and the narrowly bounded recheck.
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
 
@@ -27,6 +29,7 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/detection/`: the detector contract, detectors, registry, fingerprints, CVE enrichment, and run orchestration.
 - `backend/app/findings.py`: finding persistence, deduplication, and lifecycle rules.
 - `backend/app/validation/`: approval-gated validation orchestration and the fixed HTTP-origin profile.
+- `backend/app/correlation/`: stored-state correlation, fixed CWE mappings, and RedPath assembly.
 - `backend/app/evidence.py`: the evidence store.
 - `backend/app/models.py` and `schemas.py`: persistence mappings and input/output contracts.
 - `frontend/src`: presentation and API client only.
@@ -104,6 +107,10 @@ prepare → execute → parse → normalize → artifacts
 - **Finding** — a normalized security-relevant conclusion one named detector drew. Identity is a SHA-256 `fingerprint` over the detector, the rule, and the asset and service concerned, unique within a Dockyard, so repeated detection updates one row instead of accumulating duplicates. Severity and confidence are separate fields: how much this would matter, and how sure RedDock is that it is true, are different questions and blending them loses both.
 - **FindingEvidence** — one row per observation that supported a finding, carrying the discovery run and the hashed `EvidenceRecord` that observation came from.
 - **ValidationRun** — one request to recheck one eligible finding. It records target, validator version, both the request-time and approval-time policy outcome, the approval note, a bounded result, and hashes for its evidence package. Denied requests are complete audit records because no target was contacted.
+- **CorrelationRun** — one immutable stored-state snapshot with input/relationship/mapping counts and hashes for its normalized result and metadata. It has no target or policy decision because it contacts nothing.
+- **AssetRelationship** — an exact-address link from a web asset to a host asset, citing the observation, discovery run, evidence record, explanation, confidence, and SHA-256 that support it.
+- **FindingCorrelation** — a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
+- **FrameworkMapping** — a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
 - **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
@@ -161,6 +168,22 @@ RedDock fetches no CVE data and has no vulnerability feed. Phase 2 ships the bou
 
 An association never creates a finding, never changes a severity, a confidence or a status, and is attached to the version-disclosure finding that already stood on its own evidence. A catalogue that is missing, oversized or malformed is recorded as a warning on the detection run rather than failing it, and each detection run states which enrichment source was in effect so a finding with no CVE reference can be told apart from one RedDock could not enrich. See [ADR 0007](docs/adr/0007-cve-enrichment-is-an-association.md).
 
+## Correlation boundary
+
+Correlation accepts an empty request body and reads assets, observations,
+findings, and evidence hashes already stored for one Dockyard. The package has
+no networking, subprocess, dynamic import, target, selector, weight, or plugin
+surface. Its only asset rule is exact equality between a web asset's recorded
+address and a host asset's normalized identity, supported by that web
+observation's retained artifact. Findings correlate when they share one asset
+or sit on the two sides of that exact relationship, and only when both have
+evidence hashes.
+
+RedPath is a view of this snapshot. Each edge states its basis, confidence, and
+supporting SHA-256 value or values. Fixed CWE mappings classify detector rules;
+they are not additional evidence. Neither the runner nor the graph claims
+reachability, exploitability, causation, likelihood, or risk. See [ADR 0009](docs/adr/0009-correlation-asserts-only-evidence-linked-facts.md).
+
 ## Evidence flow (RedLedger)
 
 Every completed run writes through the same store:
@@ -183,13 +206,18 @@ evidence/<dockyard-id>/validation/<validation-run-id>/
   metadata.json          request/approval timestamps, approval note, DockGuard decision,
                          target, validator version, and artifact hashes
   raw/manifest.json      package membership and SHA-256 for the other artifacts
+
+evidence/<dockyard-id>/correlation/<correlation-run-id>/
+  metadata.json          input and output counts, method, and artifact hash
+  normalized/result.json assets, findings, relationships, mappings, explanations,
+                         observation identifiers, and supporting evidence hashes
 ```
 
 Paths are built from integer identifiers, a fixed scope name and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Every artifact is SHA-256 hashed. Session material such as cookies is deliberately never retained, and detection has nothing raw to retain because it contacts nothing.
 
 A finding is therefore checkable end to end. `FindingEvidence` names the observations it was drawn from; each of those names its discovery run and that run's hashed `EvidenceRecord`; the detection run records the hash of the normalized result the finding appears in. Which detector produced it, from what observation, during which run, and which hash verifies it are all answerable without leaving the database.
 
-Detection and validation artifact hashes are recorded as columns on their runs rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and keeping the evolution additive avoids relaxing it in place. Unifying them behind one table is the first job of a future versioned migration.
+Detection, validation, and correlation artifact hashes are recorded as columns on their runs rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and keeping the evolution additive avoids relaxing it in place. Unifying them behind one table is the first job of a future versioned migration.
 
 Portable exports still belong to later phases; the Phase 3 package is retained locally and is not an export format.
 
@@ -203,6 +231,7 @@ Portable exports still belong to later phases; the Phase 3 package is retained l
 | Adapter → target | Non-invasive profiles only, without a shell, under a timeout, with output bounds. |
 | Target → RedDock | Tool output and HTTP headers are untrusted data. They are stored and displayed as text, never executed, and self-reported values are marked `reported`. A detector reads that same data and may draw a conclusion from it; it still cannot act on it. |
 | API → detector | Only an immutable snapshot of one Dockyard crosses. No session, socket, subprocess, target or operator option is reachable from a detector, and its output is validated before any of it is stored. |
+| API → correlation runner | One Dockyard identifier and an empty body. The runner reads stored state, requires evidence hashes, and has no active capability or operator option. |
 | API → validation runner | One finding identifier and an approval note only; the runner derives the origin from persisted state and has no arbitrary target or tool option. |
 | Validation runner → target | DockGuard must allow the recorded origin at approval time; the only contact is the fixed bounded HTTP probe. |
 | RedDock → disk | Writes confined to the database file and the evidence root. |
@@ -212,6 +241,10 @@ Portable exports still belong to later phases; the Phase 3 package is retained l
 Discovery runs on a `ThreadPoolExecutor` bounded to the concurrent-run limit; there is no Redis, queue, or worker service. If the process stops while a run is in flight, startup marks that run failed with "Interrupted by a RedDock restart" rather than leaving it looking active or pretending it completed.
 
 Detection is synchronous. It reads stored state and contacts nothing, so there is nothing to wait on: the run completes inside the request, the response describes a finished run, and there is no in-flight detection state for a restart to recover. A second detection run on the same Dockyard while one is in flight is refused rather than interleaved.
+
+Correlation is synchronous for the same reason and is capped at 5,000 derived
+edges per snapshot. Startup marks a correlation run left active by a process
+restart as failed instead of leaving its audit state ambiguous.
 
 Validation is synchronous only after approval. It is bounded to 500 retained requests per Dockyard, makes at most the two requests owned by the HTTP probe, and records a failed outcome if the process-level probe cannot complete. There is no background retry or task queue.
 

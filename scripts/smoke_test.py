@@ -130,6 +130,7 @@ def main(base: str) -> None:
     print("\nPhase 1 discovery verified.\n")
     findings = detection_checks(base, dockyard_id)
     validation_checks(base, dockyard_id, findings)
+    correlation_checks(base, dockyard_id)
     print("\nSmoke test passed.")
 
 
@@ -254,6 +255,37 @@ def validation_checks(base: str, dockyard_id: int, findings: list[dict]) -> None
             for field in ("metadata_sha256", "result_sha256", "manifest_sha256")
         ),
         approved.get("evidence_path") or "",
+    )
+
+
+def correlation_checks(base: str, dockyard_id: int) -> None:
+    """Phase 4: stored records become explainable, evidence-linked relationships."""
+    status, refused = call(
+        base, "POST", f"/api/dockyards/{dockyard_id}/correlations", {"weight": 10}
+    )
+    check("correlation accepts no operator parameters", status == 422, refused["detail"][0]["msg"])
+
+    status, run = call(base, "POST", f"/api/dockyards/{dockyard_id}/correlations", {})
+    check("correlation run completed", status == 201 and run["status"] == "completed", run)
+    check(
+        "correlation retained hashed evidence",
+        all(len(run.get(field) or "") == 64 for field in ("metadata_sha256", "result_sha256")),
+        run.get("evidence_path") or "",
+    )
+
+    status, graph = call(base, "GET", f"/api/dockyards/{dockyard_id}/redpath")
+    check("RedPath graph returned", status == 200 and graph["run"]["id"] == run["id"])
+    check(
+        "RedPath relationships are explained and evidence-linked",
+        bool(graph["edges"])
+        and all(edge["basis"] and edge["evidence_sha256"] for edge in graph["edges"]),
+        len(graph["edges"]),
+    )
+    check(
+        "framework mappings are evidence-linked",
+        bool(graph["mappings"])
+        and all(mapping["evidence_sha256"] for mapping in graph["mappings"]),
+        len(graph["mappings"]),
     )
 
 

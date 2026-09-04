@@ -172,6 +172,70 @@ const detectionRun = {
   completed_at: "2026-08-18T12:31:01Z",
 };
 
+const correlationRun = {
+  id: 8,
+  dockyard_id: 1,
+  status: "completed",
+  asset_count: 1,
+  finding_count: 1,
+  asset_relationship_count: 0,
+  finding_correlation_count: 0,
+  framework_mapping_count: 1,
+  error: null,
+  evidence_path: "1/correlation/8",
+  metadata_sha256: "d".repeat(64),
+  result_sha256: "e".repeat(64),
+  created_at: "2026-08-18T12:33:00Z",
+  started_at: "2026-08-18T12:33:00Z",
+  completed_at: "2026-08-18T12:33:01Z",
+};
+
+const redpath = {
+  run: correlationRun,
+  nodes: [
+    {
+      id: "asset:3",
+      kind: "asset",
+      label: "127.0.0.1",
+      subtitle: "host",
+      status: null,
+      severity: null,
+    },
+    {
+      id: "finding:9",
+      kind: "finding",
+      label: finding.title,
+      subtitle: finding.rule_id,
+      status: "open",
+      severity: "low",
+    },
+  ],
+  edges: [
+    {
+      id: "finding-subject:9",
+      source: "asset:3",
+      target: "finding:9",
+      kind: "finding_subject",
+      label: "supported finding",
+      confidence: "high",
+      basis: "Finding #9 cites observations attached to asset #3.",
+      evidence_sha256: ["a".repeat(64)],
+    },
+  ],
+  mappings: [
+    {
+      id: 1,
+      finding_id: 9,
+      framework: "CWE",
+      external_id: "CWE-319",
+      title: "Cleartext Transmission of Sensitive Information",
+      basis: "Fixed RedDock mapping.",
+      mapping_version: "1.0.0",
+      evidence_sha256: "a".repeat(64),
+    },
+  ],
+};
+
 const allowed = {
   decision: "allowed",
   target: "127.0.0.1",
@@ -201,6 +265,7 @@ type Options = {
   findings?: unknown[];
   observations?: unknown[];
   validations?: unknown[];
+  redpath?: unknown;
 };
 
 type Calls = {
@@ -209,6 +274,7 @@ type Calls = {
   decision: ReturnType<typeof vi.fn>;
   validationRequest: ReturnType<typeof vi.fn>;
   validationApproval: ReturnType<typeof vi.fn>;
+  correlation: ReturnType<typeof vi.fn>;
 };
 
 function stubApi({
@@ -218,6 +284,7 @@ function stubApi({
   findings = [],
   observations = [],
   validations = [],
+  redpath: redpathResponse = { run: null, nodes: [], edges: [], mappings: [] },
 }: Options = {}): Calls {
   const calls: Calls = {
     discovery: vi.fn(),
@@ -225,6 +292,7 @@ function stubApi({
     decision: vi.fn(),
     validationRequest: vi.fn(),
     validationApproval: vi.fn(),
+    correlation: vi.fn(),
   };
   vi.stubGlobal(
     "fetch",
@@ -236,7 +304,7 @@ function stubApi({
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.4.0", phase: "Phase 3 — Validation" });
+        return json({ name: "RedDock", version: "0.5.0", phase: "Phase 4 — Correlation" });
       if (path.endsWith("/adapters")) return json(adapters);
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);
@@ -245,6 +313,14 @@ function stubApi({
       if (path.endsWith("/services")) return json([]);
       if (path.endsWith("/observations")) return json(observations);
       if (path.endsWith("/evidence")) return json([]);
+      if (path.endsWith("/redpath")) return json(redpathResponse);
+      if (path.endsWith("/correlations")) {
+        if (init?.method === "POST") {
+          calls.correlation(JSON.parse(String(init.body)));
+          return json(correlationRun, 201);
+        }
+        return json([]);
+      }
       if (/\/findings\/\d+\/validations$/.test(path) && init?.method === "POST") {
         calls.validationRequest(JSON.parse(String(init.body)));
         return json(validationRun, 201);
@@ -314,7 +390,7 @@ describe("RedDock application", () => {
   it("shows healthy status and the current phase", async () => {
     render(<App />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("PHASE 3 — VALIDATION")).toBeInTheDocument();
+    expect(screen.getByText("PHASE 4 — CORRELATION")).toBeInTheDocument();
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
@@ -399,12 +475,31 @@ describe("RedDock application", () => {
     expect(within(table).queryByText(/critical|high|severity/i)).toBeNull();
   });
 
-  it("keeps unbuilt capabilities visibly planned", async () => {
+  it("keeps reports visibly planned", async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("Lab review");
-    await user.click(screen.getAllByRole("button", { name: /RedPath/ })[0]);
-    expect(await screen.findByText("RedPath is not available yet.")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: /Reports/ })[0]);
+    expect(await screen.findByText("Reports is not available yet.")).toBeInTheDocument();
+  });
+
+  it("shows evidence-linked RedPath data and runs correlation with an empty body", async () => {
+    const calls = stubApi({ redpath });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: "RedPath" })[0]);
+
+    expect(
+      await screen.findByText("Explainable relationships, not inferred attack paths"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("CWE-319")).toBeInTheDocument();
+    expect(
+      screen.getByText("Finding #9 cites observations attached to asset #3."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Run correlation" }));
+    await waitFor(() => expect(calls.correlation).toHaveBeenCalledWith({}));
   });
 });
 

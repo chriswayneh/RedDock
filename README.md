@@ -11,7 +11,7 @@ Container-native security assessment and validation platform with controlled exe
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-3%20Validation-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/phase-4%20Correlation-C1121F)](ROADMAP.md)
 
 **Current release:** [v0.4.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.4.0) — Phase 3 Validation
 
@@ -41,6 +41,8 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | Findings | Normalized conclusions with separate severity and confidence, deduplicated by fingerprint |
 | Lifecycle | Findings resolve rather than disappear, and operator decisions survive later runs |
 | Validation | A separately approved, fixed HTTP-origin recheck for eligible open header findings |
+| Correlation | Evidence-linked asset/finding relationships and fixed CWE classifications |
+| RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
 | Evidence | Raw output, normalized result, metadata, and a manifest per validation, each SHA-256 hashed |
 | Persistence | SQLite and evidence stored in a named Docker volume |
@@ -97,6 +99,7 @@ Stop the application with `docker compose down`. The `reddock-data` volume holds
 5. Results normalize into assets, services, and observations, and the run's raw output, normalized result, and metadata are retained and hashed.
 6. Run detection. It contacts nothing: every registered detector reads what the Dockyard already recorded and returns findings, each naming the rule that produced it and the observations it was drawn from.
 7. For an eligible open HTTP security-header finding, request validation. This records intent only. Add an approval note to recheck DockGuard immediately before RedDock sends its fixed, bodyless HTTP probe; the raw response summary, normalized conclusion, metadata, and manifest are retained as a hash-linked evidence package.
+8. Run correlation. RedDock reads only stored assets, findings, observations, and hashes, then renders an explainable RedPath graph and fixed CWE classifications without contacting a target.
 
 Run the same discovery again and RedDock updates what it already knows rather than duplicating it, while every observation is kept as history. Run detection again and the same issue stays one finding whose `last_seen` moves, while an issue that is no longer reproduced is marked resolved rather than quietly removed.
 
@@ -117,6 +120,9 @@ flowchart TB
   Detect --> Findings[Findings]
   Findings --> Database
   Findings -.cites.-> Evidence
+  Database --> Correlate[Correlation]
+  Correlate --> RedPath[RedPath graph]
+  RedPath -.cites.-> Evidence
   Findings --> Request[Validation request]
   Request --> Approval[Local approval note]
   Approval --> Guard
@@ -124,7 +130,7 @@ flowchart TB
   Recheck --> Evidence
 ```
 
-Discovery and the tightly bounded validation recheck are the only paths that touch a network, and both pass DockGuard immediately before contact. Detection reads only stored state and never leaves the process, which is why it needs no scope decision. A validation request alone makes no network contact; it must first receive a separate local approval note.
+Discovery and the tightly bounded validation recheck are the only paths that touch a network, and both pass DockGuard immediately before contact. Detection and correlation read only stored state and never leave the process, which is why they need no scope decision. A validation request alone makes no network contact; it must first receive a separate local approval note.
 
 The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency; discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, the adapter and detector boundaries, and the trust boundaries.
 
@@ -144,6 +150,7 @@ The production image builds the React application and serves it from the same Fa
 - **Validation is deliberately smaller than a scanner.** It applies only to eligible open HTTP header findings, targets their recorded origin, accepts no URL, payload, credential, cookie, command, or option, follows no redirect, reads no body, and requires a separate approval note. DockGuard is re-evaluated immediately before its single fixed probe.
 - **Ratings are not inflated.** Severity and confidence are separate fields, missing hardening headers are `low`, and there is no risk score, CVSS vector, or aggregate rating, because RedDock does not compute one.
 - **CVE data is never invented.** RedDock downloads none. Enrichment is optional, local, exact-match only, and never changes a severity or a status.
+- **Correlation asserts only what evidence supports.** Exact stored identifiers produce relationships; every RedPath edge explains its basis and carries its evidence hash. No edge claims reachability, exploitability, causation, or risk.
 
 Read [SECURITY.md](SECURITY.md) for the authorized-use policy and the full control list.
 
@@ -169,6 +176,8 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
+**Development head implements Phase 4 — Correlation for v0.5.0:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph. v0.5.0 has not been tagged or published yet.
+
 **v0.4.0 delivered Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
 
 **v0.3.0 delivered Phase 2 — Detection:** the detector contract and registry, detection runs, normalized findings with separate severity and confidence, deduplication by stable fingerprint, a lifecycle that resolves rather than deletes, evidence links from every finding back to the observations and hashes behind it, and the CVE enrichment boundary.
@@ -179,7 +188,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next: Phase 4 — Correlation.** Relationships, framework mappings, and RedPath visualization remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after the v0.5.0 release: Phase 5 — Intelligence.** Optional AI analysis remains planned and will be structured, reviewable, and unable to bypass DockGuard. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 

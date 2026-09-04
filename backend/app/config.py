@@ -9,8 +9,8 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.4.0"
-    phase: str = "Phase 3 — Validation"
+    version: str = "0.5.0"
+    phase: str = "Phase 4 — Correlation"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
@@ -43,6 +43,12 @@ class Settings(BaseModel):
     # Phase 3 validation is intentionally narrower than discovery: one
     # approved HTTP-origin recheck, with the existing fixed request profile.
     max_validation_runs_per_dockyard: int = 500
+
+    # Phase 4 only relates already-stored records. A fixed edge bound prevents
+    # a dense Dockyard from turning one correlation request into unbounded work.
+    max_correlation_assets: int = 2_000
+    max_correlation_findings: int = 2_000
+    max_correlation_edges: int = 5_000
 
 
 @lru_cache

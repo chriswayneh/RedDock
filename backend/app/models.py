@@ -376,3 +376,139 @@ class FindingEvidence(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     finding: Mapped[Finding] = relationship(back_populates="evidence")
+
+
+class CorrelationRun(Base):
+    """One immutable snapshot of evidence-linked Phase 4 relationships."""
+
+    __tablename__ = "correlation_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    asset_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    finding_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    asset_relationship_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    finding_correlation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    framework_mapping_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    evidence_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    result_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    graph: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AssetRelationship(Base):
+    """A relationship asserted from one named observation and retained hash."""
+
+    __tablename__ = "asset_relationships"
+    __table_args__ = (
+        UniqueConstraint(
+            "correlation_run_id",
+            "source_asset_id",
+            "target_asset_id",
+            "relationship_type",
+            name="uq_asset_relationship_snapshot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    correlation_run_id: Mapped[int] = mapped_column(
+        ForeignKey("correlation_runs.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    source_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
+    target_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("assets.id", ondelete="CASCADE"), nullable=False
+    )
+    relationship_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False)
+    basis: Mapped[str] = mapped_column(String(500), nullable=False)
+    observation_id: Mapped[int] = mapped_column(
+        ForeignKey("observations.id", ondelete="CASCADE"), nullable=False
+    )
+    discovery_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discovery_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    evidence_record_id: Mapped[int | None] = mapped_column(
+        ForeignKey("evidence_records.id", ondelete="SET NULL"), nullable=True
+    )
+    evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FindingCorrelation(Base):
+    """A symmetric relationship between two findings with an explicit basis."""
+
+    __tablename__ = "finding_correlations"
+    __table_args__ = (
+        UniqueConstraint(
+            "correlation_run_id",
+            "source_finding_id",
+            "target_finding_id",
+            "relationship_type",
+            name="uq_finding_correlation_snapshot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    correlation_run_id: Mapped[int] = mapped_column(
+        ForeignKey("correlation_runs.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    source_finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), nullable=False
+    )
+    target_finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), nullable=False
+    )
+    relationship_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(16), nullable=False)
+    basis: Mapped[str] = mapped_column(String(500), nullable=False)
+    asset_relationship_id: Mapped[int | None] = mapped_column(
+        ForeignKey("asset_relationships.id", ondelete="SET NULL"), nullable=True
+    )
+    source_evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target_evidence_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FrameworkMapping(Base):
+    """A transparent classification of a finding under a fixed public framework."""
+
+    __tablename__ = "framework_mappings"
+    __table_args__ = (
+        UniqueConstraint(
+            "correlation_run_id", "finding_id", "framework", "external_id",
+            name="uq_framework_mapping_snapshot",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    correlation_run_id: Mapped[int] = mapped_column(
+        ForeignKey("correlation_runs.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    finding_id: Mapped[int] = mapped_column(
+        ForeignKey("findings.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    framework: Mapped[str] = mapped_column(String(32), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    basis: Mapped[str] = mapped_column(String(500), nullable=False)
+    mapping_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

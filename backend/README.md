@@ -11,6 +11,7 @@ app/discovery/      adapter contract, adapters, registry, and run orchestration
 app/detection/      detector contract, detectors, registry, enrichment, and run orchestration
 app/findings.py     finding persistence, deduplication, and lifecycle rules
 app/validation/     approval-gated, fixed HTTP-origin validation orchestration
+app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath assembly
 app/evidence.py     hashed evidence storage
 ```
 
@@ -26,3 +27,8 @@ one records intent without contacting a target; a separate approval note
 re-evaluates DockGuard and then reuses the fixed, bodyless HTTP probe. The
 raw result, normalized conclusion, metadata, and manifest are retained with
 SHA-256 hashes.
+
+Correlation is passive too. It accepts no target or options and relates only
+stored records with exact identifiers and retained evidence hashes. RedPath
+renders those relationships and their explanations; it does not infer an attack
+path, exploitability, causation, or aggregate risk.

@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.correlation import runner as correlation_runner
 from app.database import get_session
 from app.detection import registry as detection_registry
 from app.detection import runner as detection_runner
@@ -21,6 +22,8 @@ from app.schemas import (
     AdapterRead,
     AssetDetailRead,
     AssetRead,
+    CorrelationCreate,
+    CorrelationRunRead,
     DetectionCreate,
     DetectionRunRead,
     DetectorRead,
@@ -36,6 +39,7 @@ from app.schemas import (
     HealthRead,
     ObservationRead,
     ProfileRead,
+    RedPathGraphRead,
     ScopeEntryCreate,
     ScopeEntryRead,
     ScopeEvaluateRequest,
@@ -350,6 +354,40 @@ def read_detection(
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Detection run not found")
     return run
+
+
+@router.get("/dockyards/{dockyard_id}/correlations", response_model=list[CorrelationRunRead])
+def read_correlations(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[CorrelationRunRead]:
+    require_dockyard(dockyard_id, session)
+    return correlation_runner.list_runs(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/correlations",
+    response_model=CorrelationRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_correlation(
+    dockyard_id: int,
+    payload: CorrelationCreate,
+    session: Session = Depends(get_session),
+) -> CorrelationRunRead:
+    """Relate stored state only; the deliberately empty body selects nothing."""
+    require_dockyard(dockyard_id, session)
+    try:
+        return correlation_runner.start_correlation(session, dockyard_id)
+    except correlation_runner.RunRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.get("/dockyards/{dockyard_id}/redpath", response_model=RedPathGraphRead)
+def read_redpath(
+    dockyard_id: int, session: Session = Depends(get_session)
+) -> RedPathGraphRead:
+    require_dockyard(dockyard_id, session)
+    return RedPathGraphRead.model_validate(correlation_runner.graph(session, dockyard_id))
 
 
 @router.get("/dockyards/{dockyard_id}/validations", response_model=list[ValidationRunRead])

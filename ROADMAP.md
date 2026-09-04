@@ -18,9 +18,9 @@ RedDock ships no CVE data. Enrichment is a boundary with a local, operator-suppl
 
 Controlled non-destructive validation is now limited to one fixed HTTP-origin recheck for an eligible open `http.security_headers` finding. Creating a request makes no network contact; a separate local approval note is required, DockGuard re-evaluates the recorded origin immediately before the probe, and a raw/normalized/metadata/manifest evidence package is SHA-256 hashed. Outcomes are `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. There are no payloads, credentials, arbitrary URLs, redirects, response bodies, or commands. Released as v0.4.0.
 
-## Phase 4 — Correlation
+## Implemented — Phase 4: Correlation (unreleased)
 
-Finding correlation, asset relationships, framework mappings, and RedPath visualization. Complete when relationships are explainable and evidence-linked.
+Finding correlation, exact-address asset relationships, fixed CWE mappings, and the RedPath visualization are implemented for v0.5.0. Correlation reads stored state only, accepts no target or tuning parameters, and retains a hashed snapshot. Every displayed relationship states its basis and carries the discovery evidence hash or hashes that support it; it does not infer exploitability, reachability, or aggregate risk.
 
 ## Phase 5 — Intelligence
 

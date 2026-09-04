@@ -55,12 +55,20 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Ratings are stated conservatively and separately. Severity and confidence are distinct fields, missing hardening headers are reported as `low`, and RedDock produces no risk score, CVSS vector, or aggregate rating because it does not compute one.
 - RedDock downloads no CVE data. Enrichment is off unless an operator supplies a local catalogue, matches only an exact product and version, and never changes a finding's severity, confidence, or status.
 
+**Correlation**
+
+- Correlation reads one Dockyard's stored state and accepts an empty request body. It has no target, network or process capability, selector, weighting, dynamic rule, or operator-supplied option.
+- Asset relationships require exact equality between a web asset's recorded address and a host asset's normalized identity, plus the observation and retained discovery hash that support it.
+- Finding correlations require evidence hashes for both findings. A candidate missing required evidence is omitted rather than guessed.
+- Fixed CWE mappings classify existing detector rules only; they never create a finding or alter severity, confidence, status, or validation outcome.
+- RedPath is not attack-path analysis. It does not claim reachability, exploitability, causation, likelihood, or aggregate risk, and correlation output is capped at 5,000 edges per snapshot.
+
 **Evidence and data**
 
 - Evidence paths are built from integer identifiers and a validated artifact name, and each resolved destination is confirmed to be inside its run directory before a write.
 - Raw artifacts are capped at 2 MiB and marked when truncated.
 - Only a small allowlist of response headers is retained; cookies and other session material are never written to evidence.
-- Every stored artifact is SHA-256 hashed and recorded, for detection runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
+- Every stored artifact is SHA-256 hashed and recorded, for detection and correlation runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
 - Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
 **Runtime**
@@ -77,7 +85,7 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 
 RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, AI reasoning, automated remediation, or report generation. No operator-supplied script or shell command is executed anywhere in the product.
 
-It performs no exploitation or broad active vulnerability testing. Detection reasons over data an earlier, non-invasive discovery already recorded; it sends nothing. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association from a local catalogue is never a statement that a service is exploitable.
+It performs no exploitation or broad active vulnerability testing. Detection and correlation reason over data an earlier, non-invasive discovery already recorded; they send nothing. RedPath visualizes evidence-linked relationships, not attack reachability. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association or CWE classification is never a statement that a service is exploitable.
 
 ## Reporting a vulnerability
 

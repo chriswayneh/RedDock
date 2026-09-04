@@ -158,6 +158,62 @@ export type DetectionRun = {
   completed_at: string | null;
 };
 
+export type CorrelationRun = {
+  id: number;
+  dockyard_id: number;
+  status: string;
+  asset_count: number;
+  finding_count: number;
+  asset_relationship_count: number;
+  finding_correlation_count: number;
+  framework_mapping_count: number;
+  error: string | null;
+  evidence_path: string | null;
+  metadata_sha256: string | null;
+  result_sha256: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type RedPathNode = {
+  id: string;
+  kind: "asset" | "finding";
+  label: string;
+  subtitle: string;
+  status: string | null;
+  severity: string | null;
+};
+
+export type RedPathEdge = {
+  id: string;
+  source: string;
+  target: string;
+  kind: "asset_relationship" | "finding_subject" | "finding_correlation";
+  label: string;
+  confidence: string;
+  basis: string;
+  evidence_sha256: string[];
+};
+
+export type FrameworkMapping = {
+  id: number;
+  finding_id: number;
+  framework: string;
+  external_id: string;
+  title: string;
+  basis: string;
+  mapping_version: string;
+  evidence_sha256: string;
+};
+
+export type RedPathGraph = {
+  run: CorrelationRun | null;
+  nodes: RedPathNode[];
+  edges: RedPathEdge[];
+  mappings: FrameworkMapping[];
+};
+
 /** Enrichment, not proof: a catalogue matched a reported product and version. */
 export type CveReference = {
   cve_id: string;

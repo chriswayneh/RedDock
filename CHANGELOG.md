@@ -2,6 +2,26 @@
 
 All notable changes to RedDock are documented here.
 
+## [Unreleased] — Phase 4 Correlation
+
+### Added
+
+- `CorrelationRun` snapshots with counts and hashed normalized/metadata evidence
+- Exact-address web-to-host asset relationships backed by the observation and discovery artifact that recorded the address
+- Same-asset and related-asset finding correlations carrying both findings' evidence hashes
+- A fixed, versioned CWE mapping table for RedDock's detector rules; classification never changes a finding
+- `/correlations` and `/redpath` APIs whose correlation request body is deliberately empty
+- RedPath, an evidence-linked asset/finding graph with relationship explanations and framework mappings
+- Structural, API, isolation, schema-upgrade, frontend, and end-to-end smoke coverage
+- ADR 0009 documenting why correlation asserts only evidence-linked facts
+
+### Security
+
+- Correlation has no network or process capability and accepts no target, selector, weight, script, or plugin
+- Every edge requires retained evidence; records lacking the necessary hash are omitted instead of inferred
+- Exact identifier equality is the only asset-linking rule, and correlation does not claim attack reachability, exploitability, causation, or risk
+- Snapshot edge count is capped at 5,000 per Dockyard
+
 ## [0.4.0] — Phase 3 Validation
 
 Phase 3 adds a deliberately narrow path to recheck a conclusion without turning
