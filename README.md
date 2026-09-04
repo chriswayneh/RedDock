@@ -13,7 +13,7 @@ Container-native security assessment and validation platform with controlled exe
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/phase-3%20Validation-C1121F)](ROADMAP.md)
 
-**Current development version:** 0.4.0 — Phase 3 Validation · Active development
+**Current release:** [v0.4.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.4.0) — Phase 3 Validation
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -169,7 +169,7 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-**0.4.0 completes Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package. This development version is not represented by a release tag yet.
+**v0.4.0 delivered Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
 
 **v0.3.0 delivered Phase 2 — Detection:** the detector contract and registry, detection runs, normalized findings with separate severity and confidence, deduplication by stable fingerprint, a lifecycle that resolves rather than deletes, evidence links from every finding back to the observations and hashes behind it, and the CVE enrichment boundary.
 

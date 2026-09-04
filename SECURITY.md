@@ -87,8 +87,8 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.4.x | Yes — current development version; no release tag yet |
-| 0.3.x | No — superseded by the current development version |
+| 0.4.x | Yes — current published release |
+| 0.3.x | No — superseded by 0.4.0 |
 | 0.2.x | No — superseded by 0.3.0 |
 | 0.1.x | No — superseded by 0.2.0 |
 

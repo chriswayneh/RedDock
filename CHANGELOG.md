@@ -2,10 +2,10 @@
 
 All notable changes to RedDock are documented here.
 
-## [0.4.0] — Phase 3 Validation (development)
+## [0.4.0] — Phase 3 Validation
 
 Phase 3 adds a deliberately narrow path to recheck a conclusion without turning
-RedDock into a general-purpose scanner. It is not a tagged release yet.
+RedDock into a general-purpose scanner.
 
 ### Added
 
