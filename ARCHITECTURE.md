@@ -402,9 +402,11 @@ context for the request and resets it afterward; root loaders derive their
 organization only from that context. Tests switch between two organizations and
 prove each sees only its own list and IDs, with a cross-organization ID returning
 the same 404 as an absent object. Child-resource routes first cross this root
-loader and then constrain their own queries by Dockyard ID. Replacing the local
-context resolver with a verified server session remains a separate fail-closed
-checkpoint.
+loader and then constrain their own queries by Dockyard ID. An AST contract test
+proves every current Dockyard route reaches that loader, including artifact
+helpers, while a runtime matrix proves every foreign-Dockyard GET path returns
+the same 404 before touching a child ID. Replacing the local context resolver
+with a verified server session remains a separate fail-closed checkpoint.
 
 ## Deterministic core
 

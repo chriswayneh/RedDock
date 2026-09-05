@@ -27,6 +27,8 @@ All notable changes to RedDock are documented here.
   cross-tenant ID tests and indistinguishable not-found responses
 - Request-scoped authorization context propagation and reset, with two-tenant
   integration tests proving isolation in both directions
+- A child-route tenancy contract plus negative-IDOR coverage across every
+  foreign-Dockyard GET path, including report artifact helpers
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

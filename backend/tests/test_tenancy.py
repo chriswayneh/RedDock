@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.authorization import AuthorizationContext, Role
+from app.authorization import ROUTE_PERMISSIONS, AuthorizationContext, Role
 from app.authorization_dependencies import current_authorization
 from app.models import Dockyard, Membership, Organization, User
 from app.schemas import DockyardCreate
@@ -89,3 +89,31 @@ def test_request_context_selects_exactly_one_organization(client, session: Sessi
 
     assert client.get(f"/api/dockyards/{local.id}").status_code == 200
     assert client.get(f"/api/dockyards/{other.id}").status_code == 404
+
+
+def test_every_foreign_dockyard_get_route_returns_the_same_not_found(client, session: Session):
+    other_organization_id = _second_organization(session)
+    foreign = create_dockyard(
+        session,
+        other_organization_id,
+        DockyardCreate(name="Foreign"),
+    )
+    identifiers = {
+        "dockyard_id": foreign.id,
+        "asset_id": 1,
+        "finding_id": 1,
+        "run_id": 1,
+        "authorization_id": 1,
+        "entry_id": 1,
+    }
+    paths = sorted(
+        path
+        for (method, path) in ROUTE_PERMISSIONS
+        if method == "GET" and "{dockyard_id}" in path
+    )
+
+    assert paths
+    for template in paths:
+        response = client.get(template.format(**identifiers))
+        assert response.status_code == 404, template
+        assert response.json() == {"detail": "Dockyard not found"}, template
