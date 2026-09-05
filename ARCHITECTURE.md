@@ -413,7 +413,10 @@ CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
 the generated URL-safe shape, joins through one membership to its user and
 organization, and returns no context for an unknown, expired, revoked, disabled,
 or unrecognized-role record. The returned token container masks both bearer
-values from `repr`. No cookie or login route uses this primitive yet.
+values from `repr`. Lifecycle operations revoke a single hashed token
+idempotently, revoke every session for a membership after an access change, and
+purge only expired or revoked rows at an explicit retention cutoff. No cookie or
+login route uses this primitive yet.
 
 ## Deterministic core
 

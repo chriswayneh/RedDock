@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import compare_digest
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.authorization import AuthorizationContext, Role
@@ -128,3 +128,64 @@ def csrf_token_matches(presented: str, expected_hash: str) -> bool:
     if not _valid_token(presented) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
         return False
     return compare_digest(_digest(presented), expected_hash)
+
+
+def revoke_browser_session(
+    session: Session,
+    token: str,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Revoke one bearer token without storing or querying its plaintext value."""
+    if not _valid_token(token):
+        return False
+    revoked_at = _as_utc(now or _now())
+    result = session.execute(
+        update(BrowserSession)
+        .where(
+            BrowserSession.token_hash == _digest(token),
+            BrowserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=revoked_at)
+    )
+    session.commit()
+    return result.rowcount == 1
+
+
+def revoke_membership_sessions(
+    session: Session,
+    membership_id: int,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Revoke every live session after a role, access, or account change."""
+    revoked_at = _as_utc(now or _now())
+    result = session.execute(
+        update(BrowserSession)
+        .where(
+            BrowserSession.membership_id == membership_id,
+            BrowserSession.revoked_at.is_(None),
+        )
+        .values(revoked_at=revoked_at)
+    )
+    session.commit()
+    return result.rowcount or 0
+
+
+def purge_inactive_browser_sessions(
+    session: Session,
+    *,
+    before: datetime,
+) -> int:
+    """Delete expired or revoked records older than an operator-selected cutoff."""
+    cutoff = _as_utc(before)
+    result = session.execute(
+        delete(BrowserSession).where(
+            or_(
+                BrowserSession.expires_at <= cutoff,
+                BrowserSession.revoked_at <= cutoff,
+            )
+        )
+    )
+    session.commit()
+    return result.rowcount or 0
