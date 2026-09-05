@@ -373,7 +373,7 @@ function stubApi({
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.6.0", phase: "Phase 5 — Intelligence" });
+        return json({ name: "RedDock", version: "0.7.0", phase: "Phase 6 — Reporting" });
       if (path.endsWith("/adapters")) return json(adapters);
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);
@@ -415,6 +415,7 @@ function stubApi({
         }
         return json(intelligenceRuns);
       }
+      if (path.endsWith("/reports")) return json([]);
       if (path.endsWith("/correlations")) {
         if (init?.method === "POST") {
           calls.correlation(JSON.parse(String(init.body)));
@@ -491,7 +492,7 @@ describe("RedDock application", () => {
   it("shows healthy status and the current phase", async () => {
     render(<App />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("PHASE 5 — INTELLIGENCE")).toBeInTheDocument();
+    expect(screen.getByText("PHASE 6 — REPORTING")).toBeInTheDocument();
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
@@ -576,12 +577,13 @@ describe("RedDock application", () => {
     expect(within(table).queryByText(/critical|high|severity/i)).toBeNull();
   });
 
-  it("keeps reports visibly planned", async () => {
+  it("opens the evidence-grounded reporting workspace", async () => {
     const user = userEvent.setup();
     render(<App />);
     await screen.findByText("Lab review");
     await user.click(screen.getAllByRole("button", { name: /Reports/ })[0]);
-    expect(await screen.findByText("Reports is not available yet.")).toBeInTheDocument();
+    expect(await screen.findByText("Technical detail, executive context, one portable DockPack.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate report set" })).toBeInTheDocument();
   });
 
   it("shows evidence-linked RedPath data and runs correlation with an empty body", async () => {

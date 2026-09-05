@@ -10,6 +10,7 @@ Usage: python scripts/smoke_test.py [base-url]
 """
 
 import json
+from hashlib import sha256
 import sys
 import time
 import urllib.error
@@ -19,10 +20,15 @@ TIMEOUT = 10
 RUN_DEADLINE = 240
 
 
-def call(base: str, method: str, path: str, body: dict | None = None) -> tuple[int, object]:
+def call(
+    base: str, method: str, path: str, body: dict | None = None
+) -> tuple[int, object]:
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(
-        f"{base}{path}", data=data, method=method, headers={"Content-Type": "application/json"}
+        f"{base}{path}",
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
@@ -33,8 +39,22 @@ def call(base: str, method: str, path: str, body: dict | None = None) -> tuple[i
         return error.code, json.loads(payload) if payload else None
 
 
+def download(base: str, path: str) -> tuple[int, bytes, dict[str, str]]:
+    request = urllib.request.Request(f"{base}{path}", method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            headers = {key.lower(): value for key, value in response.headers.items()}
+            return response.status, response.read(), headers
+    except urllib.error.HTTPError as error:
+        headers = {key.lower(): value for key, value in error.headers.items()}
+        return error.code, error.read(), headers
+
+
 def check(label: str, condition: bool, detail: object = "") -> None:
-    print(f"{'PASS' if condition else 'FAIL'}  {label}" + (f"  {detail}" if detail else ""))
+    print(
+        f"{'PASS' if condition else 'FAIL'}  {label}"
+        + (f"  {detail}" if detail else "")
+    )
     if not condition:
         sys.exit(1)
 
@@ -83,7 +103,9 @@ def main(base: str) -> None:
 
     deadline = time.monotonic() + RUN_DEADLINE
     while time.monotonic() < deadline:
-        _, run = call(base, "GET", f"/api/dockyards/{dockyard_id}/discoveries/{run['id']}")
+        _, run = call(
+            base, "GET", f"/api/dockyards/{dockyard_id}/discoveries/{run['id']}"
+        )
         if run["status"] not in ("pending", "running"):
             break
         time.sleep(2)
@@ -104,7 +126,9 @@ def main(base: str) -> None:
 
     _, evidence = call(base, "GET", f"/api/dockyards/{dockyard_id}/evidence")
     kinds = {record["kind"] for record in evidence}
-    check("evidence retained", {"raw", "normalized", "metadata"} <= kinds, sorted(kinds))
+    check(
+        "evidence retained", {"raw", "normalized", "metadata"} <= kinds, sorted(kinds)
+    )
     check(
         "evidence hashed",
         all(len(record["sha256"]) == 64 for record in evidence),
@@ -132,6 +156,7 @@ def main(base: str) -> None:
     validation_checks(base, dockyard_id, findings)
     correlation_checks(base, dockyard_id)
     intelligence_checks(base, dockyard_id)
+    reporting_checks(base, dockyard_id)
     print("\nSmoke test passed.")
 
 
@@ -148,7 +173,10 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
     """Phase 2: observations become findings, and only through a detector."""
     # RedDock probes its own origin. Nothing outside this container is contacted.
     status, entry = call(
-        base, "POST", f"/api/dockyards/{dockyard_id}/scope", {"target": "http://127.0.0.1:8080"}
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/scope",
+        {"target": "http://127.0.0.1:8080"},
     )
     check("own origin authorized", status == 201, entry["value"])
 
@@ -165,7 +193,11 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
     check("detectors advertised", status == 200 and len(detectors) >= 1, len(detectors))
 
     status, run = call(base, "POST", f"/api/dockyards/{dockyard_id}/detections", {})
-    check("detection run completed", status == 201 and run["status"] == "completed", run["status"])
+    check(
+        "detection run completed",
+        status == 201 and run["status"] == "completed",
+        run["status"],
+    )
     check(
         "every detector ran",
         all(entry["status"] == "completed" for entry in run["detectors"]),
@@ -185,14 +217,20 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
     _, findings = call(base, "GET", f"/api/dockyards/{dockyard_id}/findings")
     check("findings produced", len(findings) >= 1, len(findings))
     rules = {finding["rule_id"] for finding in findings}
-    check("plaintext http detected on the probed origin", "plaintext-http" in rules, sorted(rules))
+    check(
+        "plaintext http detected on the probed origin",
+        "plaintext-http" in rules,
+        sorted(rules),
+    )
     check(
         "severity and confidence are separate",
         all(finding["severity"] and finding["confidence"] for finding in findings),
         f"{findings[0]['severity']}/{findings[0]['confidence']}",
     )
 
-    _, detail = call(base, "GET", f"/api/dockyards/{dockyard_id}/findings/{findings[0]['id']}")
+    _, detail = call(
+        base, "GET", f"/api/dockyards/{dockyard_id}/findings/{findings[0]['id']}"
+    )
     check("finding names its detector", bool(detail["detector"]), detail["detector"])
     check(
         "finding is traceable to hashed evidence",
@@ -219,7 +257,11 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
     status, refused = call(
         base, "POST", f"/api/dockyards/{dockyard_id}/detections", {"target": "10.0.0.5"}
     )
-    check("detection accepts no operator parameters", status == 422, refused["detail"][0]["msg"])
+    check(
+        "detection accepts no operator parameters",
+        status == 422,
+        refused["detail"][0]["msg"],
+    )
     return findings
 
 
@@ -234,7 +276,9 @@ def validation_checks(base: str, dockyard_id: int, findings: list[dict]) -> None
     )
     check(
         "validation request records no-contact pending state",
-        status == 201 and requested["status"] == "pending_approval" and requested["outcome"] is None,
+        status == 201
+        and requested["status"] == "pending_approval"
+        and requested["outcome"] is None,
         f"run={requested['id']}",
     )
 
@@ -246,7 +290,9 @@ def validation_checks(base: str, dockyard_id: int, findings: list[dict]) -> None
     )
     check(
         "approved validation completes the fixed origin recheck",
-        status == 200 and approved["status"] == "completed" and approved["outcome"] == "confirmed",
+        status == 200
+        and approved["status"] == "completed"
+        and approved["outcome"] == "confirmed",
         approved.get("summary") or "",
     )
     check(
@@ -264,13 +310,22 @@ def correlation_checks(base: str, dockyard_id: int) -> None:
     status, refused = call(
         base, "POST", f"/api/dockyards/{dockyard_id}/correlations", {"weight": 10}
     )
-    check("correlation accepts no operator parameters", status == 422, refused["detail"][0]["msg"])
+    check(
+        "correlation accepts no operator parameters",
+        status == 422,
+        refused["detail"][0]["msg"],
+    )
 
     status, run = call(base, "POST", f"/api/dockyards/{dockyard_id}/correlations", {})
-    check("correlation run completed", status == 201 and run["status"] == "completed", run)
+    check(
+        "correlation run completed", status == 201 and run["status"] == "completed", run
+    )
     check(
         "correlation retained hashed evidence",
-        all(len(run.get(field) or "") == 64 for field in ("metadata_sha256", "result_sha256")),
+        all(
+            len(run.get(field) or "") == 64
+            for field in ("metadata_sha256", "result_sha256")
+        ),
         run.get("evidence_path") or "",
     )
 
@@ -319,6 +374,72 @@ def intelligence_checks(base: str, dockyard_id: int) -> None:
         "disabled intelligence makes no provider request",
         status == 409 and "disabled" in disabled["detail"].lower(),
         disabled["detail"],
+    )
+
+
+def reporting_checks(base: str, dockyard_id: int) -> None:
+    """Phase 6: reports are bounded, reproducible exports of retained evidence."""
+    status, rejected = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/reports",
+        {"path": "operator-selected.zip"},
+    )
+    check("reporting accepts no output path", status == 422, rejected)
+
+    status, first = call(base, "POST", f"/api/dockyards/{dockyard_id}/reports", {})
+    check(
+        "report set completed",
+        status == 201 and first["status"] == "completed",
+        first.get("error") or f"run={first['id']}",
+    )
+    hash_fields = (
+        "snapshot_sha256",
+        "technical_sha256",
+        "executive_sha256",
+        "manifest_sha256",
+        "dockpack_sha256",
+    )
+    check(
+        "report artifacts are hash-linked",
+        all(len(first.get(field) or "") == 64 for field in hash_fields),
+        first["dockpack_sha256"][:16] + "…",
+    )
+    check(
+        "report snapshot includes retained evidence",
+        first["source_counts"]["evidence_files"] > 0,
+        first["source_counts"],
+    )
+
+    status, manifest = call(
+        base, "GET", f"/api/dockyards/{dockyard_id}/reports/{first['id']}/manifest"
+    )
+    check(
+        "evidence manifest is available",
+        status == 200
+        and manifest["schema"] == "reddock.evidence-manifest/1"
+        and manifest["file_count"] > 0,
+        manifest.get("file_count") if isinstance(manifest, dict) else manifest,
+    )
+    status, package, headers = download(
+        base, f"/api/dockyards/{dockyard_id}/reports/{first['id']}/dockpack"
+    )
+    check(
+        "DockPack download matches its retained hash",
+        status == 200
+        and headers.get("content-type") == "application/zip"
+        and package.startswith(b"PK")
+        and sha256(package).hexdigest() == first["dockpack_sha256"],
+        f"{len(package)} bytes",
+    )
+
+    status, second = call(base, "POST", f"/api/dockyards/{dockyard_id}/reports", {})
+    check(
+        "unchanged state produces an identical DockPack",
+        status == 201
+        and second["status"] == "completed"
+        and all(second[field] == first[field] for field in hash_fields),
+        second.get("dockpack_sha256", ""),
     )
 
 

@@ -9,8 +9,8 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.6.0"
-    phase: str = "Phase 5 — Intelligence"
+    version: str = "0.7.0"
+    phase: str = "Phase 6 — Reporting"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
@@ -62,6 +62,16 @@ class Settings(BaseModel):
     max_intelligence_findings: int = 200
     max_intelligence_input_bytes: int = 512 * 1024
     max_intelligence_runs_per_dockyard: int = 200
+
+    # Reporting packages only database-referenced retained files. Fixed limits
+    # keep a local export from becoming an unbounded filesystem copy operation.
+    max_report_runs_per_dockyard: int = 200
+    max_report_assets: int = 2_000
+    max_report_services: int = 20_000
+    max_report_findings: int = 5_000
+    max_report_evidence_links: int = 20_000
+    max_report_evidence_files: int = 2_000
+    max_dockpack_bytes: int = 64 * 1024 * 1024
 
 
 @lru_cache

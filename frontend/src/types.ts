@@ -363,3 +363,52 @@ export type IntelligenceRun = {
   started_at: string | null;
   completed_at: string | null;
 };
+
+export type ReportCounts = {
+  assets: number;
+  services: number;
+  observations: number;
+  findings: number;
+  findings_by_severity: Record<string, number>;
+  findings_by_status: Record<string, number>;
+  validations: number;
+  evidence_files: number;
+  evidence_bytes: number;
+};
+
+export type ReportRun = {
+  id: number;
+  dockyard_id: number;
+  status: string;
+  report_schema: string;
+  snapshot_sha256: string | null;
+  technical_sha256: string | null;
+  executive_sha256: string | null;
+  manifest_sha256: string | null;
+  dockpack_sha256: string | null;
+  dockpack_bytes: number;
+  evidence_path: string | null;
+  source_counts: ReportCounts | null;
+  error: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type EvidenceManifestFile = {
+  source: string;
+  run_id: number;
+  source_path: string;
+  archive_path: string;
+  media_type: string;
+  bytes: number;
+  sha256: string;
+  truncated: boolean;
+};
+
+export type EvidenceManifest = {
+  schema: string;
+  algorithm: "sha256";
+  files: EvidenceManifestFile[];
+  file_count: number;
+  total_bytes: number;
+};

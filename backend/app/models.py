@@ -549,3 +549,33 @@ class IntelligenceRun(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ReportRun(Base):
+    """One immutable, reproducible reporting snapshot and DockPack export.
+
+    Report artifacts are derived only from stored database state and retained
+    evidence. The database keeps their hashes and summary rather than mutable
+    report bodies; downloads are re-verified against these hashes.
+    """
+
+    __tablename__ = "report_runs"
+    __table_args__ = (Index("ix_report_dockyard_status", "dockyard_id", "status"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    report_schema: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    technical_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    executive_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manifest_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dockpack_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dockpack_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    evidence_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

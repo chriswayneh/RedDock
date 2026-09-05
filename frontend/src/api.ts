@@ -14,6 +14,8 @@ import type {
   IntelligenceRun,
   Observation,
   RedPathGraph,
+  ReportRun,
+  EvidenceManifest,
   ScopeEntry,
   ScopeEvaluation,
   ServiceRow,
@@ -43,6 +45,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return undefined as T;
   }
   return response.json() as Promise<T>;
+}
+
+async function requestText(path: string): Promise<string> {
+  const response = await fetch(`/api${path}`);
+  if (!response.ok) throw new Error(await detailOf(response));
+  return response.text();
 }
 
 function post<T>(path: string, body: unknown): Promise<T> {
@@ -105,6 +113,18 @@ export const api = {
     post<IntelligenceRun>(`/dockyards/${id}/intelligence`, {}),
   approveIntelligence: (id: number, runId: number, note: string) =>
     post<IntelligenceRun>(`/dockyards/${id}/intelligence/${runId}/approve`, { note }),
+
+  reports: (id: number) => request<ReportRun[]>(`/dockyards/${id}/reports`),
+  /** Reporting snapshots complete retained state and accepts no path or selector. */
+  createReport: (id: number) => post<ReportRun>(`/dockyards/${id}/reports`, {}),
+  technicalReport: (id: number, runId: number) =>
+    requestText(`/dockyards/${id}/reports/${runId}/technical`),
+  executiveReport: (id: number, runId: number) =>
+    requestText(`/dockyards/${id}/reports/${runId}/executive`),
+  reportManifest: (id: number, runId: number) =>
+    request<EvidenceManifest>(`/dockyards/${id}/reports/${runId}/manifest`),
+  dockpackUrl: (id: number, runId: number) =>
+    `/api/dockyards/${id}/reports/${runId}/dockpack`,
 
   findings: (id: number, filters: { severity?: string; status?: string } = {}) =>
     request<Finding[]>(`/dockyards/${id}/findings${query(filters)}`),

@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,7 @@ from app.findings import get_finding, list_evidence, list_findings, set_status
 from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
 from app.models import Asset, Dockyard, EvidenceRecord, Finding, FindingEvidence, Service
+from app.reporting import runner as reporting_runner
 from app.schemas import (
     AdapterRead,
     AssetDetailRead,
@@ -45,6 +46,8 @@ from app.schemas import (
     ObservationRead,
     ProfileRead,
     RedPathGraphRead,
+    ReportCreate,
+    ReportRunRead,
     ScopeEntryCreate,
     ScopeEntryRead,
     ScopeEvaluateRequest,
@@ -451,6 +454,90 @@ def approve_intelligence_run(
             else status.HTTP_409_CONFLICT
         )
         raise HTTPException(status_code=code, detail=message) from error
+
+
+@router.get("/dockyards/{dockyard_id}/reports", response_model=list[ReportRunRead])
+def read_reports(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[ReportRunRead]:
+    require_dockyard(dockyard_id, session)
+    return reporting_runner.list_runs(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/reports",
+    response_model=ReportRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_report(
+    dockyard_id: int,
+    payload: ReportCreate,
+    session: Session = Depends(get_session),
+) -> ReportRunRead:
+    """Snapshot all retained state; the empty request chooses no target or path."""
+    require_dockyard(dockyard_id, session)
+    try:
+        return reporting_runner.start_report(session, dockyard_id)
+    except reporting_runner.ReportRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.get("/dockyards/{dockyard_id}/reports/{run_id}", response_model=ReportRunRead)
+def read_report(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+) -> ReportRunRead:
+    require_dockyard(dockyard_id, session)
+    run = reporting_runner.get_run(session, dockyard_id, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report run not found")
+    return run
+
+
+def _report_artifact(dockyard_id: int, run_id: int, artifact: str, session: Session):
+    require_dockyard(dockyard_id, session)
+    run = reporting_runner.get_run(session, dockyard_id, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report run not found")
+    try:
+        return reporting_runner.artifact_path(run, artifact)
+    except reporting_runner.ReportRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.get("/dockyards/{dockyard_id}/reports/{run_id}/technical")
+def read_technical_report(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+):
+    path = _report_artifact(dockyard_id, run_id, "technical", session)
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
+@router.get("/dockyards/{dockyard_id}/reports/{run_id}/executive")
+def read_executive_report(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+):
+    path = _report_artifact(dockyard_id, run_id, "executive", session)
+    return FileResponse(path, media_type="text/markdown; charset=utf-8")
+
+
+@router.get("/dockyards/{dockyard_id}/reports/{run_id}/manifest")
+def read_report_manifest(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+):
+    path = _report_artifact(dockyard_id, run_id, "manifest", session)
+    return FileResponse(path, media_type="application/json")
+
+
+@router.get("/dockyards/{dockyard_id}/reports/{run_id}/dockpack")
+def download_dockpack(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
+):
+    path = _report_artifact(dockyard_id, run_id, "dockpack", session)
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=f"reddock-dockyard-{dockyard_id}-report-{run_id}.dockpack.zip",
+    )
 
 
 @router.get("/dockyards/{dockyard_id}/validations", response_model=list[ValidationRunRead])

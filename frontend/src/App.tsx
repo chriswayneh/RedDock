@@ -11,6 +11,7 @@ import {
 import { FindingsPanel } from "./Findings";
 import { Intelligence } from "./Intelligence";
 import { RedPath } from "./RedPath";
+import { Reports } from "./Reports";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
 import type {
@@ -48,7 +49,7 @@ const pages: Page[] = [
   "Settings",
 ];
 
-// Phase 5 adds reviewable, approval-gated intelligence; reporting remains planned.
+// Phase 6 adds deterministic reports and portable, hash-verifiable DockPacks.
 const availablePages = new Set<Page>([
   "Dashboard",
   "Dockyards",
@@ -57,6 +58,7 @@ const availablePages = new Set<Page>([
   "RedPath",
   "Intelligence",
   "RedLedger",
+  "Reports",
 ]);
 
 export function App() {
@@ -149,7 +151,7 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 5 — Intelligence").toUpperCase()}
+            {(version?.phase ?? "Phase 6 — Reporting").toUpperCase()}
           </span>
         </header>
         {error && (
@@ -182,6 +184,7 @@ export function App() {
         {page === "RedPath" && <RedPath dockyards={dockyards} onError={setError} />}
         {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
+        {page === "Reports" && <Reports dockyards={dockyards} onError={setError} />}
         {!availablePages.has(page) && <Planned page={page} />}
       </main>
     </div>

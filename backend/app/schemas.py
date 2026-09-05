@@ -335,6 +335,32 @@ class IntelligenceRunRead(BaseModel):
     completed_at: UtcDatetime | None
 
 
+class ReportCreate(BaseModel):
+    """Reporting snapshots always include the complete retained Dockyard state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ReportRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    status: str
+    report_schema: str
+    snapshot_sha256: str | None
+    technical_sha256: str | None
+    executive_sha256: str | None
+    manifest_sha256: str | None
+    dockpack_sha256: str | None
+    dockpack_bytes: int
+    evidence_path: str | None
+    source_counts: dict | None
+    error: str | None
+    created_at: UtcDatetime
+    completed_at: UtcDatetime | None
+
+
 class CveReferenceRead(BaseModel):
     cve_id: str
     source: str

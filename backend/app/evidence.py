@@ -15,6 +15,7 @@ to share an identifier cannot share a directory:
     evidence/<dockyard-id>/validation/<validation-run-id>/
     evidence/<dockyard-id>/correlation/<correlation-run-id>/
     evidence/<dockyard-id>/intelligence/<intelligence-run-id>/
+    evidence/<dockyard-id>/reporting/<report-run-id>/
 """
 
 import json
@@ -35,6 +36,7 @@ DETECTION_SCOPE = "detection"
 VALIDATION_SCOPE = "validation"
 CORRELATION_SCOPE = "correlation"
 INTELLIGENCE_SCOPE = "intelligence"
+REPORTING_SCOPE = "reporting"
 
 _ARTIFACT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 #: A closed set, so a scope can never become a path fragment an operator chose.
@@ -45,6 +47,7 @@ _SCOPES = frozenset(
         VALIDATION_SCOPE,
         CORRELATION_SCOPE,
         INTELLIGENCE_SCOPE,
+        REPORTING_SCOPE,
     }
 )
 
@@ -126,6 +129,30 @@ class EvidenceStore:
             payload,
             False,
             scope,
+        )
+
+    def write_export(
+        self,
+        dockyard_id: int,
+        run_id: int,
+        name: str,
+        media_type: str,
+        content: bytes,
+    ) -> StoredArtifact:
+        """Write one complete bounded Phase 6 export without evidence truncation."""
+        if not _ARTIFACT_NAME.match(name):
+            raise EvidenceError(f"Unsafe evidence artifact name: {name!r}")
+        if len(content) > get_settings().max_dockpack_bytes:
+            raise EvidenceError("Reporting artifact exceeds the fixed DockPack size limit")
+        return self._write(
+            dockyard_id,
+            run_id,
+            "export",
+            f"raw/{name}",
+            media_type,
+            content,
+            False,
+            REPORTING_SCOPE,
         )
 
     def _write(
