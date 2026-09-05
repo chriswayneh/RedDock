@@ -133,3 +133,7 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 | 0.1.x | No — superseded by 0.2.0 |
 
 Security fixes are evaluated for the latest published release. RedDock is a local, single-operator application in this phase; do not expose it to untrusted networks.
+
+The source-backed [threat model](docs/THREAT_MODEL.md) documents the current
+trust boundaries and the separate fail-closed identity and tenancy design
+required before a supported networked deployment exists.

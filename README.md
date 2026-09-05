@@ -252,6 +252,7 @@ docs/          Architecture decisions and project documentation
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Current system boundaries and future design seams |
 | [Security](SECURITY.md) | Authorized-use policy and product safety model |
+| [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
 | [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
 | [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
