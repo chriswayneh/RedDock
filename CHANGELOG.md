@@ -23,6 +23,8 @@ All notable changes to RedDock are documented here.
   lacks an explicit public/protected classification
 - API-boundary permission enforcement with negative viewer and inactive-user
   tests for mutation, raw evidence, model disclosure, and DockPack export
+- Organization-scoped Dockyard list, create, and load operations with negative
+  cross-tenant ID tests and indistinguishable not-found responses
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

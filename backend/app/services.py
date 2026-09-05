@@ -7,21 +7,36 @@ from app.models import Dockyard, ScopeEntry
 from app.schemas import DockyardCreate, ScopeEntryCreate
 
 
-def list_dockyards(session: Session) -> list[Dockyard]:
-    statement = select(Dockyard).order_by(Dockyard.updated_at.desc(), Dockyard.id.desc())
+def list_dockyards(session: Session, organization_id: int) -> list[Dockyard]:
+    statement = (
+        select(Dockyard)
+        .where(Dockyard.organization_id == organization_id)
+        .order_by(Dockyard.updated_at.desc(), Dockyard.id.desc())
+    )
     return list(session.scalars(statement))
 
 
-def create_dockyard(session: Session, payload: DockyardCreate) -> Dockyard:
-    dockyard = Dockyard(name=payload.name.strip(), description=payload.description)
+def create_dockyard(
+    session: Session, organization_id: int, payload: DockyardCreate
+) -> Dockyard:
+    dockyard = Dockyard(
+        organization_id=organization_id,
+        name=payload.name.strip(),
+        description=payload.description,
+    )
     session.add(dockyard)
     session.commit()
     session.refresh(dockyard)
     return dockyard
 
 
-def get_dockyard(session: Session, dockyard_id: int) -> Dockyard | None:
-    return session.get(Dockyard, dockyard_id)
+def get_dockyard(session: Session, organization_id: int, dockyard_id: int) -> Dockyard | None:
+    return session.scalar(
+        select(Dockyard).where(
+            Dockyard.organization_id == organization_id,
+            Dockyard.id == dockyard_id,
+        )
+    )
 
 
 def list_scope_entries(session: Session, dockyard_id: int) -> list[ScopeEntry]:

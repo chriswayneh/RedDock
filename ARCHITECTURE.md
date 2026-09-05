@@ -396,6 +396,14 @@ Server mode remains unavailable, and configuration rejects
 loading, and authenticated context resolution are complete. The API remains the
 enforcement point; UI visibility will never grant authority.
 
+Dockyard data access already requires an organization ID for list, create, and
+load operations. The local API supplies the reserved local organization, and
+negative tests prove another organization's Dockyard is both excluded from
+lists and returned as the same 404 as an absent ID. Child-resource routes first
+cross this root loader and then constrain their own queries by Dockyard ID.
+Replacing the fixed local context with a verified server session remains a
+separate fail-closed checkpoint.
+
 ## Deterministic core
 
 Nothing in discovery, detection, validation, correlation, or reporting is AI-driven.
