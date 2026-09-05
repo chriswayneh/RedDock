@@ -396,13 +396,15 @@ Server mode remains unavailable, and configuration rejects
 loading, and authenticated context resolution are complete. The API remains the
 enforcement point; UI visibility will never grant authority.
 
-Dockyard data access already requires an organization ID for list, create, and
-load operations. The local API supplies the reserved local organization, and
-negative tests prove another organization's Dockyard is both excluded from
-lists and returned as the same 404 as an absent ID. Child-resource routes first
-cross this root loader and then constrain their own queries by Dockyard ID.
-Replacing the fixed local context with a verified server session remains a
-separate fail-closed checkpoint.
+Dockyard data access requires an organization ID for list, create, and load
+operations. The enforced router dependency installs one immutable authorization
+context for the request and resets it afterward; root loaders derive their
+organization only from that context. Tests switch between two organizations and
+prove each sees only its own list and IDs, with a cross-organization ID returning
+the same 404 as an absent object. Child-resource routes first cross this root
+loader and then constrain their own queries by Dockyard ID. Replacing the local
+context resolver with a verified server session remains a separate fail-closed
+checkpoint.
 
 ## Deterministic core
 

@@ -7,8 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import lab
-from app.authorization import LOCAL_AUTHORIZATION
-from app.authorization_dependencies import authorize_request
+from app.authorization_dependencies import authorize_request, request_authorization
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
 from app.database import get_session
@@ -90,7 +89,7 @@ ListLimit = Query(default=100, ge=1, le=500)
 
 
 def require_dockyard(dockyard_id: int, session: Session) -> Dockyard:
-    dockyard = get_dockyard(session, LOCAL_AUTHORIZATION.organization_id, dockyard_id)
+    dockyard = get_dockyard(session, request_authorization().organization_id, dockyard_id)
     if dockyard is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dockyard not found")
     return dockyard
@@ -168,7 +167,7 @@ def read_lab_status() -> LabStatusRead:
 
 @router.get("/dockyards", response_model=list[DockyardRead])
 def read_dockyards(session: Session = Depends(get_session)) -> list[DockyardRead]:
-    return list_dockyards(session, LOCAL_AUTHORIZATION.organization_id)
+    return list_dockyards(session, request_authorization().organization_id)
 
 
 @router.post("/dockyards", response_model=DockyardRead, status_code=status.HTTP_201_CREATED)
@@ -178,7 +177,7 @@ def add_dockyard(payload: DockyardCreate, session: Session = Depends(get_session
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Name is required",
         )
-    return create_dockyard(session, LOCAL_AUTHORIZATION.organization_id, payload)
+    return create_dockyard(session, request_authorization().organization_id, payload)
 
 
 @router.get("/dockyards/{dockyard_id}", response_model=DockyardRead)

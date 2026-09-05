@@ -25,6 +25,8 @@ All notable changes to RedDock are documented here.
   tests for mutation, raw evidence, model disclosure, and DockPack export
 - Organization-scoped Dockyard list, create, and load operations with negative
   cross-tenant ID tests and indistinguishable not-found responses
+- Request-scoped authorization context propagation and reset, with two-tenant
+  integration tests proving isolation in both directions
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

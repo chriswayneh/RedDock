@@ -1,6 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, Role
+from app.authorization_dependencies import current_authorization
 from app.models import Dockyard, Membership, Organization, User
 from app.schemas import DockyardCreate
 from app.services import create_dockyard, get_dockyard, list_dockyards
@@ -58,3 +60,32 @@ def test_api_local_context_cannot_load_another_organizations_dockyard(
     assert response.status_code == 404
     assert response.json() == {"detail": "Dockyard not found"}
     assert session.scalar(select(Dockyard).where(Dockyard.id == other.id)) is not None
+
+
+def test_request_context_selects_exactly_one_organization(client, session: Session):
+    from app.main import app
+
+    other_organization_id = _second_organization(session)
+    local = create_dockyard(session, 1, DockyardCreate(name="Local"))
+    other = create_dockyard(
+        session,
+        other_organization_id,
+        DockyardCreate(name="Other"),
+    )
+    app.dependency_overrides[current_authorization] = lambda: AuthorizationContext(
+        organization_id=other_organization_id,
+        user_id=2,
+        membership_id=2,
+        role=Role.OWNER,
+    )
+    try:
+        listed = client.get("/api/dockyards")
+        assert listed.status_code == 200
+        assert [item["id"] for item in listed.json()] == [other.id]
+        assert client.get(f"/api/dockyards/{other.id}").status_code == 200
+        assert client.get(f"/api/dockyards/{local.id}").status_code == 404
+    finally:
+        app.dependency_overrides.pop(current_authorization, None)
+
+    assert client.get(f"/api/dockyards/{local.id}").status_code == 200
+    assert client.get(f"/api/dockyards/{other.id}").status_code == 404
