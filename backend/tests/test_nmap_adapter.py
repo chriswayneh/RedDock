@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 
 from app.discovery.base import AdapterError, AdapterRequest
-from app.discovery.nmap import HOST_DISCOVERY, SERVICE_DISCOVERY, NmapAdapter
+from app.discovery.nmap import (
+    HOST_DISCOVERY,
+    LAB_EXTENDED_SERVICE_DISCOVERY,
+    SERVICE_DISCOVERY,
+    NmapAdapter,
+)
 from app.targets import normalize_target
 
 FIXTURE = Path(__file__).parent / "fixtures" / "nmap_service_discovery.xml"
@@ -38,12 +43,22 @@ def test_service_discovery_arguments_are_safe_and_explicit():
 
 def test_no_aggressive_or_scripting_options_are_ever_generated():
     adapter = NmapAdapter()
-    generated = set(adapter.prepare(request())) | set(
-        adapter.prepare(request(profile=HOST_DISCOVERY))
+    generated = (
+        set(adapter.prepare(request()))
+        | set(adapter.prepare(request(profile=HOST_DISCOVERY)))
+        | set(adapter.prepare(request(profile=LAB_EXTENDED_SERVICE_DISCOVERY)))
     )
     forbidden = {"-A", "--script", "-sU", "-f", "-D", "--source-port", "-O", "--spoof-mac"}
     assert not generated & forbidden
     assert not any(argument.startswith("--script") for argument in generated)
+
+
+def test_lab_service_discovery_is_fixed_and_bounded():
+    arguments = NmapAdapter().prepare(request(profile=LAB_EXTENDED_SERVICE_DISCOVERY))
+    assert arguments[arguments.index("--top-ports") + 1] == "1000"
+    assert arguments[arguments.index("--version-intensity") + 1] == "5"
+    assert "-sT" in arguments
+    assert "-sV" in arguments
 
 
 def test_host_discovery_does_not_scan_ports():

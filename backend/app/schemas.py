@@ -1,10 +1,11 @@
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field
 
 from app.detection.base import OPERATOR_STATUSES, FindingStatus
 from app.dockguard import ScopeRuleType
+from app.lab_capabilities import LAB_ACKNOWLEDGEMENT
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -467,6 +468,71 @@ class FindingStatusUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=255)
 
 
+def _exact_lab_acknowledgement(value: str) -> str:
+    if value != LAB_ACKNOWLEDGEMENT:
+        raise ValueError("The exact lab acknowledgement is required")
+    return value
+
+
+LabAcknowledgement = Annotated[str, AfterValidator(_exact_lab_acknowledgement)]
+
+
+class LabCapabilityRead(BaseModel):
+    id: str
+    title: str
+    description: str
+    risk: str
+    single_host_only: bool
+
+
+class LabStatusRead(BaseModel):
+    deployment_enabled: bool
+    acknowledgement: str
+    max_authorization_minutes: int
+    capabilities: list[LabCapabilityRead]
+
+
+class LabAuthorizationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    capability: Literal["discovery.nmap.extended-service"]
+    acknowledgement: LabAcknowledgement
+    note: str = Field(min_length=3, max_length=500)
+    duration_minutes: int = Field(default=60, ge=5, le=120)
+
+
+class LabAuthorizationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    capability: str
+    status: str
+    acknowledgement: str
+    note: str
+    created_at: UtcDatetime
+    expires_at: UtcDatetime
+    revoked_at: UtcDatetime | None
+
+
+class LabRevokeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class LabAuditEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    capability: str
+    action: str
+    decision: str
+    reason: str
+    authorization_id: int | None
+    discovery_run_id: int | None
+    created_at: UtcDatetime
+
+
 class DetectorRead(BaseModel):
     id: str
     version: str
@@ -479,6 +545,10 @@ class ProfileRead(BaseModel):
     name: str
     title: str
     description: str
+    risk: str
+    capability: str | None
+    requires_lab_authorization: bool
+    single_host_only: bool
 
 
 class AdapterRead(BaseModel):

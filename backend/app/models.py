@@ -579,3 +579,47 @@ class ReportRun(Base):
     error: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LabAuthorization(Base):
+    """A short-lived owner acknowledgement for one fixed lab capability."""
+
+    __tablename__ = "lab_authorizations"
+    __table_args__ = (
+        Index("ix_lab_authorization_dockyard_capability", "dockyard_id", "capability"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    capability: Mapped[str] = mapped_column(String(96), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    acknowledgement: Mapped[str] = mapped_column(String(200), nullable=False)
+    note: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class LabAuditEvent(Base):
+    """One immutable lab-policy decision, including denials and rechecks."""
+
+    __tablename__ = "lab_audit_events"
+    __table_args__ = (Index("ix_lab_audit_dockyard_time", "dockyard_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    capability: Mapped[str] = mapped_column(String(96), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    authorization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lab_authorizations.id", ondelete="SET NULL"), nullable=True
+    )
+    discovery_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("discovery_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

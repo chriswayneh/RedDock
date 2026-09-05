@@ -83,15 +83,37 @@ def test_detectors_are_advertised_without_an_offensive_capability(client):
         assert not {"exploit", "attack", "bruteforce"} & set(detector["id"].split("."))
 
 
-def test_adapters_are_advertised_with_their_safe_profiles(client):
+def test_adapters_distinguish_standard_and_separately_guarded_lab_profiles(client):
     adapters = client.get("/api/adapters").json()
     assert response_names(adapters) == {"nmap", "http"}
 
     nmap = next(item for item in adapters if item["name"] == "nmap")
     assert {profile["name"] for profile in nmap["profiles"]} == {
         "host_discovery",
+        "lab_extended_service_discovery",
         "service_discovery",
     }
+    lab_profile = next(
+        profile
+        for profile in nmap["profiles"]
+        if profile["name"] == "lab_extended_service_discovery"
+    )
+    assert lab_profile == {
+        "name": "lab_extended_service_discovery",
+        "title": "Extended service discovery",
+        "description": (
+            "Lab-only TCP connect scan of the 1,000 most common ports with bounded "
+            "version detection."
+        ),
+        "risk": "lab",
+        "capability": "discovery.nmap.extended-service",
+        "requires_lab_authorization": True,
+        "single_host_only": True,
+    }
+    for profile in nmap["profiles"]:
+        if profile is not lab_profile:
+            assert profile["risk"] == "standard"
+            assert profile["requires_lab_authorization"] is False
     # No adapter advertises an aggressive or exploitation profile.
     for adapter in adapters:
         for profile in adapter["profiles"]:

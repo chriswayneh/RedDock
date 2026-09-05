@@ -8,11 +8,13 @@ exactly what happened, including the runs that were never allowed to start.
 
 import logging
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import lab
 from app.config import get_settings
 from app.discovery import registry
 from app.discovery.base import (
@@ -25,12 +27,12 @@ from app.discovery.base import (
     DiscoveryAdapter,
     RunStatus,
 )
-from app.dockguard import Evaluation, evaluate, system_resolver
+from app.dockguard import Decision, Evaluation, evaluate, system_resolver
 from app.evidence import EVIDENCE_SCHEMA, EvidenceStore
 from app.inventory import record_observation, upsert_asset, upsert_service
 from app.models import DiscoveryRun, EvidenceRecord
 from app.services import scope_rules
-from app.targets import normalize_target
+from app.targets import TargetKind, normalize_target
 
 logger = logging.getLogger("reddock.discovery")
 
@@ -62,14 +64,36 @@ def create_run(
     adapter = registry.get_adapter(adapter_name)
     if adapter is None:
         raise RunRejected(f"Unknown discovery adapter: {adapter_name}")
-    if adapter.profile(profile_name) is None:
+    profile = adapter.profile(profile_name)
+    if profile is None:
         raise RunRejected(f"{adapter.title} has no {profile_name} profile")
 
     evaluation = evaluate(
         requested_target, scope_rules(session, dockyard_id), resolver=system_resolver
     )
-    if evaluation.allowed and not adapter.supports(normalize_target(requested_target)):
+    target = normalize_target(requested_target) if evaluation.allowed else None
+    if evaluation.allowed and target is not None and not adapter.supports(target):
         raise RunRejected(f"{adapter.title} cannot act on a {evaluation.target_kind} target")
+    if (
+        evaluation.allowed
+        and target is not None
+        and profile.single_host_only
+        and target.kind in {TargetKind.IPV4_NETWORK, TargetKind.IPV6_NETWORK}
+    ):
+        raise RunRejected(f"{profile.title} is limited to one host; network targets are refused")
+    if evaluation.allowed and profile.requires_lab_authorization:
+        policy = lab.check_capability(
+            session,
+            dockyard_id,
+            profile.capability or "",
+            action="request",
+        )
+        if not policy.allowed:
+            evaluation = replace(
+                evaluation,
+                decision=Decision.DENIED_POLICY,
+                reason=policy.reason,
+            )
     if evaluation.allowed and active_run_count(session) >= get_settings().max_concurrent_runs:
         raise RunRejected(
             f"RedDock already has {get_settings().max_concurrent_runs} discovery runs in flight"
@@ -154,7 +178,11 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
     if adapter is None:
         raise AdapterError(f"Adapter {run.adapter} is no longer available")
 
-    # DockGuard is evaluated again immediately before execution. Scope can
+    profile = adapter.profile(run.profile)
+    if profile is None:
+        raise AdapterError(f"Adapter {run.adapter} no longer provides profile {run.profile}")
+
+    # DockGuard and lab policy are evaluated again immediately before execution. Scope can
     # change between requesting and starting a run, and the authoritative
     # decision is the one taken with the tool about to be invoked.
     evaluation = evaluate(
@@ -167,6 +195,22 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
         run.completed_at = datetime.now(UTC)
         session.commit()
         return
+
+    if profile.requires_lab_authorization:
+        policy = lab.check_capability(
+            session,
+            run.dockyard_id,
+            profile.capability or "",
+            action="execute",
+            discovery_run_id=run.id,
+        )
+        if not policy.allowed:
+            run.decision = str(Decision.DENIED_POLICY)
+            run.decision_reason = policy.reason[:500]
+            run.status = str(RunStatus.DENIED)
+            run.completed_at = datetime.now(UTC)
+            session.commit()
+            return
 
     request = AdapterRequest(
         target=normalize_target(run.requested_target),

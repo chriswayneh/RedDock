@@ -25,6 +25,10 @@ class Settings(BaseModel):
     llm_api_key: str | None = None
     llm_timeout_seconds: int = 60
 
+    # Phase 7 lab capabilities require a deployment-owner opt-in in addition to
+    # a short-lived Dockyard authorization. The API cannot enable this switch.
+    lab_mode_enabled: bool = False
+
     # Scope and execution bounds. These are constants rather than environment
     # settings because relaxing them would weaken the exact guarantees
     # DockGuard exists to provide; an operator who needs a wider engagement
@@ -73,6 +77,11 @@ class Settings(BaseModel):
     max_report_evidence_files: int = 2_000
     max_dockpack_bytes: int = 64 * 1024 * 1024
 
+    # Lab authorizations are deliberately short lived. Unlike ordinary limits,
+    # the requested duration may vary inside this fixed ceiling.
+    max_lab_authorization_minutes: int = 120
+    max_lab_authorizations_per_dockyard: int = 500
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -88,4 +97,6 @@ def get_settings() -> Settings:
         llm_base_url=os.getenv("REDDOCK_LLM_BASE_URL") or None,
         llm_model=os.getenv("REDDOCK_LLM_MODEL") or None,
         llm_api_key=os.getenv("REDDOCK_LLM_API_KEY") or None,
+        lab_mode_enabled=os.getenv("REDDOCK_LAB_MODE_ENABLED", "").strip().lower()
+        in {"1", "true", "yes"},
     )

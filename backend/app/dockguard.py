@@ -26,6 +26,7 @@ class ScopeRuleType(StrEnum):
 
 class Decision(StrEnum):
     ALLOWED = "allowed"
+    DENIED_POLICY = "denied_policy"
     DENIED_OUT_OF_SCOPE = "denied_out_of_scope"
     DENIED_EXCLUDED = "denied_excluded"
     INVALID_TARGET = "invalid_target"

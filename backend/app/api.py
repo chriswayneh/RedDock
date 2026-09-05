@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import lab
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
 from app.database import get_session
@@ -18,6 +19,7 @@ from app.dockguard import Evaluation, ScopeRejected, evaluate, system_resolver
 from app.findings import get_finding, list_evidence, list_findings, set_status
 from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
+from app.lab_capabilities import CAPABILITIES
 from app.models import Asset, Dockyard, EvidenceRecord, Finding, FindingEvidence, Service
 from app.reporting import runner as reporting_runner
 from app.schemas import (
@@ -43,6 +45,12 @@ from app.schemas import (
     IntelligenceCreate,
     IntelligenceProviderRead,
     IntelligenceRunRead,
+    LabAuditEventRead,
+    LabAuthorizationCreate,
+    LabAuthorizationRead,
+    LabCapabilityRead,
+    LabRevokeCreate,
+    LabStatusRead,
     ObservationRead,
     ProfileRead,
     RedPathGraphRead,
@@ -137,6 +145,18 @@ def read_adapters() -> list[AdapterRead]:
     ]
 
 
+@router.get("/lab/status", response_model=LabStatusRead)
+def read_lab_status() -> LabStatusRead:
+    """Describe the fixed lab boundary without exposing process configuration."""
+    settings = get_settings()
+    return LabStatusRead(
+        deployment_enabled=settings.lab_mode_enabled,
+        acknowledgement=lab.LAB_ACKNOWLEDGEMENT,
+        max_authorization_minutes=settings.max_lab_authorization_minutes,
+        capabilities=[LabCapabilityRead(**asdict(item)) for item in CAPABILITIES],
+    )
+
+
 @router.get("/dockyards", response_model=list[DockyardRead])
 def read_dockyards(session: Session = Depends(get_session)) -> list[DockyardRead]:
     return list_dockyards(session)
@@ -155,6 +175,74 @@ def add_dockyard(payload: DockyardCreate, session: Session = Depends(get_session
 @router.get("/dockyards/{dockyard_id}", response_model=DockyardRead)
 def read_dockyard(dockyard_id: int, session: Session = Depends(get_session)) -> DockyardRead:
     return require_dockyard(dockyard_id, session)
+
+
+@router.get(
+    "/dockyards/{dockyard_id}/lab/authorizations",
+    response_model=list[LabAuthorizationRead],
+)
+def read_lab_authorizations(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[LabAuthorizationRead]:
+    require_dockyard(dockyard_id, session)
+    return lab.list_authorizations(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/lab/authorizations",
+    response_model=LabAuthorizationRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def authorize_lab_capability(
+    dockyard_id: int,
+    payload: LabAuthorizationCreate,
+    session: Session = Depends(get_session),
+) -> LabAuthorizationRead:
+    require_dockyard(dockyard_id, session)
+    try:
+        authorization, decision = lab.create_authorization(
+            session,
+            dockyard_id,
+            payload.capability,
+            payload.acknowledgement,
+            payload.note,
+            payload.duration_minutes,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(error)
+        ) from error
+    if not decision.allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=decision.reason)
+    return LabAuthorizationRead.model_validate(authorization)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/lab/authorizations/{authorization_id}/revoke",
+    response_model=LabAuthorizationRead,
+)
+def revoke_lab_capability(
+    dockyard_id: int,
+    authorization_id: int,
+    payload: LabRevokeCreate,
+    session: Session = Depends(get_session),
+) -> LabAuthorizationRead:
+    require_dockyard(dockyard_id, session)
+    authorization = lab.revoke_authorization(session, dockyard_id, authorization_id)
+    if authorization is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Authorization not found")
+    return LabAuthorizationRead.model_validate(authorization)
+
+
+@router.get(
+    "/dockyards/{dockyard_id}/lab/audit",
+    response_model=list[LabAuditEventRead],
+)
+def read_lab_audit(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[LabAuditEventRead]:
+    require_dockyard(dockyard_id, session)
+    return lab.list_audit_events(session, dockyard_id, limit)
 
 
 @router.get("/dockyards/{dockyard_id}/scope", response_model=list[ScopeEntryRead])

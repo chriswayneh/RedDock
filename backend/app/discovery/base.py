@@ -107,6 +107,10 @@ class Profile:
     name: str
     title: str
     description: str
+    risk: str = "standard"
+    capability: str | None = None
+    requires_lab_authorization: bool = False
+    single_host_only: bool = False
 
 
 class DiscoveryAdapter(ABC):

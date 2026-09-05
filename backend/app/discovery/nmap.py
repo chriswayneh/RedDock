@@ -26,10 +26,12 @@ from app.discovery.base import (
     Profile,
     RawArtifact,
 )
+from app.lab_capabilities import EXTENDED_SERVICE_DISCOVERY
 from app.targets import TargetKind, is_safe_token
 
 HOST_DISCOVERY = "host_discovery"
 SERVICE_DISCOVERY = "service_discovery"
+LAB_EXTENDED_SERVICE_DISCOVERY = "lab_extended_service_discovery"
 
 # States worth persisting as a service. Anything else is recorded as an
 # observation only, so the inventory never fills with ports that answered
@@ -55,6 +57,18 @@ class NmapAdapter(DiscoveryAdapter):
             title="Service discovery",
             description="TCP connect scan of the 100 most common ports with light "
             "version detection.",
+        ),
+        Profile(
+            name=LAB_EXTENDED_SERVICE_DISCOVERY,
+            title="Extended service discovery",
+            description=(
+                "Lab-only TCP connect scan of the 1,000 most common ports with "
+                "bounded version detection."
+            ),
+            risk="lab",
+            capability=EXTENDED_SERVICE_DISCOVERY,
+            requires_lab_authorization=True,
+            single_host_only=True,
         ),
     )
 
@@ -103,6 +117,16 @@ class NmapAdapter(DiscoveryAdapter):
                 "-sV",
                 "--version-intensity",
                 "2",
+            ]
+        elif request.profile == LAB_EXTENDED_SERVICE_DISCOVERY:
+            arguments += [
+                "-Pn",
+                "-sT",
+                "--top-ports",
+                "1000",
+                "-sV",
+                "--version-intensity",
+                "5",
             ]
         else:
             raise AdapterError(f"Unknown nmap profile: {request.profile}")
