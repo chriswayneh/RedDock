@@ -123,7 +123,8 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.7.x | Yes — current published release |
+| 0.8.x | Yes — current published release |
+| 0.7.x | No — superseded by 0.8.0 |
 | 0.6.x | No — superseded by 0.7.0 |
 | 0.5.x | No — superseded by 0.6.0 |
 | 0.4.x | No — superseded by 0.5.0 |

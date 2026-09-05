@@ -93,7 +93,7 @@ def test_report_set_is_complete_hash_linked_and_portable(
     manifest = manifest_response.json()
     assert manifest["schema"] == "reddock.evidence-manifest/1"
     assert manifest["dockyard_id"] == dockyard_id
-    assert manifest["generator"]["version"] == "0.7.0"
+    assert manifest["generator"]["version"] == "0.8.0"
     assert len(manifest["scope_sha256"]) == 64
     assert manifest["skipped_findings"] == []
     assert manifest["file_count"] >= 6

@@ -9,7 +9,7 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.7.0"
+    version: str = "0.8.0"
     phase: str = "Phase 7 — Advanced / Lab"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"

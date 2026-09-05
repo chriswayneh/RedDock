@@ -11,11 +11,11 @@ Container-native security assessment and validation platform with controlled exe
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-6%20Reporting-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/phase-7%20Advanced%20%2F%20Lab-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.7.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.7.0) — Phase 6 Reporting
+**Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0) — Phase 7 Advanced / Lab
 
-**Development on `master`:** Phase 7 lab controls and data-only detector plugins are in progress.
+**Phase 7 is complete:** separately gated lab controls, data-only detector plugins, and portable policy provenance are published and security-reviewed.
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -245,6 +245,8 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
+**v0.8.0 delivers Phase 7 — Advanced / Lab:** a fixed single-host extended service-discovery profile behind independent deployment and short-lived Dockyard gates, an append-only policy ledger, bounded data-only detector manifests with content-addressed provenance, optional local Qwen3.5 through Ollama, and portable lab history in reports and DockPacks.
+
 **v0.7.0 delivers Phase 6 — Reporting:** deterministic technical and executive reports, a complete SHA-256 evidence manifest, and portable DockPack exports assembled only from verified retained artifacts. Unchanged Dockyard state produces byte-identical output, and reporting contacts neither a target nor a model.
 
 **v0.6.0 delivered Phase 5 — Intelligence:** opt-in local or cloud OpenAI-compatible advice, exact packet review before disclosure, separate approval, provider and prompt-version binding, strict output validation, and hashed input/output provenance. The model receives no tools and cannot change RedDock state.
@@ -261,7 +263,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.7.0: Phase 7 — Advanced / Lab.** Explicit lab-only capabilities and a broader plugin ecosystem remain planned and must be separately guarded. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.8.0: Phase 8 — Production polish.** RBAC, optional PostgreSQL, scaling, release automation, ARM64 support, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 

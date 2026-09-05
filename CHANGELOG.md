@@ -2,7 +2,7 @@
 
 All notable changes to RedDock are documented here.
 
-## [Unreleased] — Phase 7 Advanced / Lab
+## [0.8.0] — 2026-09-05 — Phase 7 Advanced / Lab
 
 ### Added
 

@@ -376,7 +376,7 @@ function stubApi({
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.7.0", phase: "Phase 7 — Advanced / Lab" });
+        return json({ name: "RedDock", version: "0.8.0", phase: "Phase 7 — Advanced / Lab" });
       if (path.endsWith("/adapters")) return json(adapters);
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);

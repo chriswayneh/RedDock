@@ -30,9 +30,9 @@ Optional local or cloud OpenAI-compatible analysis now produces remediation and 
 
 Technical and executive reports, evidence manifests, and portable DockPack exports are implemented. A report freezes one bounded Dockyard snapshot, re-verifies every database-referenced source artifact against its retained SHA-256, and produces deterministic Markdown, JSON, a manifest, and a byte-reproducible ZIP without contacting a target or model. Downloads are hash-checked again before delivery. Released as v0.7.0.
 
-## Phase 7 — Advanced / Lab
+## Completed — Phase 7: Advanced / Lab
 
-In progress on `master`. The first capability is a fixed, single-host extended
+The first capability is a fixed, single-host extended
 TCP service-discovery profile guarded by both deployment opt-in and a separate,
 short-lived per-Dockyard authorization. Authorization, requests, execution,
 denials, and revocation have their own audit ledger. The extension boundary is
@@ -40,8 +40,8 @@ also implemented as content-addressed, data-only detector manifests rather than
 arbitrary code plugins.
 
 Portable lab-audit provenance is included in reporting and DockPacks, and real
-Phase 7 screenshots are published. Completion additionally requires a final
-security review, the complete CI/Docker test matrix, and a v0.8.0 release.
+Phase 7 screenshots are published. The final security review and complete
+CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8 — Production polish
 
