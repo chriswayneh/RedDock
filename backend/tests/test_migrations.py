@@ -14,8 +14,20 @@ def test_fresh_database_is_stamped_at_the_current_head(environment: Path):
         assert inspect(connection).has_table("dockyards")
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0001_v080"
+            == "0002_identity"
         )
+        assert connection.exec_driver_sql(
+            "SELECT name FROM organizations WHERE id = 1"
+        ).scalar_one() == "Local RedDock"
+        assert connection.exec_driver_sql(
+            "SELECT display_name FROM users WHERE id = 1"
+        ).scalar_one() == "Local operator"
+        assert connection.exec_driver_sql(
+            "SELECT role FROM memberships WHERE id = 1"
+        ).scalar_one() == "owner"
+        assert connection.exec_driver_sql(
+            "INSERT INTO organizations (slug, name) VALUES ('next', 'Next') RETURNING id"
+        ).scalar_one() == 2
 
 
 def test_migration_runner_is_idempotent(environment: Path):
@@ -61,3 +73,16 @@ def test_frozen_baseline_is_a_subset_of_the_current_model():
     for table, expected_columns in BASELINE_SCHEMA.items():
         assert table in Base.metadata.tables
         assert set(expected_columns) <= set(Base.metadata.tables[table].columns.keys())
+
+
+def test_new_dockyards_are_owned_by_the_local_organization(environment: Path):
+    import app.database
+    from app.models import Dockyard
+
+    app.database.initialize_database()
+    with app.database.SessionLocal() as session:
+        dockyard = Dockyard(name="Owned local workspace")
+        session.add(dockyard)
+        session.commit()
+        session.refresh(dockyard)
+        assert dockyard.organization_id == 1

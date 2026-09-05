@@ -15,6 +15,8 @@ All notable changes to RedDock are documented here.
 - Mounted secret-file configuration for PostgreSQL and model-provider
   credentials, including masked in-process values and fail-closed validation
 - PostgreSQL CI that applies the versioned schema and proves real-server CRUD
+- Versioned organization, OIDC-keyed user, membership, and hash-only browser
+  session tables, plus non-null organization ownership for every Dockyard
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 
@@ -24,6 +26,8 @@ All notable changes to RedDock are documented here.
   PostgreSQL profile does not claim or enable networked server deployment
 - Partial, empty, oversized, multiline, missing, or symlinked database-secret
   inputs fail startup instead of falling back to a different database
+- Existing local databases migrate into a reserved local organization and owner
+  without changing IDs, evidence hashes, or the account-free local workflow
 - PostgreSQL and optional Ollama remain private Compose services without host
   ports, and credentials do not appear in rendered service environments
 
@@ -33,6 +37,8 @@ All notable changes to RedDock are documented here.
   sources, symlink rejection, and incomplete database settings
 - The complete SQLite regression suite continues to pass alongside an isolated
   real-PostgreSQL migration and CRUD integration test
+- Fresh and legacy migration tests prove local identity seeding, non-null
+  Dockyard ownership, idempotency, and fail-closed unknown-schema handling
 
 ## [0.8.0] — 2026-09-05 — Phase 7 Advanced / Lab
 

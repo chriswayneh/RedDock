@@ -77,8 +77,11 @@ def test_every_phase_1_table_is_created(phase_0_database: Path):
     } <= tables
     with sqlite3.connect(phase_0_database) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0001_v080",
+            "0002_identity",
         )
+        assert connection.execute(
+            "SELECT organization_id FROM dockyards WHERE name = 'Existing engagement'"
+        ).fetchone() == (1,)
 
 
 #: The schema as released in v0.2.1, written out rather than derived, so a
@@ -312,8 +315,8 @@ def test_every_phase_6_table_is_created(phase_1_database: Path):
     assert "report_runs" in tables
 
 
-def test_phase_2_changes_no_phase_1_column(phase_1_database: Path):
-    """The upgrade is additive, so every Phase 1 table keeps the shape it had."""
+def test_phase_8_preserves_every_existing_phase_1_column(phase_1_database: Path):
+    """Tenancy adds Dockyard ownership without changing any released column."""
     import app.database
 
     before = _columns(phase_1_database)
@@ -321,7 +324,11 @@ def test_phase_2_changes_no_phase_1_column(phase_1_database: Path):
     after = _columns(phase_1_database)
 
     for table, columns in before.items():
-        assert after[table] == columns, table
+        if table == "dockyards":
+            assert after[table][: len(columns)] == columns
+            assert after[table][-1][1:4] == ("organization_id", "INTEGER", 1)
+        else:
+            assert after[table] == columns, table
 
 
 def test_phase_1_data_survives_and_phase_2_runs_on_top_of_it(phase_1_database: Path):

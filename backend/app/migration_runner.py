@@ -346,9 +346,9 @@ def upgrade_database(engine: Engine) -> None:
                 _validate_legacy_baseline(connection)
                 command.stamp(config, BASELINE_REVISION)
             else:
-                # A fresh install already has the latest model, so create it and
-                # stamp the current head. Upgrade scripts remain for existing data.
+                # Create the current model, stamp the released baseline, and run
+                # every migration so data-seeding migrations are never skipped.
                 Base.metadata.create_all(bind=connection)
-                command.stamp(config, "head")
+                command.stamp(config, BASELINE_REVISION)
 
         command.upgrade(config, "head")

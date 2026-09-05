@@ -30,11 +30,15 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
         app.database.initialize_database()
         assert app.database.engine.dialect.name == "postgresql"
         assert inspect(app.database.engine).has_table("dockyards")
-        with app.database.engine.connect() as connection:
+        with app.database.engine.begin() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0001_v080"
+                == "0002_identity"
             )
+            assert connection.exec_driver_sql(
+                "INSERT INTO organizations (slug, name) "
+                "VALUES ('sequence-check', 'Sequence check') RETURNING id"
+            ).scalar_one() == 2
 
         marker = f"PostgreSQL integration {uuid4()}"
         with app.database.SessionLocal() as session:
@@ -47,6 +51,7 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
             stored = session.scalar(select(Dockyard).where(Dockyard.id == dockyard_id))
             assert stored is not None
             assert stored.name == marker
+            assert stored.organization_id == 1
             session.delete(stored)
             session.commit()
     finally:
