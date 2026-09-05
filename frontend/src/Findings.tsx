@@ -574,6 +574,13 @@ export function DetectionPanel({
                     <code>{detector.id}</code> {detector.version}
                   </small>
                   <small>{detector.description}</small>
+                  <small>
+                    {detector.source === "declarative" ? "Reviewed manifest" : "RedDock built-in"}
+                    {" · "}{detector.execution}
+                    {detector.manifest_sha256 && (
+                      <> · SHA-256 <code className="hash">{detector.manifest_sha256.slice(0, 16)}…</code></>
+                    )}
+                  </small>
                 </span>
               </li>
             ))}

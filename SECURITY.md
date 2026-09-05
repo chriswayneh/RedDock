@@ -44,6 +44,13 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - The validator reuses the fixed HTTP probe: a bodyless `HEAD`, with one standards-required `GET` fallback for `405` or `501`; it accepts no URL, payload, credential, cookie, command, flag, redirect, response body, crawler, or browser automation.
 - A result is `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. It never changes the original finding's severity, confidence, or operator status.
 
+**Lab mode**
+
+- Lab capability requires two independent gates: the deployment owner must enable a process-level switch that the API cannot change, and an operator must create a 5–120 minute authorization for one capability and Dockyard using the exact acknowledgement shown in the Lab console.
+- The current lab profile accepts one host only and uses a fixed TCP connect scan of Nmap's top 1,000 ports with bounded version detection. It still has no scripts, UDP, OS detection, evasion, credential testing, brute force, payload, exploit, or operator-supplied flag.
+- RedDock rechecks the deployment switch, active authorization, single-host constraint, and DockGuard immediately before execution. A network target is refused even when it is in ordinary DockGuard scope.
+- Authorization, request, execute, deny, and revoke decisions are append-only audit events. Expiration, supersession, revocation, and denial do not erase history.
+
 **Detection**
 
 - Detection reads only what RedDock already recorded. A detector receives an immutable snapshot of one Dockyard and is given no database session, no socket, no subprocess, no target, and no operator-supplied option, so there is nothing for it to reach, execute, or widen. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could.

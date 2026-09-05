@@ -1,0 +1,6 @@
+# Deployment-owner gate for Phase 7 lab capabilities. This switch alone does
+# not authorize a run; each Dockyard still needs a short-lived in-product grant.
+services:
+  reddock:
+    environment:
+      REDDOCK_LAB_MODE_ENABLED: "true"

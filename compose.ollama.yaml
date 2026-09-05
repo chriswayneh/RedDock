@@ -1,0 +1,9 @@
+# Explicit opt-in for an Ollama server already running on the Docker host.
+# No model weights or provider credentials are bundled with RedDock.
+services:
+  reddock:
+    environment:
+      REDDOCK_LLM_BASE_URL: http://host.docker.internal:11434/v1
+      REDDOCK_LLM_MODEL: "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

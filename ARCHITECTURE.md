@@ -101,7 +101,7 @@ prepare → execute → parse → normalize → artifacts
 
 | Adapter | Profiles | Behaviour |
 | --- | --- | --- |
-| `nmap` | `host_discovery`, `service_discovery` | `-sn` host discovery, or a TCP connect scan of the top 100 ports with light version detection. No NSE scripts, no UDP, no OS detection, no evasion, no `-A`. |
+| `nmap` | `host_discovery`, `service_discovery`, lab-gated `lab_extended_service_discovery` | `-sn` host discovery, a TCP connect scan of the top 100 ports with light version detection, or a separately authorized single-host lab profile covering the top 1,000 TCP ports with bounded version detection. No NSE scripts, UDP, OS detection, evasion, or `-A`. |
 | `http` | `http_probe` | One HEAD (GET only if HEAD is refused) against a scoped origin. No redirects, no body read, no crawling, no path guessing. |
 
 ## Domain model

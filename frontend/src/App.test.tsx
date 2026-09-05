@@ -33,6 +33,9 @@ const detectors = [
     title: "HTTP security headers",
     description: "Reports response-level protections the recorded response did not carry.",
     consumes: ["http_response", "http_header"],
+    source: "built-in",
+    execution: "passive",
+    manifest_sha256: null,
   },
 ];
 
@@ -729,6 +732,7 @@ describe("Phase 2 detection", () => {
     await user.click(await screen.findByRole("button", { name: "Detection" }));
 
     expect(await screen.findByText("HTTP security headers")).toBeInTheDocument();
+    expect(screen.getByText(/RedDock built-in · passive/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Run detection" }));
 
     await waitFor(() => expect(calls.detection).toHaveBeenCalledWith({}));

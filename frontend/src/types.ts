@@ -130,6 +130,9 @@ export type Detector = {
   title: string;
   description: string;
   consumes: string[];
+  source: "built-in" | "declarative";
+  execution: "passive";
+  manifest_sha256: string | null;
 };
 
 export type LabCapability = {

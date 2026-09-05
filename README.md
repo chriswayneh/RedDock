@@ -15,6 +15,8 @@ Container-native security assessment and validation platform with controlled exe
 
 **Current release:** [v0.7.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.7.0) — Phase 6 Reporting
 
+**Development on `master`:** Phase 7 lab controls and data-only detector plugins are in progress.
+
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
 </div>
@@ -45,12 +47,15 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | Correlation | Evidence-linked asset/finding relationships and fixed CWE classifications |
 | RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
 | Intelligence | Optional, approval-gated model advice over an exact packet the operator reviews first |
+| Local AI | Qwen3.5 4B through Ollama is the recommended default; any compatible provider remains configurable |
 | Reporting | Deterministic technical and executive reports over one bounded retained snapshot |
 | DockPack | Portable ZIP export with a member manifest and verified source evidence |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
 | Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |
 | Persistence | SQLite and evidence stored in a named Docker volume |
 | Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
+| Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
+| Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
 
 ## Screenshots
 
@@ -108,26 +113,19 @@ Stop the application with `docker compose down`. The `reddock-data` volume holds
 
 ### Optional intelligence provider
 
-Intelligence is off by default. To enable it, provide an OpenAI-compatible API
-base URL and model to the container. For a model server running on the Docker
-host, a Compose override can pass values already present in your shell:
+Intelligence is off by default. The recommended local option is Qwen3.5 4B
+through Ollama; `compose.ollama.yaml` enables that path explicitly without
+bundling model weights. Any OpenAI-compatible local or cloud model remains an
+operator choice. See [Local and configurable AI](docs/LOCAL_AI.md) for setup,
+provider overrides, data-boundary rules, and the approval flow.
 
-```yaml
-services:
-  reddock:
-    environment:
-      REDDOCK_LLM_BASE_URL: ${REDDOCK_LLM_BASE_URL}
-      REDDOCK_LLM_MODEL: ${REDDOCK_LLM_MODEL}
-      REDDOCK_LLM_API_KEY: ${REDDOCK_LLM_API_KEY:-}
-```
+### Optional Phase 7 controls
 
-For example, a compatible local endpoint might use
-`REDDOCK_LLM_BASE_URL=http://host.docker.internal:11434/v1`. Any endpoint that
-uses `REDDOCK_LLM_API_KEY`, including a local one, must use HTTPS; cloud
-endpoints must use HTTPS and usually require that key. Keep credentials in
-your shell or secret manager; do not add them to Compose files or commit them.
-The provider receives nothing until you create a packet, inspect its exact JSON
-and destination in the UI, and submit a separate approval note.
+Lab capabilities require both a deployment-owner switch and a short-lived
+per-Dockyard authorization; the API cannot enable the deployment switch. See
+[Lab mode](docs/LAB_MODE.md). Organization-specific detector policy can be
+installed only as bounded, data-only JSON manifests—never executable plugin
+code. See [Detector plugins](plugins/README.md).
 
 ## How It Works
 
@@ -141,6 +139,7 @@ and destination in the UI, and submit a separate approval note.
 8. Run correlation. RedDock reads only stored assets, findings, observations, and hashes, then renders an explainable RedPath graph and fixed CWE classifications without contacting a target.
 9. Optionally create an intelligence packet from the latest correlation. RedDock stores and hashes the exact JSON without contacting a provider. Review it and the destination, then add a separate approval note to request structured remediation and prioritization advice.
 10. Generate a report snapshot. RedDock re-verifies retained evidence, renders technical and executive reports, builds a manifest, and packages the exact source artifacts into a reproducible DockPack without contacting a target or model.
+11. In an isolated authorized lab, optionally enable the deployment gate and create a short-lived Dockyard grant before using the fixed extended service-discovery profile. Every authorization and decision remains in the lab audit ledger.
 
 Run the same discovery again and RedDock updates what it already knows rather than duplicating it, while every observation is kept as history. Run detection again and the same issue stays one finding whose `last_seen` moves, while an issue that is no longer reproduced is marked resolved rather than quietly removed.
 
@@ -223,6 +222,9 @@ docs/          Architecture decisions and project documentation
 | [Architecture](ARCHITECTURE.md) | Current system boundaries and future design seams |
 | [Security](SECURITY.md) | Authorized-use policy and product safety model |
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
+| [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
+| [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
+| [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
 | [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
 | [Changelog](CHANGELOG.md) | Release history |
 | [DockPack format](docs/DOCKPACK.md) | Portable report and evidence package layout and verification |

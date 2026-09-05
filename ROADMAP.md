@@ -32,7 +32,16 @@ Technical and executive reports, evidence manifests, and portable DockPack expor
 
 ## Phase 7 — Advanced / Lab
 
-Explicitly authorized lab-mode capabilities and a broader plugin ecosystem. Complete when lab-only controls are clear and separately guarded.
+In progress on `master`. The first capability is a fixed, single-host extended
+TCP service-discovery profile guarded by both deployment opt-in and a separate,
+short-lived per-Dockyard authorization. Authorization, requests, execution,
+denials, and revocation have their own audit ledger. The extension boundary is
+also implemented as content-addressed, data-only detector manifests rather than
+arbitrary code plugins.
+
+Completion additionally requires portable lab-audit provenance in reporting,
+real Phase 7 screenshots, a final security review, the complete CI/Docker test
+matrix, and a v0.8.0 release.
 
 ## Phase 8 — Production polish
 
