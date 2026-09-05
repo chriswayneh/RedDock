@@ -29,6 +29,8 @@ All notable changes to RedDock are documented here.
   integration tests proving isolation in both directions
 - A child-route tenancy contract plus negative-IDOR coverage across every
   foreign-Dockyard GET path, including report artifact helpers
+- A dormant high-entropy browser-session primitive with hash-only token storage,
+  constant-time CSRF verification, expiry/revocation, and active-membership checks
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

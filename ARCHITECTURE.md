@@ -408,6 +408,13 @@ helpers, while a runtime matrix proves every foreign-Dockyard GET path returns
 the same 404 before touching a child ID. Replacing the local context resolver
 with a verified server session remains a separate fail-closed checkpoint.
 
+The dormant server-session primitive generates independent 256-bit browser and
+CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
+the generated URL-safe shape, joins through one membership to its user and
+organization, and returns no context for an unknown, expired, revoked, disabled,
+or unrecognized-role record. The returned token container masks both bearer
+values from `repr`. No cookie or login route uses this primitive yet.
+
 ## Deterministic core
 
 Nothing in discovery, detection, validation, correlation, or reporting is AI-driven.

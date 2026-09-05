@@ -15,6 +15,7 @@ app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath 
 app/intelligence/   approval-gated, provider-neutral advice over reviewed evidence packets
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/authorization.py reviewed role/permission contract for the future authenticated mode
+app/session_auth.py  hash-only browser-session issuance and resolution primitive
 app/evidence.py     hashed evidence storage
 ```
 
@@ -62,6 +63,11 @@ export a DockPack. These controls are not authentication: the only supported
 runtime mode remains the account-free loopback `local` mode, and requesting
 `server` mode fails startup until OIDC sessions and tenant-scoped context
 resolution are complete.
+
+The dormant session primitive issues independent 256-bit browser and CSRF
+tokens, masks them from object representations, stores only their hashes, and
+resolves a context only while the session, membership, user, and role remain
+valid. No route issues or accepts these tokens yet.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced
