@@ -2,6 +2,40 @@
 
 All notable changes to RedDock are documented here.
 
+## [Unreleased] — Phase 7 Advanced / Lab
+
+### Added
+
+- A deployment-gated, fixed extended TCP service-discovery capability for one
+  scoped host, plus 5–120 minute per-Dockyard authorizations and a dedicated
+  lab policy ledger
+- A Lab console showing the independent deployment gate, exact acknowledgement,
+  current grant, expiration, revocation, and authorization/execution decisions
+- Data-only detector plugins with a strict JSON schema, fixed scalar matching,
+  startup validation, bounded loading, manifest SHA-256 provenance, and no
+  executable extension surface
+- Qwen3.5 4B through Ollama as the documented local-AI default, while preserving
+  deployment-only selection of any compatible local or cloud model
+- Real Phase 7 screenshots for the lab authorization flow and plugin provenance
+
+### Security
+
+- A lab request must pass DockGuard and two independent lab gates again
+  immediately before execution; network targets, scripts, UDP, credentials,
+  payloads, raw flags, and exploitation remain unavailable
+- Declarative plugin loading is separated from the no-I/O detection package;
+  symlinks, path escapes, duplicate keys/IDs, unknown fields, excessive size,
+  and IDs outside the `plugin.` namespace fail startup closed
+- Lab and Ollama Compose overrides are explicit opt-ins. Provider settings remain
+  process-only, and no model weight or credential is committed or bundled
+
+### Testing
+
+- Backend security-contract, manifest-validation, exact-type matching, frozen
+  registry, API provenance, lab-policy, and complete regression coverage
+- Frontend lab authorization/revocation and detector provenance coverage, plus
+  browser verification against the rebuilt production container
+
 ## [0.7.0] — Phase 6 Reporting
 
 ### Added

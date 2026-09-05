@@ -155,7 +155,7 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 6 — Reporting").toUpperCase()}
+            {(version?.phase ?? "Phase 7 — Advanced / Lab").toUpperCase()}
           </span>
         </header>
         {error && (

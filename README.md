@@ -95,6 +95,18 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 
 <sub>API explorer: the OpenAPI 3.1 contract is available through the built-in Swagger UI.</sub>
 
+<br><br>
+
+<img src="docs/screenshots/lab-mode.png" alt="RedDock Phase 7 Lab console showing the independent deployment gate, an active temporary Dockyard authorization, and its audit event" width="900">
+
+<sub>Phase 7 lab policy: deployment opt-in, temporary per-Dockyard authorization, fixed capability bounds, immediate revocation, and the audit ledger in one view.</sub>
+
+<br><br>
+
+<img src="docs/screenshots/plugin-provenance.png" alt="RedDock Detection view showing built-in detectors and a data-only plugin with a content-addressed version and manifest SHA-256" width="900">
+
+<sub>Detector provenance: reviewed built-ins and a data-only organization rule publish their source, passive execution model, content-addressed version, and manifest hash.</sub>
+
 </div>
 
 ## Quick Start

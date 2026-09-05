@@ -10,7 +10,7 @@ class Settings(BaseModel):
 
     app_name: str = "RedDock"
     version: str = "0.7.0"
-    phase: str = "Phase 6 — Reporting"
+    phase: str = "Phase 7 — Advanced / Lab"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
