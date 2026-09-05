@@ -33,6 +33,8 @@ All notable changes to RedDock are documented here.
   constant-time CSRF verification, expiry, targeted and membership-wide
   revocation, a concurrency-aware active-session cap, inactive-record cleanup,
   and active-membership checks
+- An additive security-audit migration and tenant-scoped structured event
+  primitive that rejects cross-organization actors and free-form metadata
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

@@ -376,7 +376,7 @@ interrupted report failed and removes its partial reporting directory.
 
 ## Persistence evolution
 
-Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0 schema contract and versioned Alembic baseline before ownership changed. Migration `0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and hash-only browser-session storage; assigns every existing Dockyard to the reserved local organization; and makes that ownership non-null. It does not enable authentication or networked server mode. A legacy database is completed additively, validated table by table and column by column, and only then stamped; an unknown shape fails startup without being stamped. Fresh installs create the current tables, stamp the baseline, and still run every data migration rather than skipping seed invariants. `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and `tests/test_postgres.py` verify old data survival, idempotency, local ownership, and both SQLite and PostgreSQL paths.
+Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0 schema contract and versioned Alembic baseline before ownership changed. Migration `0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and hash-only browser-session storage; assigns every existing Dockyard to the reserved local organization; and makes that ownership non-null. Migration `0003_security_audit` adds structured, tenant-bound security-event storage without a free-form detail field. Neither migration enables authentication or networked server mode. A legacy database is completed additively, validated table by table and column by column, and only then stamped; an unknown shape fails startup without being stamped. Fresh installs create the current tables, stamp the baseline, and still run every data migration rather than skipping seed invariants. `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and `tests/test_postgres.py` verify old data survival, idempotency, local ownership, and both SQLite and PostgreSQL paths.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
@@ -419,6 +419,14 @@ purge only expired or revoked rows at an explicit retention cutoff. Issuance
 locks the membership and evicts the oldest session above an eight-active-session
 cap, serializing that decision on PostgreSQL. No cookie or login route uses this
 primitive yet.
+
+Future security decisions have a separate event foundation. Events are bound to
+one organization, optionally snapshot a verified actor and role, and accept only
+typed actions/outcomes plus length- and character-bounded opaque identifiers.
+There is intentionally no arbitrary message or metadata field that could become
+a credential sink. Reads require an organization ID and have a fixed upper
+bound. The writer is transaction-friendly so a future privileged action and its
+event can commit together; current local API flows do not emit these events yet.
 
 ## Deterministic core
 

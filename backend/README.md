@@ -16,6 +16,7 @@ app/intelligence/   approval-gated, provider-neutral advice over reviewed eviden
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
+app/security_audit.py bounded, tenant-scoped security-event writer and reader
 app/evidence.py     hashed evidence storage
 ```
 
@@ -71,6 +72,12 @@ valid. It also supports idempotent single-session logout, membership-wide
 revocation after access changes, an eight-session per-membership cap that evicts
 the oldest active record, and operator-cutoff cleanup. No route issues or accepts
 these tokens yet.
+
+The security-audit foundation records only typed actions/outcomes and bounded
+opaque identifiers. It accepts no free-form detail field, rejects an actor from
+another organization, and scopes every read by organization. The table and
+helpers are present for future authentication and administration flows, but no
+route exposes them yet.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

@@ -30,10 +30,11 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
         app.database.initialize_database()
         assert app.database.engine.dialect.name == "postgresql"
         assert inspect(app.database.engine).has_table("dockyards")
+        assert inspect(app.database.engine).has_table("security_audit_events")
         with app.database.engine.begin() as connection:
             assert (
                 connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-                == "0002_identity"
+                == "0003_security_audit"
             )
             assert connection.exec_driver_sql(
                 "INSERT INTO organizations (slug, name) "

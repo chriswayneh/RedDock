@@ -58,6 +58,8 @@ Phase 8 adds:
 - `Membership`: a user's role and status in an organization.
 - `Dockyard.organization_id`: mandatory owner for engagement state.
 - `Session`: expiring and revocable; only a token hash is retained server-side.
+- `SecurityAuditEvent`: tenant-bound structured decisions with bounded opaque
+  identifiers and no free-form detail field.
 
 Every child resource is authorized through its Dockyard and organization. A
 route must use a central organization-aware loader; `session.get(Resource, id)`

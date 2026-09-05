@@ -99,6 +99,38 @@ class BrowserSession(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class SecurityAuditEvent(Base):
+    """A tenant-bound security decision with deliberately bounded metadata."""
+
+    __tablename__ = "security_audit_events"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('success', 'denied', 'failure')",
+            name="ck_security_audit_events_outcome",
+        ),
+        Index("ix_security_audit_org_time", "organization_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False
+    )
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_membership_id: Mapped[int | None] = mapped_column(
+        ForeignKey("memberships.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Dockyard(Base):
     """A bounded engagement workspace that owns an authorized scope."""
 
