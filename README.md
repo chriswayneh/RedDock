@@ -48,7 +48,7 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
 | Intelligence | Optional, approval-gated model advice over an exact packet the operator reviews first |
 | Local AI | Qwen3.5 4B through Ollama is the recommended default; any compatible provider remains configurable |
-| Reporting | Deterministic technical and executive reports over one bounded retained snapshot |
+| Reporting | Deterministic technical and executive reports over one bounded retained snapshot, including lab-policy history |
 | DockPack | Portable ZIP export with a member manifest and verified source evidence |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
 | Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |

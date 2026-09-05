@@ -2,6 +2,7 @@
 
 import ast
 import json
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
@@ -12,7 +13,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import DiscoveryRun, EvidenceRecord, Finding, ReportRun
+from app.models import (
+    DiscoveryRun,
+    EvidenceRecord,
+    Finding,
+    LabAuditEvent,
+    LabAuthorization,
+    ReportRun,
+)
 from app.reporting import runner as reporting_runner
 
 
@@ -63,7 +71,7 @@ def test_report_set_is_complete_hash_linked_and_portable(
     assert response.status_code == 201, response.text
     report = response.json()
     assert report["status"] == "completed"
-    assert report["report_schema"] == "reddock.reporting/1"
+    assert report["report_schema"] == "reddock.reporting/2"
     for field in (
         "snapshot_sha256",
         "technical_sha256",
@@ -158,6 +166,119 @@ def test_unchanged_state_produces_byte_identical_reports(
     ):
         assert first[field] == second[field]
     assert first_pack == second_pack
+
+
+def test_lab_policy_history_is_bounded_isolated_and_portable(
+    client: TestClient,
+    recorder,
+    session: Session,
+    dockyard_id: int,
+    environment: Path,
+):
+    _prepared(recorder, session, dockyard_id, environment)
+    other = client.post("/api/dockyards", json={"name": "Other lab"}).json()["id"]
+    now = datetime(2026, 9, 5, 7, 0, tzinfo=UTC)
+    authorization = LabAuthorization(
+        dockyard_id=dockyard_id,
+        capability="discovery.nmap.extended-service",
+        status="revoked",
+        acknowledgement=(
+            "I confirm this Dockyard is an isolated lab that I am authorized to test."
+        ),
+        note="Approved range review | retained literally",
+        created_at=now,
+        expires_at=now + timedelta(minutes=60),
+        revoked_at=now + timedelta(minutes=5),
+    )
+    session.add(authorization)
+    session.flush()
+    session.add_all(
+        [
+            LabAuditEvent(
+                dockyard_id=dockyard_id,
+                capability=authorization.capability,
+                action="authorize",
+                decision="allowed",
+                reason="Explicit Dockyard acknowledgement",
+                authorization_id=authorization.id,
+                created_at=now,
+            ),
+            LabAuditEvent(
+                dockyard_id=dockyard_id,
+                capability=authorization.capability,
+                action="execute",
+                decision="denied",
+                reason="Authorization revoked before execution",
+                authorization_id=authorization.id,
+                discovery_run_id=None,
+                created_at=now + timedelta(minutes=6),
+            ),
+        ]
+    )
+    session.add(
+        LabAuditEvent(
+            dockyard_id=other,
+            capability=authorization.capability,
+            action="authorize",
+            decision="allowed",
+            reason="Must not cross Dockyard boundary",
+            created_at=now,
+        )
+    )
+    session.commit()
+
+    report = client.post(f"/api/dockyards/{dockyard_id}/reports", json={}).json()
+    package = client.get(
+        f"/api/dockyards/{dockyard_id}/reports/{report['id']}/dockpack"
+    ).content
+
+    assert report["status"] == "completed"
+    assert report["source_counts"]["lab_authorizations"] == 1
+    assert report["source_counts"]["lab_audit_events"] == 2
+    assert report["source_counts"]["lab_decisions"] == {"allowed": 1, "denied": 1}
+    with ZipFile(BytesIO(package)) as archive:
+        snapshot = json.loads(archive.read("reports/technical.json"))
+        technical = archive.read("reports/technical.md").decode()
+    assert snapshot["schema"] == "reddock.reporting/2"
+    assert [row["id"] for row in snapshot["lab"]["audit_events"]] == sorted(
+        row["id"] for row in snapshot["lab"]["audit_events"]
+    )
+    assert len(snapshot["lab"]["authorizations"]) == 1
+    assert len(snapshot["lab"]["audit_events"]) == 2
+    assert "Must not cross Dockyard boundary" not in json.dumps(snapshot)
+    assert "## Lab authorization and policy audit" in technical
+    assert reporting_runner._md(authorization.note) in technical
+
+
+def test_lab_audit_report_limit_fails_closed(
+    client: TestClient,
+    recorder,
+    session: Session,
+    dockyard_id: int,
+    environment: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _prepared(recorder, session, dockyard_id, environment)
+    session.add(
+        LabAuditEvent(
+            dockyard_id=dockyard_id,
+            capability="discovery.nmap.extended-service",
+            action="request",
+            decision="denied",
+            reason="No authorization",
+        )
+    )
+    session.commit()
+    settings = reporting_runner.get_settings().model_copy(
+        update={"max_report_lab_audit_events": 0}
+    )
+    monkeypatch.setattr(reporting_runner, "get_settings", lambda: settings)
+
+    response = client.post(f"/api/dockyards/{dockyard_id}/reports", json={})
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "failed"
+    assert response.json()["error"] == "The report exceeds the fixed lab-audit-event-count limit"
 
 
 def test_changed_or_missing_evidence_fails_closed(

@@ -38,6 +38,8 @@ from app.models import (
     Finding,
     FindingEvidence,
     IntelligenceRun,
+    LabAuditEvent,
+    LabAuthorization,
     Observation,
     ReportRun,
     ScopeEntry,
@@ -45,7 +47,7 @@ from app.models import (
     ValidationRun,
 )
 
-REPORT_SCHEMA = "reddock.reporting/1"
+REPORT_SCHEMA = "reddock.reporting/2"
 MANIFEST_SCHEMA = "reddock.evidence-manifest/1"
 DOCKPACK_SCHEMA = "reddock.dockpack/1"
 ACTIVE_STATUSES = ("pending", "queued", "running")
@@ -631,6 +633,7 @@ def _snapshot(session: Session, dockyard_id: int, manifest: dict) -> dict:
     _reject_oversized_collection(findings, settings.max_report_findings, "finding")
     evidence = _finding_evidence(session, dockyard_id)
     validations = _validation_rows(session, dockyard_id)
+    lab = _lab_snapshot(session, dockyard_id)
     correlation = session.scalar(
         select(CorrelationRun)
         .where(CorrelationRun.dockyard_id == dockyard_id, CorrelationRun.status == "completed")
@@ -670,6 +673,14 @@ def _snapshot(session: Session, dockyard_id: int, manifest: dict) -> dict:
         "findings_by_severity": severity,
         "findings_by_status": status,
         "validations": sum(len(rows) for rows in validations.values()),
+        "lab_authorizations": len(lab["authorizations"]),
+        "lab_audit_events": len(lab["audit_events"]),
+        "lab_decisions": {
+            decision: sum(
+                event["decision"] == decision for event in lab["audit_events"]
+            )
+            for decision in ("allowed", "denied")
+        },
         "evidence_files": manifest["file_count"],
         "evidence_bytes": manifest["total_bytes"],
     }
@@ -744,6 +755,7 @@ def _snapshot(session: Session, dockyard_id: int, manifest: dict) -> dict:
         ],
         "correlation": _correlation_snapshot(correlation),
         "intelligence": _intelligence_snapshot(intelligence),
+        "lab": lab,
         "evidence_manifest": manifest,
         "limitations": [
             "This report describes retained observations and detector conclusions; it is not "
@@ -813,6 +825,60 @@ def _validation_rows(session: Session, dockyard_id: int) -> dict[int, list[dict]
     return result
 
 
+def _lab_snapshot(session: Session, dockyard_id: int) -> dict[str, list[dict]]:
+    settings = get_settings()
+    authorizations = list(
+        session.scalars(
+            select(LabAuthorization)
+            .where(LabAuthorization.dockyard_id == dockyard_id)
+            .order_by(LabAuthorization.id)
+            .limit(settings.max_report_lab_authorizations + 1)
+        )
+    )
+    _reject_oversized_collection(
+        authorizations, settings.max_report_lab_authorizations, "lab-authorization"
+    )
+    events = list(
+        session.scalars(
+            select(LabAuditEvent)
+            .where(LabAuditEvent.dockyard_id == dockyard_id)
+            .order_by(LabAuditEvent.id)
+            .limit(settings.max_report_lab_audit_events + 1)
+        )
+    )
+    _reject_oversized_collection(
+        events, settings.max_report_lab_audit_events, "lab-audit-event"
+    )
+    return {
+        "authorizations": [
+            {
+                "id": row.id,
+                "capability": row.capability,
+                "status": row.status,
+                "acknowledgement": row.acknowledgement,
+                "note": row.note,
+                "created_at": _iso(row.created_at),
+                "expires_at": _iso(row.expires_at),
+                "revoked_at": _iso(row.revoked_at),
+            }
+            for row in authorizations
+        ],
+        "audit_events": [
+            {
+                "id": row.id,
+                "capability": row.capability,
+                "action": row.action,
+                "decision": row.decision,
+                "reason": row.reason,
+                "authorization_id": row.authorization_id,
+                "discovery_run_id": row.discovery_run_id,
+                "created_at": _iso(row.created_at),
+            }
+            for row in events
+        ],
+    }
+
+
 def _correlation_snapshot(run: CorrelationRun | None) -> dict | None:
     if run is None:
         return None
@@ -874,6 +940,8 @@ def _technical_markdown(snapshot: dict) -> str:
             f"- Observations: {counts['observations']}",
             f"- Findings: {counts['findings']}",
             f"- Validation requests: {counts['validations']}",
+            f"- Lab authorizations: {counts['lab_authorizations']}",
+            f"- Lab policy events: {counts['lab_audit_events']}",
             f"- Verified evidence files: {counts['evidence_files']}",
             "",
             "## Assets and services",
@@ -938,6 +1006,45 @@ def _technical_markdown(snapshot: dict) -> str:
                 f" / `{_md_code(validation['outcome'])}` — {_md(validation['summary'])}"
             )
         lines.append("")
+    lines.extend(["## Lab authorization and policy audit", ""])
+    if snapshot["lab"]["authorizations"]:
+        lines.extend(
+            [
+                "### Authorizations",
+                "",
+                "| ID | Capability | Status | Created | Expires | Revoked | Note |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for authorization in snapshot["lab"]["authorizations"]:
+            lines.append(
+                f"| {authorization['id']} | {_md(authorization['capability'])} | "
+                f"{_md(authorization['status'])} | {_md(authorization['created_at'])} | "
+                f"{_md(authorization['expires_at'])} | {_md(authorization['revoked_at'])} | "
+                f"{_md(authorization['note'])} |"
+            )
+        lines.append("")
+    else:
+        lines.extend(["No lab authorizations were retained.", ""])
+    if snapshot["lab"]["audit_events"]:
+        lines.extend(
+            [
+                "### Policy ledger",
+                "",
+                "| Event | Time | Action | Decision | Capability | Authorization | Run | Reason |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for event in snapshot["lab"]["audit_events"]:
+            lines.append(
+                f"| {event['id']} | {_md(event['created_at'])} | {_md(event['action'])} | "
+                f"{_md(event['decision'])} | {_md(event['capability'])} | "
+                f"{_md(event['authorization_id'])} | {_md(event['discovery_run_id'])} | "
+                f"{_md(event['reason'])} |"
+            )
+        lines.append("")
+    else:
+        lines.extend(["No lab policy decisions were retained.", ""])
     lines.extend(["## Correlation and non-authoritative intelligence", ""])
     correlation = snapshot["correlation"]
     intelligence = snapshot["intelligence"]
@@ -1004,6 +1111,9 @@ def _executive_markdown(snapshot: dict) -> str:
         f"- Resolved: {status.get('resolved', 0)}",
         f"- Suppressed: {status.get('suppressed', 0)}",
         f"- Completed validation rechecks: {validated}",
+        f"- Lab policy decisions: {counts['lab_audit_events']} "
+        f"({counts['lab_decisions']['allowed']} allowed, "
+        f"{counts['lab_decisions']['denied']} denied)",
         "",
         "## Evidence assurance",
         "",

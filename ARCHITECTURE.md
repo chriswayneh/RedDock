@@ -119,7 +119,7 @@ prepare → execute → parse → normalize → artifacts
 - **FindingCorrelation** — a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
 - **FrameworkMapping** — a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
 - **IntelligenceRun** — one immutable reviewed packet and, after separate approval, one structured advice result. It binds provider identity, prompt version, approval note, timestamps, packet and result hashes, and failure state to the latest completed correlation snapshot.
-- **ReportRun** — one immutable, bounded snapshot of completed retained state. It records source counts and the SHA-256 values of the technical JSON, technical Markdown, executive Markdown, evidence manifest, and DockPack, plus failure and restart state.
+- **ReportRun** — one immutable, bounded snapshot of completed retained state, including lab authorization and policy history. It records source counts and the SHA-256 values of the technical JSON, technical Markdown, executive Markdown, evidence manifest, and DockPack, plus failure and restart state.
 - **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
@@ -253,6 +253,13 @@ the exact fixed raw artifact, and only completed intelligence advice joins the
 always-retained reviewed packet. No directory is scanned to discover extra
 files. Missing, changed, duplicated, unsafe, or oversized input fails the whole
 run rather than creating a partial export.
+
+Reporting schema `reddock.reporting/2` adds bounded, Dockyard-isolated lab
+authorization and policy-ledger rows to the canonical technical snapshot. They
+are ordered by immutable identifiers and therefore remain reproducible; stored
+authorization status is reported alongside its timestamps without a clock-based
+reinterpretation. The snapshot and DockPack hashes bind this policy history to
+the portable report.
 
 The snapshot excludes reporting history, so creating a report does not change
 the next report's source state. Source queries and evidence verification run

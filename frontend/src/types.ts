@@ -422,6 +422,9 @@ export type ReportCounts = {
   findings_by_severity: Record<string, number>;
   findings_by_status: Record<string, number>;
   validations: number;
+  lab_authorizations?: number;
+  lab_audit_events?: number;
+  lab_decisions?: Record<string, number>;
   evidence_files: number;
   evidence_bytes: number;
 };

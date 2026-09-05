@@ -144,7 +144,7 @@ export function Reports({
         <div className="metrics compact-metrics">
           <Metric label="Assets" value={String(counts.assets)} note={`${counts.services} retained services`} />
           <Metric label="Findings" value={String(counts.findings)} note={`${counts.findings_by_status.open ?? 0} currently open`} />
-          <Metric label="Evidence" value={String(counts.evidence_files)} note={formatBytes(counts.evidence_bytes)} />
+          <Metric label="Evidence" value={String(counts.evidence_files)} note={`${formatBytes(counts.evidence_bytes)} · ${counts.lab_audit_events ?? 0} lab events`} />
           <Metric label="DockPack" value={formatBytes(latest?.dockpack_bytes ?? 0)} note="Portable, hash-verifiable ZIP" />
         </div>
       )}

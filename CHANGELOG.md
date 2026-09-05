@@ -17,6 +17,8 @@ All notable changes to RedDock are documented here.
 - Qwen3.5 4B through Ollama as the documented local-AI default, while preserving
   deployment-only selection of any compatible local or cloud model
 - Real Phase 7 screenshots for the lab authorization flow and plugin provenance
+- Reporting schema v2 coverage for bounded lab authorization and policy-event
+  history, including deterministic technical JSON/Markdown and DockPack export
 
 ### Security
 

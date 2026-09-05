@@ -39,9 +39,9 @@ denials, and revocation have their own audit ledger. The extension boundary is
 also implemented as content-addressed, data-only detector manifests rather than
 arbitrary code plugins.
 
-Completion additionally requires portable lab-audit provenance in reporting,
-real Phase 7 screenshots, a final security review, the complete CI/Docker test
-matrix, and a v0.8.0 release.
+Portable lab-audit provenance is included in reporting and DockPacks, and real
+Phase 7 screenshots are published. Completion additionally requires a final
+security review, the complete CI/Docker test matrix, and a v0.8.0 release.
 
 ## Phase 8 — Production polish
 

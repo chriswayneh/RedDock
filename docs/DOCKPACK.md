@@ -25,7 +25,9 @@ evidence/
 ```
 
 `reports/technical.json` is the canonical snapshot used to render both Markdown
-reports. `evidence/manifest.json` binds the Dockyard ID, RedDock version, scope
+reports. Schema `reddock.reporting/2` includes bounded authorization and lab
+policy-ledger history alongside inventory, findings, validation, correlation,
+and intelligence state. `evidence/manifest.json` binds the Dockyard ID, RedDock version, scope
 snapshot hash, cited run IDs, and every finding claim to the retained evidence
 that supports it. Its file inventory records each source phase, run ID, original
 RedLedger-relative path, portable archive path, media type, byte count, SHA-256,
@@ -48,7 +50,7 @@ state, and database inputs are captured under one explicit consistent
 transaction. Two report runs over unchanged retained state therefore have identical
 report hashes and byte-identical DockPack files.
 
-A changed finding, status, approval, run, source artifact, or completed advice
+A changed finding, status, approval, lab policy event, run, source artifact, or completed advice
 is a changed snapshot and should produce a different package.
 
 ## Verification
@@ -91,7 +93,7 @@ responsible for verifying and securely handling any copy that leaves RedDock.
 ## Handling
 
 A DockPack may expose authorized targets, internal addresses, service banners,
-findings, validation approval notes, model advice, and other engagement data.
+findings, validation or lab authorization notes, lab policy decisions, model advice, and other engagement data.
 It contains no deliberate session cookies or provider credentials, but it must
 still be treated as sensitive assessment material. Review it before sharing,
 apply appropriate access controls and retention policy, and do not publish it

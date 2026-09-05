@@ -85,10 +85,10 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Reporting reads one Dockyard's stored state and accepts an empty request body. It has no target, provider, prompt, output path, filename, selector, command, network, or process capability.
 - A snapshot is refused while source discovery, detection, validation, or correlation work is active. Pending intelligence packets may be included as retained input, while only completed, hash-verified advice is included as output.
 - The runner enumerates database-referenced artifacts only. Each portable path is fixed by source type and integer run ID, resolved beneath RedLedger, and rejected if it is absolute, escaping, duplicated, missing, not a regular file, or no longer matches its retained SHA-256.
-- Assets, services, findings, finding-evidence links, validation rows, evidence files, retained report runs, and total DockPack bytes have independent fixed bounds applied before unbounded materialization. A limit violation fails closed rather than silently omitting part of the snapshot.
+- Assets, services, findings, finding-evidence links, validation rows, lab authorizations, lab audit events, evidence files, retained report runs, and total DockPack bytes have independent fixed bounds applied before unbounded materialization. A limit violation fails closed rather than silently omitting part of the snapshot.
 - Members use sorted names, fixed timestamps, fixed modes, canonical JSON, and uncompressed ZIP storage. The same retained state therefore produces byte-identical reports and DockPacks. A download re-hashes its retained artifact before serving it.
 - Stored text remains untrusted and is placed in delimiter-safe literal code spans before Markdown rendering, including in portable exports. Reports are evidence summaries, not HTML, executable content, vulnerability verdicts, or aggregate risk scores.
-- A DockPack can contain targets, service banners, finding details, approval notes, model advice, and other assessment evidence. Treat it as potentially sensitive engagement data: review it before sharing, store it with access controls, and verify its manifest before extraction.
+- A DockPack can contain targets, service banners, finding details, validation and lab authorization notes, lab policy decisions, model advice, and other assessment evidence. Treat it as potentially sensitive engagement data: review it before sharing, store it with access controls, and verify its manifest before extraction.
 
 **Evidence and data**
 

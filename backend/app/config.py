@@ -79,6 +79,8 @@ class Settings(BaseModel):
     max_report_evidence_links: int = 20_000
     max_report_evidence_files: int = 2_000
     max_dockpack_bytes: int = 64 * 1024 * 1024
+    max_report_lab_authorizations: int = 500
+    max_report_lab_audit_events: int = 5_000
 
     # Lab authorizations are deliberately short lived. Unlike ordinary limits,
     # the requested duration may vary inside this fixed ceiling.
