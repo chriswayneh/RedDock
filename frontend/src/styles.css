@@ -83,6 +83,16 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 .redpath-node-link { cursor: pointer; outline: none; }
 .redpath-node-link:hover .redpath-node, .redpath-node-link:focus-visible .redpath-node { fill: #251419; stroke-width: 2.5; }
 .inline-link { color: #ff9ba5; text-decoration-color: #6e3037; text-underline-offset: 3px; }
-.brand-button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; width: 100%; }
+.brand-button { background: transparent; border: 0; color: inherit; cursor: pointer; width: 100%; }
 .brand-button:hover span:last-child, .brand-button:focus-visible span:last-child { color: #ff9ba5; }
 .brand-button:focus-visible { border-radius: 7px; outline: 2px solid #d7263d; outline-offset: 3px; }
+.manifest-tabs { border-bottom: 1px solid #30363d; margin-bottom: 16px; padding-bottom: 10px; }
+.manifest-tabs .active { color: #fff; text-decoration: underline; text-decoration-color: #d7263d; text-underline-offset: 6px; }
+.manifest-summary { grid-template-columns: repeat(3, minmax(150px, 1fr)); }
+.manifest-summary .metric { min-height: 105px; padding: 16px; }
+.manifest-path { overflow-wrap: anywhere; white-space: normal; }
+.manifest-directory { overflow-wrap: anywhere; }
+.cell-note { color: #8b949e; display: block; margin-top: 4px; }
+.hash-copy { background: transparent; border: 0; color: inherit; padding: 0; }
+.hash-copy:hover .hash, .hash-copy:focus-visible .hash { color: #ff9ba5; }
+.hash-copy:focus-visible { border-radius: 4px; outline: 2px solid #d7263d; outline-offset: 3px; }

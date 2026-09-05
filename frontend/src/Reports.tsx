@@ -5,6 +5,14 @@ import { formatBytes, formatDate, humanize } from "./format";
 import type { Dockyard, EvidenceManifest, ReportRun } from "./types";
 
 type Preview = "technical" | "executive" | "manifest";
+type ManifestView = "readable" | "json";
+
+function artifactParts(path: string): { directory: string; name: string } {
+  const separator = path.lastIndexOf("/");
+  return separator === -1
+    ? { directory: "", name: path }
+    : { directory: path.slice(0, separator + 1), name: path.slice(separator + 1) };
+}
 
 export function Reports({
   dockyards,
@@ -19,6 +27,7 @@ export function Reports({
   const [preview, setPreview] = useState<Preview>("technical");
   const [reportText, setReportText] = useState("");
   const [manifest, setManifest] = useState<EvidenceManifest | null>(null);
+  const [manifestView, setManifestView] = useState<ManifestView>("readable");
   const [busy, setBusy] = useState(false);
   const refreshSequence = useRef(0);
   const previewSequence = useRef(0);
@@ -44,6 +53,7 @@ export function Reports({
     setActiveRun(null);
     setReportText("");
     setManifest(null);
+    setManifestView("readable");
     setPreview("technical");
   }
 
@@ -69,6 +79,7 @@ export function Reports({
       const document = await api.reportManifest(run.dockyard_id, run.id);
       if (sequence !== previewSequence.current) return;
       setManifest(document);
+      setManifestView("readable");
       setReportText("");
       return;
     }
@@ -198,19 +209,32 @@ export function Reports({
               </div>
               {manifest ? (
                 <>
-                  <p className="hint">
-                    {manifest.file_count} files · {formatBytes(manifest.total_bytes)} · {manifest.algorithm.toUpperCase()}
-                  </p>
-                  <DataTable headers={["Source", "Archive path", "Bytes", "SHA-256"]}>
-                    {manifest.files.map((file) => (
-                      <tr key={file.archive_path}>
-                        <td>{humanize(file.source)} #{file.run_id}</td>
-                        <td><code>{file.archive_path}</code></td>
-                        <td>{formatBytes(file.bytes)}</td>
-                        <td><code className="hash">{file.sha256.slice(0, 16)}…</code></td>
-                      </tr>
-                    ))}
-                  </DataTable>
+                  <div className="button-row manifest-tabs" role="tablist" aria-label="Manifest format">
+                    <button className={manifestView === "readable" ? "text-button active" : "text-button"} role="tab" aria-selected={manifestView === "readable"} onClick={() => setManifestView("readable")}>Readable HTML</button>
+                    <button className={manifestView === "json" ? "text-button active" : "text-button"} role="tab" aria-selected={manifestView === "json"} onClick={() => setManifestView("json")}>Raw JSON</button>
+                  </div>
+                  {manifestView === "readable" ? (
+                    <>
+                      <div className="metrics compact-metrics manifest-summary">
+                        <Metric label="Files" value={String(manifest.file_count)} note="Verified artifacts" />
+                        <Metric label="Total size" value={formatBytes(manifest.total_bytes)} note="Portable evidence" />
+                        <Metric label="Digest" value={manifest.algorithm.toUpperCase()} note="Integrity algorithm" />
+                      </div>
+                      <DataTable headers={["Source", "Artifact", "Type", "Size", "SHA-256"]}>
+                        {manifest.files.map((file) => (
+                          <tr key={file.archive_path}>
+                            <td><strong>{humanize(file.source)}</strong><small className="cell-note">Run #{file.run_id}</small></td>
+                            <td title={file.archive_path}><code className="manifest-path">{artifactParts(file.archive_path).name}</code><small className="cell-note manifest-directory">{artifactParts(file.archive_path).directory}</small></td>
+                            <td>{file.media_type}</td>
+                            <td>{formatBytes(file.bytes)}</td>
+                            <td><button className="hash-copy" type="button" title="Copy full SHA-256" aria-label={`Copy SHA-256 for ${file.archive_path}`} onClick={() => void navigator.clipboard.writeText(file.sha256)}><code className="hash">{file.sha256.slice(0, 16)}…</code></button></td>
+                          </tr>
+                        ))}
+                      </DataTable>
+                    </>
+                  ) : (
+                    <pre className="report-preview">{JSON.stringify(manifest, null, 2)}</pre>
+                  )}
                 </>
               ) : (
                 <pre className="report-preview">{reportText || "Loading verified report…"}</pre>

@@ -115,8 +115,18 @@ describe("Phase 6 reporting", () => {
     expect(await screen.findByText("# RedDock executive report", { exact: false })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Manifest" }));
     const table = await screen.findByRole("table");
-    expect(within(table).getByText("Discovery #3")).toBeInTheDocument();
-    expect(within(table).getByText("evidence/discovery/3/normalized/result.json")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Readable HTML" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(within(table).getByText("Discovery")).toBeInTheDocument();
+    expect(within(table).getByText("Run #3")).toBeInTheDocument();
+    expect(within(table).getByText("application/json")).toBeInTheDocument();
+    expect(within(table).getByText("result.json")).toBeInTheDocument();
+    expect(within(table).getByText("evidence/discovery/3/normalized/")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Raw JSON" }));
+    expect(screen.getByText('"schema": "reddock.evidence-manifest/1"', { exact: false })).toBeInTheDocument();
   });
 
   it("creates a complete report set with an empty request", async () => {
