@@ -31,6 +31,7 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/inventory.py`: asset, service, and observation persistence rules.
 - `backend/app/discovery/`: the adapter contract, adapters, registry, and run orchestration.
 - `backend/app/detection/`: the detector contract, detectors, registry, fingerprints, CVE enrichment, and run orchestration.
+- `backend/app/detector_plugins.py`: bounded JSON manifest loading outside the no-I/O detector boundary.
 - `backend/app/findings.py`: finding persistence, deduplication, and lifecycle rules.
 - `backend/app/validation/`: approval-gated validation orchestration and the fixed HTTP-origin profile.
 - `backend/app/correlation/`: stored-state correlation, fixed CWE mappings, and RedPath assembly.
@@ -155,8 +156,17 @@ Everything except `detect` belongs to the runner. It builds the snapshot, valida
 | `http.security_headers` | `http_response`, `http_header` | Plaintext transport, and response-level protections the response did not carry, for the headers the probe examined |
 | `service.rules` | `service_identified` and the service inventory | A fixed table of protocol rules over services RedDock identified, and disclosed product versions |
 | `tls.certificates` | `tls_session` | What certificate verification objected to |
+| `plugin.*` | One declared observation type | An exact scalar match from a reviewed, content-addressed JSON manifest |
 
 Three things keep this from producing the usual noise. A header is only reported when the probe recorded that it looked for it, so "RedDock did not look" is never rendered as "the server did not send it". Content-level headers are only judged on a response that represents how an endpoint normally answers, so a 301 to HTTPS carrying no Content-Security-Policy is not a finding. And a service rule needs an identification observation, so a port number alone still says nothing: TCP/23 open is TCP/23 open.
+
+Phase 7 extensions preserve the same boundary by being data rather than code.
+The loader sits outside `detection/`, validates one deployment-configured
+directory before the API starts, and compiles exact comparisons into frozen
+value objects. A manifest cannot import a module, execute a command, interpolate
+a template, choose a target, or perform I/O. Its full SHA-256 appears in the
+detector catalogue, while detection evidence records the content-addressed
+detector version. See [ADR 0012](docs/adr/0012-detector-plugins-are-data-not-code.md).
 
 The scope is also narrower than it could look. RedDock does not enumerate supported TLS versions or cipher suites — the HTTP probe negotiates with a default client, so it can only ever record a version a current client accepted — and a rule about obsolete protocol versions would therefore never be able to fire from RedDock's own data. It is left out rather than shipped as decoration.
 

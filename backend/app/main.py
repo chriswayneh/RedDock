@@ -10,6 +10,7 @@ from app.api import router
 from app.config import get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import SessionLocal, initialize_database
+from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
@@ -22,6 +23,9 @@ logger = logging.getLogger("reddock")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Deployment-owned detector manifests are frozen and validated before the
+    # service accepts traffic. A malformed extension fails startup closed.
+    available_detectors()
     initialize_database()
     with SessionLocal() as session:
         # A run that was in flight when the process stopped did not finish.

@@ -539,6 +539,9 @@ class DetectorRead(BaseModel):
     title: str
     description: str
     consumes: list[str]
+    source: str
+    execution: str
+    manifest_sha256: str | None = None
 
 
 class ProfileRead(BaseModel):

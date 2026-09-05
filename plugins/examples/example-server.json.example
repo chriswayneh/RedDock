@@ -1,0 +1,21 @@
+{
+  "schema": "reddock.detector-plugin/1",
+  "id": "plugin.example-server",
+  "version": "1.0.0",
+  "title": "Example server policy",
+  "description": "Demonstrates a passive rule over a retained service identification.",
+  "rules": [
+    {
+      "id": "example-product",
+      "observation_type": "service_identified",
+      "detail_key": "product",
+      "equals": "ExampleServer",
+      "title": "Example server identified",
+      "description": "The service identified itself as ExampleServer.",
+      "category": "information_disclosure",
+      "severity": "informational",
+      "confidence": "medium",
+      "remediation": "Review whether this service is expected in the authorized environment."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
         "REDDOCK_LLM_MODEL",
         "REDDOCK_LLM_API_KEY",
         "REDDOCK_LAB_MODE_ENABLED",
+        "REDDOCK_DETECTOR_PLUGIN_DIR",
     ):
         monkeypatch.delenv(name, raising=False)
     # Modules read settings at import time; isolate after changing the environment.

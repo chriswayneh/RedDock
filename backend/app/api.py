@@ -117,7 +117,7 @@ def version() -> VersionRead:
 
 @router.get("/detectors", response_model=list[DetectorRead])
 def read_detectors() -> list[DetectorRead]:
-    """The fixed set of detectors. Nothing is loaded at runtime."""
+    """The frozen detector set and the provenance of every data-only extension."""
     return [
         DetectorRead(
             id=detector.id,
@@ -125,6 +125,9 @@ def read_detectors() -> list[DetectorRead]:
             title=detector.title,
             description=detector.description,
             consumes=list(detector.consumes),
+            source=getattr(detector, "source", "built-in"),
+            execution=getattr(detector, "execution", "passive"),
+            manifest_sha256=getattr(detector, "manifest_sha256", None),
         )
         for detector in detection_registry.available_detectors()
     ]

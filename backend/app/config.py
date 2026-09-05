@@ -17,6 +17,9 @@ class Settings(BaseModel):
     # Optional, local, and off unless an operator supplies it. RedDock never
     # downloads CVE data; see app/detection/enrichment.py.
     cve_catalog_path: str | None = None
+    # Optional Phase 7 detector plugins are declarative JSON only. RedDock does
+    # not import Python or executable code from this directory.
+    detector_plugin_dir: str | None = None
     # Phase 5 is disabled unless the operator supplies a trusted process-level
     # OpenAI-compatible endpoint and model. The API never accepts provider
     # destinations or credentials.
@@ -81,6 +84,9 @@ class Settings(BaseModel):
     # the requested duration may vary inside this fixed ceiling.
     max_lab_authorization_minutes: int = 120
     max_lab_authorizations_per_dockyard: int = 500
+    max_detector_plugins: int = 16
+    max_detector_plugin_bytes: int = 256 * 1024
+    max_detector_plugin_rules: int = 50
 
 
 @lru_cache
@@ -94,6 +100,7 @@ def get_settings() -> Settings:
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),
         nmap_path=os.getenv("REDDOCK_NMAP_PATH") or None,
         cve_catalog_path=os.getenv("REDDOCK_CVE_CATALOG") or None,
+        detector_plugin_dir=os.getenv("REDDOCK_DETECTOR_PLUGIN_DIR") or None,
         llm_base_url=os.getenv("REDDOCK_LLM_BASE_URL") or None,
         llm_model=os.getenv("REDDOCK_LLM_MODEL") or None,
         llm_api_key=os.getenv("REDDOCK_LLM_API_KEY") or None,
