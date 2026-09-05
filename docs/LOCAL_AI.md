@@ -76,7 +76,8 @@ Compose override, orchestrator secret, or other deployment configuration:
 | --- | --- | --- |
 | `REDDOCK_LLM_BASE_URL` | Yes | OpenAI-compatible API base ending before `/chat/completions` |
 | `REDDOCK_LLM_MODEL` | Yes | Provider-specific model identifier |
-| `REDDOCK_LLM_API_KEY` | Provider-dependent | Bearer credential; never stored or returned by RedDock |
+| `REDDOCK_LLM_API_KEY` | Provider-dependent | Backward-compatible bearer credential supplied in the process environment |
+| `REDDOCK_LLM_API_KEY_FILE` | Provider-dependent | Preferred in-container path to a mounted bearer-credential secret; mutually exclusive with the direct variable |
 
 Credentialed and non-local endpoints must use HTTPS. HTTP is accepted only for
 loopback, `host.docker.internal`, or the fixed private Compose service name

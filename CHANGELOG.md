@@ -2,6 +2,38 @@
 
 All notable changes to RedDock are documented here.
 
+## Unreleased — Phase 8 Production polish
+
+### Added
+
+- A source-backed threat model and accepted identity/tenancy architecture that
+  preserve the loopback local workflow while requiring a separate fail-closed
+  authenticated server mode
+- A private PostgreSQL 17.11 Compose profile pinned to a multi-architecture
+  image digest, with SCRAM host authentication, data checksums, health-gated
+  startup, and no published database port
+- Mounted secret-file configuration for PostgreSQL and model-provider
+  credentials, including masked in-process values and fail-closed validation
+- PostgreSQL CI that applies the versioned schema and proves real-server CRUD
+- A readable evidence-manifest view, expanded screenshot gallery, and
+  contextual navigation including dashboard-return branding
+
+### Security
+
+- The current unauthenticated API remains explicitly loopback-only; the new
+  PostgreSQL profile does not claim or enable networked server deployment
+- Partial, empty, oversized, multiline, missing, or symlinked database-secret
+  inputs fail startup instead of falling back to a different database
+- PostgreSQL and optional Ollama remain private Compose services without host
+  ports, and credentials do not appear in rendered service environments
+
+### Testing
+
+- Configuration tests cover masked secrets, mutually exclusive provider-key
+  sources, symlink rejection, and incomplete database settings
+- The complete SQLite regression suite continues to pass alongside an isolated
+  real-PostgreSQL migration and CRUD integration test
+
 ## [0.8.0] — 2026-09-05 — Phase 7 Advanced / Lab
 
 ### Added

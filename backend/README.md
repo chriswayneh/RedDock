@@ -45,6 +45,13 @@ The default `compose.yaml` package contains no LLM. The optional
 model volume; an operator can replace that model or use any compatible endpoint
 without changing this backend package.
 
+The optional `compose.postgres.yaml` profile replaces SQLite with a private,
+pinned PostgreSQL 17 service. RedDock and PostgreSQL receive the password as a
+mounted Compose secret, PostgreSQL has no host port, and CI proves the migration
+head and CRUD behavior against a real server. This remains a loopback-only
+validation profile, not the future authenticated server mode. See
+[Optional PostgreSQL](../docs/POSTGRESQL.md).
+
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced
 artifacts beneath RedLedger. Every source hash is re-verified before RedDock

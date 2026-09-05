@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
 from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import URL, Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
@@ -11,8 +11,8 @@ class Base(DeclarativeBase):
     pass
 
 
-def _connect_args(database_url: str) -> dict:
-    if not database_url.startswith("sqlite"):
+def _connect_args(database_url: str | URL) -> dict:
+    if not str(database_url).startswith("sqlite"):
         return {}
     # Discovery runs write from a background thread, so the connection is shared
     # across threads and a short lock wait avoids spurious "database is locked".
@@ -29,7 +29,18 @@ def configure_engine() -> None:
     previous = globals().get("engine")
     if previous is not None:
         previous.dispose()
-    url = get_settings().database_url
+    settings = get_settings()
+    if settings.database_password is not None:
+        url: str | URL = URL.create(
+            "postgresql+psycopg",
+            username=settings.database_user,
+            password=settings.database_password.get_secret_value(),
+            host=settings.database_host,
+            port=settings.database_port,
+            database=settings.database_name,
+        )
+    else:
+        url = settings.database_url
     engine = create_engine(url, connect_args=_connect_args(url))
     SessionLocal.configure(bind=engine)
 

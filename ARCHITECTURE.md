@@ -5,7 +5,7 @@
 ```text
 Browser → React UI (static files) → FastAPI → DockGuard → discovery adapter
                                         │                        ↓
-                                        │            SQLite ← evidence files
+                                        │       SQLite/PostgreSQL ← evidence files
                                         ↓               ↓
                                     detector ←── snapshot of stored state
                                         ↓
@@ -20,7 +20,7 @@ Browser → React UI (static files) → FastAPI → DockGuard → discovery adap
 
 Discovery goes through DockGuard to a target and records what it saw. Detection, correlation, and reporting go the other way: they read stored state and write findings, relationship snapshots, or portable reports without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. Optional intelligence creates an exact stored-data packet first, then a separate approval may send only that packet to the configured model provider. The provider receives no target or tool capability. Reporting re-verifies retained artifacts and packages them locally without contacting a target or model.
 
-The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
+The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. By default, a named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. The optional PostgreSQL profile moves relational state to a pinned, private service while RedLedger remains in `reddock-data`; the optional Ollama profile is private too. There is no reverse proxy, separate frontend service, or queue in these local profiles.
 
 ## Boundaries
 
@@ -263,8 +263,8 @@ the portable report.
 
 The snapshot excludes reporting history, so creating a report does not change
 the next report's source state. Source queries and evidence verification run
-inside one explicit SQLite transaction, so concurrent mutations wait until the
-snapshot is frozen. JSON is canonical, ZIP members are sorted, and
+inside one explicit database transaction, so concurrent mutations wait until
+the snapshot is frozen. JSON is canonical, ZIP members are sorted, and
 timestamps, modes, and compression are fixed. Unchanged retained state produces
 byte-identical output. See [ADR 0011](docs/adr/0011-reporting-is-a-deterministic-snapshot.md)
 and the [DockPack format](docs/DOCKPACK.md).

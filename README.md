@@ -52,7 +52,7 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | DockPack | Portable ZIP export with a member manifest and verified source evidence |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
 | Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |
-| Persistence | SQLite and evidence stored in a named Docker volume |
+| Persistence | SQLite by default or private PostgreSQL 17; evidence retained in a named Docker volume |
 | Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
 | Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
 | Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
@@ -127,7 +127,7 @@ docker compose up --build
 
 Open [http://localhost:8080](http://localhost:8080). The health endpoint is [http://localhost:8080/api/health](http://localhost:8080/api/health), and interactive API documentation is at [http://localhost:8080/docs](http://localhost:8080/docs).
 
-Stop the application with `docker compose down`. The `reddock-data` volume holds both the database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
+Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
 ### Optional intelligence provider
 
@@ -147,6 +147,21 @@ before startup, or configure any compatible local or cloud provider instead.
 See [Local and configurable AI](docs/LOCAL_AI.md) for provider overrides,
 data-boundary rules, storage, first-run behavior, and the approval flow.
 On systems with Make, `make up` and `make up-ai` are equivalent shortcuts.
+
+### Optional PostgreSQL
+
+Set a strong `REDDOCK_POSTGRES_PASSWORD` for the Compose invocation, then run:
+
+```bash
+docker compose -f compose.yaml -f compose.postgres.yaml up --build
+```
+
+This keeps RedDock on `127.0.0.1:8080`, adds a pinned private PostgreSQL 17
+service with no host port, and mounts the password into both containers as a
+Compose secret. It validates the database path for Phase 8; it does not enable
+the future authenticated server mode. The PostgreSQL and Ollama overlays can be
+combined. See [Optional PostgreSQL](docs/POSTGRESQL.md) for safe password entry,
+storage, shutdown, and external-orchestrator settings.
 
 ### Optional Phase 7 controls
 
@@ -182,7 +197,7 @@ flowchart TB
   Guard -->|denied| Audit[Recorded denial]
   Guard -->|allowed| Adapter[Discovery adapter]
   Adapter --> Normalize[Assets · Services · Observations]
-  Normalize --> Database[(SQLite named Docker volume)]
+  Normalize --> Database[(SQLite or private PostgreSQL)]
   Adapter --> Evidence[(Hashed evidence)]
   API --> Detect[Detector]
   Database --> Detect
@@ -210,7 +225,7 @@ flowchart TB
 
 Discovery and the tightly bounded validation recheck are the only paths that touch a target, and both pass DockGuard immediately before contact. Detection, correlation, and reporting read only stored state. Intelligence may contact only the configured model provider after the operator reviews the exact retained packet and records a separate approval. It receives no target or tool capability. A validation or intelligence request alone makes no network contact, and reporting never does.
 
-The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency; discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, the adapter and detector boundaries, and the trust boundaries.
+The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. The default profile has no reverse proxy, separate frontend service, queue, or remote dependency; the optional PostgreSQL and Ollama profiles add only private Compose services. Discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, adapter and detector boundaries, and trust boundaries.
 
 ## Security by Design
 
@@ -239,7 +254,7 @@ Read [SECURITY.md](SECURITY.md) for the authorized-use policy and the full contr
 ## Repository Structure
 
 ```text
-backend/       FastAPI API, DockGuard, adapters, detectors, intelligence, reporting, evidence, and SQLite
+backend/       FastAPI API, DockGuard, adapters, detectors, intelligence, reporting, evidence, and SQL persistence
 frontend/      React and TypeScript dashboard
 scripts/       Local end-to-end smoke test
 docs/          Architecture decisions and project documentation
@@ -255,6 +270,7 @@ docs/          Architecture decisions and project documentation
 | [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
 | [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
+| [PostgreSQL](docs/POSTGRESQL.md) | Private Compose profile, secret handling, and current deployment boundary |
 | [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
 | [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
 | [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
@@ -281,7 +297,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.8.0: Phase 8 — Production polish.** RBAC, optional PostgreSQL, scaling, release automation, ARM64 support, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.8.0: Phase 8 — Production polish.** The optional PostgreSQL validation profile and migration CI are complete. RBAC, identity, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 
@@ -300,7 +316,7 @@ model output—remain the authority for what ships.
 
 ## Built With
 
-[Python](https://www.python.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Pydantic](https://docs.pydantic.dev/) · [SQLAlchemy](https://www.sqlalchemy.org/) · [SQLite](https://www.sqlite.org/) · [Nmap](https://nmap.org/) · [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [Vite](https://vite.dev/) · [Docker](https://www.docker.com/) · [GitHub Actions](https://github.com/features/actions)
+[Python](https://www.python.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Pydantic](https://docs.pydantic.dev/) · [SQLAlchemy](https://www.sqlalchemy.org/) · [SQLite](https://www.sqlite.org/) · [PostgreSQL](https://www.postgresql.org/) · [Nmap](https://nmap.org/) · [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [Vite](https://vite.dev/) · [Docker](https://www.docker.com/) · [GitHub Actions](https://github.com/features/actions)
 
 <br>
 

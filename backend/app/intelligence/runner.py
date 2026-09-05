@@ -105,7 +105,7 @@ def get_provider() -> IntelligenceProvider | None:
     return OpenAICompatibleProvider(
         base_url=settings.llm_base_url.rstrip("/"),
         model=settings.llm_model,
-        api_key=settings.llm_api_key,
+        api_key=(settings.llm_api_key.get_secret_value() if settings.llm_api_key else None),
         timeout_seconds=settings.llm_timeout_seconds,
         sends_data_external=not local,
     )

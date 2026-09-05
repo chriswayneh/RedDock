@@ -73,7 +73,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 
 **Intelligence**
 
-- Intelligence is disabled unless an operator supplies a provider base URL and model through process environment variables. Provider credentials are not accepted by the API, stored, returned to the browser, retained as evidence, or logged.
+- Intelligence is disabled unless an operator supplies a provider base URL and model through deployment configuration. Provider credentials may come from a mounted secret file or the backward-compatible process variable; they are masked in settings and are never accepted by the API, stored, returned to the browser, retained as evidence, or logged.
 - Creating a run makes no provider request. It freezes and hashes the exact versioned packet from active, evidence-linked findings in the latest completed correlation; the browser displays that JSON and the destination before a separate approval note can send it.
 - Approval is bound to the provider, model, destination, local/external classification, and prompt version recorded at creation. A configuration or prompt-version change blocks the send. External endpoints require HTTPS; loopback endpoints may use HTTP only without a credential. Redirects are refused, and requests have total-time and response-size bounds.
 - The API accepts no arbitrary prompt, destination, target, command, tool, credential, action, or finding selection. Stored strings are explicitly treated as untrusted data in the fixed prompt.
@@ -101,7 +101,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 **Runtime**
 
 - The production container runs as an unprivileged `reddock` user, with no `privileged: true`, no added capabilities, and no `network_mode: host`. Nmap therefore runs unprivileged and uses TCP connect scanning; RedDock does not request raw-socket capabilities to enable features it does not need.
-- SQLite data and evidence are held in a named volume, not baked into the image.
+- SQLite data and evidence are held in a named volume by default. The optional PostgreSQL profile uses a separate named volume and a private service with no host port; its password is mounted as a Compose secret. None of this state is baked into the image.
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
 - Requests are accepted only for the documented `localhost` and `127.0.0.1` Host values, preventing an arbitrary Host from using browser DNS rebinding to reach the loopback API.

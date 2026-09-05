@@ -1,0 +1,46 @@
+# Optional PostgreSQL profile for Phase 8 validation. It remains loopback-only;
+# this profile does not enable the future authenticated server mode.
+services:
+  reddock:
+    environment:
+      REDDOCK_DATABASE_HOST: postgres
+      REDDOCK_DATABASE_PORT: "5432"
+      REDDOCK_DATABASE_NAME: reddock
+      REDDOCK_DATABASE_USER: reddock
+      REDDOCK_DATABASE_PASSWORD_FILE: /run/secrets/reddock-postgres-password
+    secrets:
+      - reddock-postgres-password
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    environment:
+      POSTGRES_DB: reddock
+      POSTGRES_USER: reddock
+      POSTGRES_PASSWORD_FILE: /run/secrets/reddock-postgres-password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --data-checksums"
+    expose:
+      - "5432"
+    secrets:
+      - reddock-postgres-password
+    volumes:
+      - reddock-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reddock -d reddock"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    shm_size: 128mb
+    restart: unless-stopped
+
+volumes:
+  reddock-postgres:
+
+secrets:
+  reddock-postgres-password:
+    environment: REDDOCK_POSTGRES_PASSWORD

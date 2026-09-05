@@ -1,4 +1,4 @@
-.PHONY: up up-ai down down-ai build logs test test-backend test-frontend lint smoke reset-data
+.PHONY: up up-ai up-postgres up-postgres-ai down down-ai down-postgres build logs test test-backend test-frontend lint smoke reset-data
 
 up:
 	docker compose up --build
@@ -6,11 +6,20 @@ up:
 up-ai:
 	docker compose -f compose.yaml -f compose.ollama.yaml up --build
 
+up-postgres:
+	docker compose -f compose.yaml -f compose.postgres.yaml up --build
+
+up-postgres-ai:
+	docker compose -f compose.yaml -f compose.postgres.yaml -f compose.ollama.yaml up --build
+
 down:
 	docker compose down
 
 down-ai:
 	docker compose -f compose.yaml -f compose.ollama.yaml down
+
+down-postgres:
+	docker compose -f compose.yaml -f compose.postgres.yaml down
 
 build:
 	docker compose build
