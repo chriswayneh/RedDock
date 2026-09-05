@@ -75,6 +75,10 @@ def test_every_phase_1_table_is_created(phase_0_database: Path):
         "discovery_runs",
         "evidence_records",
     } <= tables
+    with sqlite3.connect(phase_0_database) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
+            "0001_v080",
+        )
 
 
 #: The schema as released in v0.2.1, written out rather than derived, so a

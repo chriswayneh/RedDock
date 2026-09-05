@@ -23,7 +23,7 @@ RUN groupadd --system reddock && useradd --system --gid reddock --home-dir /app 
     && chown -R reddock:reddock /var/lib/reddock /app
 COPY backend/pyproject.toml backend/README.md ./
 COPY backend/app ./app
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[postgres]"
 COPY --from=frontend-build /build/frontend/dist /app/static
 RUN chown -R reddock:reddock /app
 USER reddock
