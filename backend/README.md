@@ -14,6 +14,7 @@ app/validation/     approval-gated, fixed HTTP-origin validation orchestration
 app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath assembly
 app/intelligence/   approval-gated, provider-neutral advice over reviewed evidence packets
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
+app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/evidence.py     hashed evidence storage
 ```
 
@@ -51,6 +52,11 @@ mounted Compose secret, PostgreSQL has no host port, and CI proves the migration
 head and CRUD behavior against a real server. This remains a loopback-only
 validation profile, not the future authenticated server mode. See
 [Optional PostgreSQL](../docs/POSTGRESQL.md).
+
+Phase 8 also defines the deny-by-default owner, admin, operator, auditor, and
+viewer permission sets. They are not authentication: the only supported runtime
+mode remains the account-free loopback `local` mode, and requesting `server`
+mode fails startup until OIDC sessions and route enforcement are complete.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

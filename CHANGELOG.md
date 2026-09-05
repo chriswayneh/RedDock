@@ -17,6 +17,8 @@ All notable changes to RedDock are documented here.
 - PostgreSQL CI that applies the versioned schema and proves real-server CRUD
 - Versioned organization, OIDC-keyed user, membership, and hash-only browser
   session tables, plus non-null organization ownership for every Dockyard
+- A centralized least-privilege role/permission contract with fail-closed
+  handling for unknown roles and inactive principals
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 
@@ -28,6 +30,8 @@ All notable changes to RedDock are documented here.
   inputs fail startup instead of falling back to a different database
 - Existing local databases migrate into a reserved local organization and owner
   without changing IDs, evidence hashes, or the account-free local workflow
+- Unsupported deployment-mode values, including the not-yet-implemented
+  `server` mode, are rejected instead of widening the local trust boundary
 - PostgreSQL and optional Ollama remain private Compose services without host
   ports, and credentials do not appear in rendered service environments
 

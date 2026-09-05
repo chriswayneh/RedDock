@@ -2,6 +2,7 @@ import os
 import re
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
@@ -86,12 +87,25 @@ def _database_components() -> dict[str, object]:
     }
 
 
+def _deployment_mode() -> Literal["local"]:
+    mode = os.getenv("REDDOCK_DEPLOYMENT_MODE", "local").strip().lower()
+    if mode == "server":
+        raise ConfigurationError(
+            "REDDOCK_DEPLOYMENT_MODE=server is not available until OIDC, sessions, "
+            "route authorization, exact origins, and trusted proxy settings are implemented"
+        )
+    if mode != "local":
+        raise ConfigurationError("REDDOCK_DEPLOYMENT_MODE must be 'local'")
+    return mode
+
+
 class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
     version: str = "0.8.0"
     phase: str = "Phase 7 — Advanced / Lab"
+    deployment_mode: Literal["local"] = "local"
     database_url: str = Field(default="sqlite:///./data/reddock.db", repr=False)
     database_host: str | None = None
     database_port: int = 5432
@@ -190,6 +204,7 @@ def get_settings() -> Settings:
     ):
         Path(database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     return Settings(
+        deployment_mode=_deployment_mode(),
         database_url=database_url,
         **database_components,
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),

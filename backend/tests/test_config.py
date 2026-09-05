@@ -14,6 +14,28 @@ def _clear_database_components(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
+def test_local_deployment_mode_is_default(monkeypatch: pytest.MonkeyPatch):
+    from app.config import get_settings
+
+    monkeypatch.delenv("REDDOCK_DEPLOYMENT_MODE", raising=False)
+    get_settings.cache_clear()
+
+    assert get_settings().deployment_mode == "local"
+
+
+@pytest.mark.parametrize("mode", ["server", "shared", "production", "invalid"])
+def test_unimplemented_or_unknown_deployment_modes_fail_closed(
+    mode: str, monkeypatch: pytest.MonkeyPatch
+):
+    from app.config import ConfigurationError, get_settings
+
+    monkeypatch.setenv("REDDOCK_DEPLOYMENT_MODE", mode)
+    get_settings.cache_clear()
+
+    with pytest.raises(ConfigurationError, match="REDDOCK_DEPLOYMENT_MODE"):
+        get_settings()
+
+
 def test_database_password_file_builds_a_masked_postgres_url(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

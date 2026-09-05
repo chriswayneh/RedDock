@@ -380,6 +380,17 @@ Database setup is isolated in `backend/app/database.py` and each domain model ow
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
+## Authorization evolution
+
+`backend/app/authorization.py` is the single deny-by-default role-permission
+contract for Phase 8. Unknown roles and inactive users or memberships receive no
+authority. The local account-free workflow maps explicitly to the reserved
+organization, user, and owner membership; it is not inferred from a missing
+identity. Server mode remains unavailable, and configuration rejects
+`REDDOCK_DEPLOYMENT_MODE=server`, until sessions, organization-scoped resource
+loading, and permission dependencies are wired to every route. The API remains
+the future enforcement point; UI visibility will never grant authority.
+
 ## Deterministic core
 
 Nothing in discovery, detection, validation, correlation, or reporting is AI-driven.

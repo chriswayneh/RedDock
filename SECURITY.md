@@ -105,6 +105,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
 - Requests are accepted only for the documented `localhost` and `127.0.0.1` Host values, preventing an arbitrary Host from using browser DNS rebinding to reach the loopback API.
+- The only accepted deployment mode is `local`. `REDDOCK_DEPLOYMENT_MODE=server` and unknown values fail startup until authenticated server mode is implemented; enabling PostgreSQL does not widen the trust boundary.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
@@ -117,7 +118,7 @@ It performs no exploitation or broad active vulnerability testing. Detection, co
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected security flaw. When GitHub Private Vulnerability Reporting is enabled, use it for a concise report with reproduction steps, affected versions, and impact. Until then, avoid posting sensitive details publicly and ask the maintainers for a private reporting channel.
+Do not open a public issue for a suspected security flaw. Use [GitHub Private Vulnerability Reporting](https://github.com/chriswayneh/RedDock/security/advisories/new) for a concise report with reproduction steps, affected versions, and impact. Private reporting is enabled for this repository; do not post sensitive details in an issue, discussion, or pull request.
 
 ## Supported versions
 

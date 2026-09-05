@@ -83,6 +83,8 @@ URL remains available for development and CI, but managed deployments should
 mount the password secret instead.
 
 This profile is a validation milestone, not the final production topology.
-OIDC, sessions, RBAC, tenant ownership, TLS proxy configuration, formal
-backup/restore tooling, and multi-process testing remain mandatory before
-server mode can be enabled.
+Tenant ownership and the reviewed role-permission contract now exist, but OIDC,
+session resolution, route enforcement, TLS proxy configuration, formal
+backup/restore tooling, and multi-process testing remain mandatory. Setting
+`REDDOCK_DEPLOYMENT_MODE=server` is explicitly rejected until those controls are
+implemented; PostgreSQL configuration can never silently enable shared mode.
