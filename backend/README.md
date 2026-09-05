@@ -68,8 +68,9 @@ The dormant session primitive issues independent 256-bit browser and CSRF
 tokens, masks them from object representations, stores only their hashes, and
 resolves a context only while the session, membership, user, and role remain
 valid. It also supports idempotent single-session logout, membership-wide
-revocation after access changes, and operator-cutoff cleanup. No route issues or
-accepts these tokens yet.
+revocation after access changes, an eight-session per-membership cap that evicts
+the oldest active record, and operator-cutoff cleanup. No route issues or accepts
+these tokens yet.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

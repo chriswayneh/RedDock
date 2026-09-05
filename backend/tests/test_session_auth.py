@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy.orm import Session
 
 from app.models import BrowserSession, Membership, User
 from app.session_auth import (
+    MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP,
     SESSION_LIFETIME,
     SessionRejected,
     csrf_token_matches,
@@ -136,3 +137,21 @@ def test_cleanup_removes_only_inactive_sessions_at_the_cutoff(session: Session):
     assert session.get(BrowserSession, expired.session_id) is None
     assert session.get(BrowserSession, revoked.session_id) is None
     assert session.get(BrowserSession, active.session_id) is not None
+
+
+def test_issuing_a_session_revokes_the_oldest_above_the_active_limit(session: Session):
+    issued = [
+        issue_browser_session(session, 1, now=NOW + timedelta(minutes=index))
+        for index in range(MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP + 1)
+    ]
+    checked_at = NOW + timedelta(minutes=MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP)
+
+    assert resolve_browser_session(session, issued[0].token, now=checked_at) is None
+    assert all(
+        resolve_browser_session(session, item.token, now=checked_at) is not None
+        for item in issued[1:]
+    )
+    active_count = sum(
+        record.revoked_at is None for record in session.query(BrowserSession).all()
+    )
+    assert active_count == MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP

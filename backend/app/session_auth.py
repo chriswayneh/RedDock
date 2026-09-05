@@ -12,6 +12,7 @@ from app.authorization import AuthorizationContext, Role
 from app.models import BrowserSession, Membership, User
 
 SESSION_LIFETIME = timedelta(hours=8)
+MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP = 8
 _TOKEN_BYTES = 32
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 
@@ -55,6 +56,7 @@ def issue_browser_session(
         select(Membership, User)
         .join(User, User.id == Membership.user_id)
         .where(Membership.id == membership_id)
+        .with_for_update(of=Membership)
     ).one_or_none()
     if identity is None:
         raise SessionRejected("Active membership required")
@@ -65,6 +67,21 @@ def issue_browser_session(
         raise SessionRejected("Active membership required") from error
     if membership.status != "active" or user.status != "active":
         raise SessionRejected("Active membership required")
+
+    active_sessions = list(
+        session.scalars(
+            select(BrowserSession)
+            .where(
+                BrowserSession.membership_id == membership.id,
+                BrowserSession.revoked_at.is_(None),
+                BrowserSession.expires_at > issued_at,
+            )
+            .order_by(BrowserSession.last_seen_at, BrowserSession.id)
+        )
+    )
+    overflow = len(active_sessions) - MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP + 1
+    for stale_session in active_sessions[: max(0, overflow)]:
+        stale_session.revoked_at = issued_at
 
     token = secrets.token_urlsafe(_TOKEN_BYTES)
     csrf_token = secrets.token_urlsafe(_TOKEN_BYTES)

@@ -415,8 +415,10 @@ organization, and returns no context for an unknown, expired, revoked, disabled,
 or unrecognized-role record. The returned token container masks both bearer
 values from `repr`. Lifecycle operations revoke a single hashed token
 idempotently, revoke every session for a membership after an access change, and
-purge only expired or revoked rows at an explicit retention cutoff. No cookie or
-login route uses this primitive yet.
+purge only expired or revoked rows at an explicit retention cutoff. Issuance
+locks the membership and evicts the oldest session above an eight-active-session
+cap, serializing that decision on PostgreSQL. No cookie or login route uses this
+primitive yet.
 
 ## Deterministic core
 
