@@ -388,10 +388,13 @@ authority. The local account-free workflow maps explicitly to the reserved
 organization, user, and owner membership; it is not inferred from a missing
 identity. Every API method/path is also classified as one of two public health
 routes or assigned a named permission, and a completeness test fails if a route
-is added without a decision. Server mode remains unavailable, and configuration rejects
+is added without a decision. A router dependency enforces that manifest for the
+explicit local owner today, and negative tests replace that context with a
+viewer or inactive user to prove sensitive and mutating routes are refused.
+Server mode remains unavailable, and configuration rejects
 `REDDOCK_DEPLOYMENT_MODE=server`, until sessions, organization-scoped resource
-loading, and permission dependencies are wired to every route. The API remains
-the future enforcement point; UI visibility will never grant authority.
+loading, and authenticated context resolution are complete. The API remains the
+enforcement point; UI visibility will never grant authority.
 
 ## Deterministic core
 

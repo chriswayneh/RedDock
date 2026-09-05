@@ -55,10 +55,13 @@ validation profile, not the future authenticated server mode. See
 
 Phase 8 also defines the deny-by-default owner, admin, operator, auditor, and
 viewer permission sets. Every API method/path is classified as public or bound
-to one named permission, and a test rejects unclassified routes. These controls
-are not authentication: the only supported runtime mode remains the account-free
-loopback `local` mode, and requesting `server` mode fails startup until OIDC
-sessions and permission enforcement are complete.
+to one named permission, a test rejects unclassified routes, and the API router
+enforces the manifest against an explicit local owner. Negative tests prove a
+viewer cannot mutate state, read raw evidence, approve model disclosure, or
+export a DockPack. These controls are not authentication: the only supported
+runtime mode remains the account-free loopback `local` mode, and requesting
+`server` mode fails startup until OIDC sessions and tenant-scoped context
+resolution are complete.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

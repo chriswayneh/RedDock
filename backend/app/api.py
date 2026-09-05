@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import lab
+from app.authorization_dependencies import authorize_request
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
 from app.database import get_session
@@ -78,7 +79,11 @@ from app.services import (
 from app.targets import TargetError
 from app.validation import runner as validation_runner
 
-router = APIRouter(prefix="/api", tags=["RedDock Core"])
+router = APIRouter(
+    prefix="/api",
+    tags=["RedDock Core"],
+    dependencies=[Depends(authorize_request)],
+)
 
 ListLimit = Query(default=100, ge=1, le=500)
 

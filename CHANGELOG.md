@@ -21,6 +21,8 @@ All notable changes to RedDock are documented here.
   handling for unknown roles and inactive principals
 - An exhaustive route-permission manifest that fails tests when a new API route
   lacks an explicit public/protected classification
+- API-boundary permission enforcement with negative viewer and inactive-user
+  tests for mutation, raw evidence, model disclosure, and DockPack export
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 
