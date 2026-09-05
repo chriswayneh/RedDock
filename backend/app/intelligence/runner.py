@@ -61,8 +61,7 @@ def provider_status() -> dict:
             "destination": None,
             "sends_data_external": False,
             "reason": (
-                "Configure REDDOCK_LLM_BASE_URL and REDDOCK_LLM_MODEL "
-                "to enable intelligence."
+                "Configure REDDOCK_LLM_BASE_URL and REDDOCK_LLM_MODEL to enable intelligence."
             ),
         }
     return {
@@ -92,7 +91,10 @@ def get_provider() -> IntelligenceProvider | None:
         or len(settings.llm_model) > 120
     ):
         return None
-    local = host in {"localhost", "host.docker.internal"}
+    # `ollama` is the fixed service name in the optional, private Compose
+    # bundle. It is never published on a host port. HTTP still fails closed if
+    # a credential is configured, because bearer material must not cross it.
+    local = host in {"localhost", "host.docker.internal", "ollama"}
     if not local:
         try:
             local = ip_address(host).is_loopback
@@ -122,17 +124,22 @@ def _create_run(session: Session, dockyard_id: int) -> IntelligenceRun:
     if provider is None:
         raise RunRejected("Intelligence is disabled until an operator configures a model provider")
     if session.scalar(
-        select(func.count()).select_from(IntelligenceRun).where(
+        select(func.count())
+        .select_from(IntelligenceRun)
+        .where(
             IntelligenceRun.dockyard_id == dockyard_id,
             IntelligenceRun.status.in_(ACTIVE_STATUSES),
         )
     ):
         raise RunRejected("An intelligence run is already awaiting approval or running")
-    count = session.scalar(
-        select(func.count()).select_from(IntelligenceRun).where(
-            IntelligenceRun.dockyard_id == dockyard_id
+    count = (
+        session.scalar(
+            select(func.count())
+            .select_from(IntelligenceRun)
+            .where(IntelligenceRun.dockyard_id == dockyard_id)
         )
-    ) or 0
+        or 0
+    )
     if count >= get_settings().max_intelligence_runs_per_dockyard:
         raise RunRejected("This Dockyard reached the fixed intelligence-run limit")
 
@@ -169,9 +176,7 @@ def _create_run(session: Session, dockyard_id: int) -> IntelligenceRun:
     return run
 
 
-def approve_run(
-    session: Session, dockyard_id: int, run_id: int, note: str
-) -> IntelligenceRun:
+def approve_run(session: Session, dockyard_id: int, run_id: int, note: str) -> IntelligenceRun:
     run = get_run(session, dockyard_id, run_id)
     if run is None:
         raise RunRejected("Intelligence run not found")

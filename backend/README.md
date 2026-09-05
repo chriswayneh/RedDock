@@ -1,6 +1,6 @@
 # RedDock backend
 
-This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLite persistence. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
+This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLAlchemy persistence with SQLite by default and packaged PostgreSQL support. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
 
 ```text
 app/targets.py      target parsing and normalization
@@ -40,6 +40,10 @@ evidence-linked packet without contacting a provider. A separate approval note
 sends that reviewed packet to the process-configured OpenAI-compatible endpoint;
 the provider response must match a strict schema and may cite only findings and
 hashes in the packet. It receives no tools and cannot change RedDock state.
+The default `compose.yaml` package contains no LLM. The optional
+`compose.ollama.yaml` bundle provisions a private Ollama sidecar and Qwen3.5 4B
+model volume; an operator can replace that model or use any compatible endpoint
+without changing this backend package.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

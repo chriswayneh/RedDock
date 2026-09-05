@@ -46,6 +46,23 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate core and optional local-AI Compose packages
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.ollama.yaml config --format json > "$RUNNER_TEMP/compose-ai.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          document = json.loads(Path(os.environ["RUNNER_TEMP"], "compose-ai.json").read_text())
+          services = document["services"]
+          assert services["reddock"]["environment"]["REDDOCK_LLM_MODEL"] == "qwen3.5:4b"
+          assert services["reddock"]["environment"]["REDDOCK_LLM_BASE_URL"] == "http://ollama:11434/v1"
+          assert "ports" not in services["ollama"]
+          assert "@sha256:" in services["ollama"]["image"]
+          assert services["ollama-model"]["command"] == ["pull", "qwen3.5:4b"]
+          PY
       - run: docker build -t reddock:ci .
       - name: Prepare reviewed data-only detector manifest
         run: |

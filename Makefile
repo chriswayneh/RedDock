@@ -1,10 +1,16 @@
-.PHONY: up down build logs test test-backend test-frontend lint smoke reset-data
+.PHONY: up up-ai down down-ai build logs test test-backend test-frontend lint smoke reset-data
 
 up:
 	docker compose up --build
 
+up-ai:
+	docker compose -f compose.yaml -f compose.ollama.yaml up --build
+
 down:
 	docker compose down
+
+down-ai:
+	docker compose -f compose.yaml -f compose.ollama.yaml down
 
 build:
 	docker compose build

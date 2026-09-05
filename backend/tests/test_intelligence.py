@@ -72,14 +72,18 @@ def test_intelligence_requires_configuration(client: TestClient, dockyard_id: in
     assert response.status_code == 409
 
 
-def test_provider_configuration_classifies_destinations_and_hides_api_key(
-    environment, monkeypatch
-):
+def test_provider_configuration_classifies_destinations_and_hides_api_key(environment, monkeypatch):
     from app.config import get_settings
     from app.intelligence.runner import get_provider, provider_status
 
     monkeypatch.setenv("REDDOCK_LLM_BASE_URL", "http://host.docker.internal:11434/v1")
     monkeypatch.setenv("REDDOCK_LLM_MODEL", "local-model")
+    get_settings.cache_clear()
+    provider = get_provider()
+    assert provider is not None
+    assert provider.sends_data_external is False
+
+    monkeypatch.setenv("REDDOCK_LLM_BASE_URL", "http://ollama:11434/v1")
     get_settings.cache_clear()
     provider = get_provider()
     assert provider is not None

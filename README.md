@@ -131,11 +131,22 @@ Stop the application with `docker compose down`. The `reddock-data` volume holds
 
 ### Optional intelligence provider
 
-Intelligence is off by default. The recommended local option is Qwen3.5 4B
-through Ollama; `compose.ollama.yaml` enables that path explicitly without
-bundling model weights. Any OpenAI-compatible local or cloud model remains an
-operator choice. See [Local and configurable AI](docs/LOCAL_AI.md) for setup,
-provider overrides, data-boundary rules, and the approval flow.
+RedDock ships in two supported Compose shapes:
+
+| Package | Command | Model behavior |
+| --- | --- | --- |
+| Core | `docker compose up --build` | No LLM runtime or weights; every non-intelligence feature works and Intelligence reports that it is disabled |
+| Local AI bundle | `docker compose -f compose.yaml -f compose.ollama.yaml up --build` | Starts a private Ollama sidecar and downloads Qwen3.5 4B into a named local volume on first use |
+
+The core/no-LLM package remains the secure default because running discovery,
+detection, validation, correlation, reporting, and DockPack export never
+requires a model. The optional bundle packages the runtime and provisioning
+workflow, not 3.4 GB of model weights inside the RedDock image or Git history.
+It is not exposed on a host port. Set `REDDOCK_LLM_MODEL` to another Ollama model
+before startup, or configure any compatible local or cloud provider instead.
+See [Local and configurable AI](docs/LOCAL_AI.md) for provider overrides,
+data-boundary rules, storage, first-run behavior, and the approval flow.
+On systems with Make, `make up` and `make up-ai` are equivalent shortcuts.
 
 ### Optional Phase 7 controls
 

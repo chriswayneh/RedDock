@@ -1,9 +1,44 @@
-# Explicit opt-in for an Ollama server already running on the Docker host.
-# No model weights or provider credentials are bundled with RedDock.
+# Optional local-AI bundle. RedDock remains complete without this override.
+# The Ollama runtime is pinned; the selected model is downloaded into a named
+# volume on first use rather than committed to Git or baked into RedDock.
 services:
   reddock:
     environment:
-      REDDOCK_LLM_BASE_URL: http://host.docker.internal:11434/v1
+      REDDOCK_LLM_BASE_URL: http://ollama:11434/v1
       REDDOCK_LLM_MODEL: "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      ollama-model:
+        condition: service_completed_successfully
+
+  ollama:
+    image: ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a754874ab28ba269eb2
+    expose:
+      - "11434"
+    volumes:
+      - reddock-ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  ollama-model:
+    image: ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a754874ab28ba269eb2
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - reddock-ollama:/root/.ollama
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+volumes:
+  reddock-ollama:

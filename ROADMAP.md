@@ -45,4 +45,4 @@ CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8 — Production polish
 
-RBAC, optional PostgreSQL, scaling work, release automation, ARM64 support, and production hardening. Complete when operational requirements are documented and validated.
+RBAC, optional PostgreSQL, scaling work, release automation, ARM64 support, and production hardening. The first checkpoint is complete: existing schemas now cross a validated, versioned Alembic baseline before ownership or tenancy changes, and the production image packages the PostgreSQL driver. The default no-LLM package and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle are also explicit. Complete when identity, authorization, database, deployment, backup/restore, and operational requirements are documented and validated end to end.

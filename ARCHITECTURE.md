@@ -376,7 +376,7 @@ interrupted report failed and removes its partial reporting directory.
 
 ## Persistence evolution
 
-Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Every phase so far is purely additive — it adds tables and changes no existing column — so `create_all` upgrades a deployed database in place without data loss. `tests/test_schema_upgrade.py` verifies that against real 0.1.0-shaped and 0.2.1-shaped databases, including running a full detection over data written by the previous release. Before the first destructive schema change, introduce versioned Alembic migrations rather than altering deployed tables ad hoc.
+Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0 schema contract and versioned Alembic baseline before any ownership or tenancy column changed. A legacy database is completed additively, validated table by table and column by column, and only then stamped; an unknown shape fails startup without being stamped. Fresh installs are created at the current model and stamped at the current migration head. `tests/test_schema_upgrade.py` and `tests/test_migrations.py` verify old data survival, idempotency, and the fail-closed path.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
