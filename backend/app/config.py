@@ -48,6 +48,7 @@ class Settings(BaseModel):
     # without limit, a detector cannot flood the findings table, and a finding
     # cannot drag an unbounded number of evidence links behind it.
     max_detection_assets: int = 2_000
+    max_detection_services: int = 20_000
     max_detection_observations: int = 20_000
     max_findings_per_detector: int = 500
     max_evidence_per_finding: int = 20

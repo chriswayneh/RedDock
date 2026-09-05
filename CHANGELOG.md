@@ -30,6 +30,14 @@ All notable changes to RedDock are documented here.
   and IDs outside the `plugin.` namespace fail startup closed
 - Lab and Ollama Compose overrides are explicit opt-ins. Provider settings remain
   process-only, and no model weight or credential is committed or bundled
+- The local application rejects arbitrary Host headers while retaining the
+  documented `localhost` and `127.0.0.1` loopback paths
+- Single-host lab policy is enforced against effective resolved addresses at
+  request, execution, and adapter boundaries, with linked audit records for
+  policy and load denials
+- Detection refuses incomplete bounded snapshots before detector execution or
+  finding reconciliation, and declarative detectors stop producing at the
+  central output-rejection threshold
 
 ### Testing
 

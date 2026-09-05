@@ -87,6 +87,24 @@ def test_a_named_target_without_resolution_never_reaches_nmap():
         NmapAdapter().prepare(request("app.lab.local"))
 
 
+def test_lab_profile_refuses_multiple_resolved_addresses_at_the_adapter_boundary():
+    with pytest.raises(AdapterError, match="limited to one host"):
+        NmapAdapter().prepare(
+            request(
+                "app.lab.local",
+                profile=LAB_EXTENDED_SERVICE_DISCOVERY,
+                resolved_addresses=("192.0.2.10", "192.0.2.11"),
+            )
+        )
+
+
+def test_lab_profile_refuses_a_network_at_the_adapter_boundary():
+    with pytest.raises(AdapterError, match="limited to one host"):
+        NmapAdapter().prepare(
+            request("192.0.2.0/24", profile=LAB_EXTENDED_SERVICE_DISCOVERY)
+        )
+
+
 def test_unknown_profile_is_refused():
     with pytest.raises(AdapterError):
         NmapAdapter().prepare(request(profile="aggressive"))

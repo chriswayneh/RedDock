@@ -25,6 +25,7 @@ from app.discovery.base import (
     DiscoveredAsset,
     DiscoveredObservation,
     DiscoveryAdapter,
+    Profile,
     RunStatus,
 )
 from app.dockguard import Decision, Evaluation, evaluate, system_resolver
@@ -32,7 +33,7 @@ from app.evidence import EVIDENCE_SCHEMA, EvidenceStore
 from app.inventory import record_observation, upsert_asset, upsert_service
 from app.models import DiscoveryRun, EvidenceRecord
 from app.services import scope_rules
-from app.targets import TargetKind, normalize_target
+from app.targets import Target, TargetKind, normalize_target
 
 logger = logging.getLogger("reddock.discovery")
 
@@ -73,31 +74,26 @@ def create_run(
     )
     target = normalize_target(requested_target) if evaluation.allowed else None
     if evaluation.allowed and target is not None and not adapter.supports(target):
-        raise RunRejected(f"{adapter.title} cannot act on a {evaluation.target_kind} target")
-    if (
-        evaluation.allowed
-        and target is not None
-        and profile.single_host_only
-        and target.kind in {TargetKind.IPV4_NETWORK, TargetKind.IPV6_NETWORK}
-    ):
-        raise RunRejected(f"{profile.title} is limited to one host; network targets are refused")
-    if evaluation.allowed and profile.requires_lab_authorization:
-        policy = lab.check_capability(
-            session,
-            dockyard_id,
-            profile.capability or "",
-            action="request",
-        )
-        if not policy.allowed:
-            evaluation = replace(
-                evaluation,
-                decision=Decision.DENIED_POLICY,
-                reason=policy.reason,
-            )
+        reason = f"{adapter.title} cannot act on a {evaluation.target_kind} target"
+        if profile.requires_lab_authorization:
+            evaluation = replace(evaluation, decision=Decision.DENIED_POLICY, reason=reason)
+        else:
+            raise RunRejected(reason)
+    if evaluation.allowed and target is not None:
+        reason = _single_host_denial(profile, target, evaluation)
+        if reason:
+            if profile.requires_lab_authorization:
+                evaluation = replace(evaluation, decision=Decision.DENIED_POLICY, reason=reason)
+            else:
+                raise RunRejected(reason)
     if evaluation.allowed and active_run_count(session) >= get_settings().max_concurrent_runs:
-        raise RunRejected(
+        reason = (
             f"RedDock already has {get_settings().max_concurrent_runs} discovery runs in flight"
         )
+        if profile.requires_lab_authorization:
+            evaluation = replace(evaluation, decision=Decision.DENIED_POLICY, reason=reason)
+        else:
+            raise RunRejected(reason)
 
     now = datetime.now(UTC)
     run = DiscoveryRun(
@@ -113,6 +109,35 @@ def create_run(
         completed_at=None if evaluation.allowed else now,
     )
     session.add(run)
+    session.flush()
+    if profile.requires_lab_authorization:
+        if evaluation.allowed:
+            policy = lab.check_capability(
+                session,
+                dockyard_id,
+                profile.capability or "",
+                action="request",
+                discovery_run_id=run.id,
+            )
+        else:
+            policy = lab.record_denial(
+                session,
+                dockyard_id,
+                profile.capability or "",
+                action="request",
+                reason=evaluation.reason,
+                discovery_run_id=run.id,
+            )
+        if not policy.allowed and evaluation.allowed:
+            evaluation = replace(
+                evaluation,
+                decision=Decision.DENIED_POLICY,
+                reason=policy.reason,
+            )
+            run.status = str(RunStatus.DENIED)
+            run.decision = str(evaluation.decision)
+            run.decision_reason = evaluation.reason[:500]
+            run.completed_at = now
     session.commit()
     session.refresh(run)
     return run, evaluation
@@ -191,6 +216,33 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
     run.decision = str(evaluation.decision)
     run.decision_reason = evaluation.reason[:500]
     if not evaluation.allowed:
+        if profile.requires_lab_authorization:
+            lab.record_denial(
+                session,
+                run.dockyard_id,
+                profile.capability or "",
+                action="execute",
+                reason=evaluation.reason,
+                discovery_run_id=run.id,
+            )
+        run.status = str(RunStatus.DENIED)
+        run.completed_at = datetime.now(UTC)
+        session.commit()
+        return
+
+    target = normalize_target(run.requested_target)
+    reason = _single_host_denial(profile, target, evaluation)
+    if reason:
+        lab.record_denial(
+            session,
+            run.dockyard_id,
+            profile.capability or "",
+            action="execute",
+            reason=reason,
+            discovery_run_id=run.id,
+        )
+        run.decision = str(Decision.DENIED_POLICY)
+        run.decision_reason = reason[:500]
         run.status = str(RunStatus.DENIED)
         run.completed_at = datetime.now(UTC)
         session.commit()
@@ -213,7 +265,7 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
             return
 
     request = AdapterRequest(
-        target=normalize_target(run.requested_target),
+        target=target,
         profile=run.profile,
         resolved_addresses=evaluation.resolved_addresses,
         excluded_addresses=evaluation.excluded_addresses,
@@ -233,6 +285,22 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
     run.completed_at = datetime.now(UTC)
     run.asset_count, run.service_count, run.observation_count = counts
     session.commit()
+
+
+def _single_host_denial(
+    profile: Profile, target: Target, evaluation: Evaluation
+) -> str | None:
+    """Return a stable denial when a one-host profile would reach multiple hosts."""
+    if not profile.single_host_only:
+        return None
+    if target.kind in {TargetKind.IPV4_NETWORK, TargetKind.IPV6_NETWORK}:
+        return f"{profile.title} is limited to one host; network targets are refused"
+    if target.is_named and len(evaluation.resolved_addresses) != 1:
+        return (
+            f"{profile.title} is limited to one host; {target.host} resolved to "
+            f"{len(evaluation.resolved_addresses)} addresses"
+        )
+    return None
 
 
 def _persist(

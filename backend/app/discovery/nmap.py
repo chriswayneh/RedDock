@@ -136,6 +136,10 @@ class NmapAdapter(DiscoveryAdapter):
             arguments += ["--exclude", ",".join(request.excluded_addresses)]
 
         scan_targets = self.scan_targets(request)
+        if request.profile == LAB_EXTENDED_SERVICE_DISCOVERY and (
+            request.target.is_network or len(scan_targets) != 1
+        ):
+            raise AdapterError("Extended service discovery is limited to one host")
         _assert_scan_values(scan_targets)
         arguments += list(scan_targets)
         return arguments

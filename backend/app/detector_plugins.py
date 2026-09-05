@@ -126,6 +126,7 @@ def _load_manifest(path: Path, root: Path) -> DeclarativeDetector:
         description=manifest.description,
         rules=tuple(rule.compiled() for rule in manifest.rules),
         manifest_sha256=digest,
+        finding_limit=get_settings().max_findings_per_detector,
     )
 
 

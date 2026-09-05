@@ -170,8 +170,108 @@ def test_lab_profile_refuses_network_targets_even_when_authorized(
             "profile": "lab_extended_service_discovery",
         },
     )
-    assert response.status_code == 422
-    assert "limited to one host" in response.json()["detail"]
+    assert response.status_code == 403
+    assert response.json()["status"] == "denied"
+    assert "limited to one host" in response.json()["decision_reason"]
+    event = client.get(f"/api/dockyards/{dockyard_id}/lab/audit").json()[0]
+    assert (event["action"], event["decision"]) == ("request", "denied")
+    assert event["discovery_run_id"] == response.json()["id"]
+
+
+def test_lab_profile_refuses_a_name_resolving_to_multiple_hosts(
+    client, dockyard_id, add_scope, monkeypatch, runner_module
+):
+    _enable_lab(monkeypatch)
+    add_scope(dockyard_id, "app.lab.local")
+    assert _authorize(client, dockyard_id).status_code == 201
+    monkeypatch.setattr(
+        runner_module,
+        "system_resolver",
+        lambda _hostname: ("192.0.2.10", "192.0.2.11"),
+    )
+
+    response = client.post(
+        f"/api/dockyards/{dockyard_id}/discoveries",
+        json={
+            "target": "app.lab.local",
+            "adapter": "nmap",
+            "profile": "lab_extended_service_discovery",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "resolved to 2 addresses" in response.json()["decision_reason"]
+    event = client.get(f"/api/dockyards/{dockyard_id}/lab/audit").json()[0]
+    assert event["decision"] == "denied"
+    assert event["discovery_run_id"] == response.json()["id"]
+
+
+def test_lab_saturation_denial_is_retained(
+    client, dockyard_id, add_scope, monkeypatch, runner_module
+):
+    _enable_lab(monkeypatch)
+    add_scope(dockyard_id, "127.0.0.1")
+    assert _authorize(client, dockyard_id).status_code == 201
+    monkeypatch.setattr(
+        runner_module,
+        "active_run_count",
+        lambda _session: get_settings().max_concurrent_runs,
+    )
+
+    response = client.post(
+        f"/api/dockyards/{dockyard_id}/discoveries",
+        json={
+            "target": "127.0.0.1",
+            "adapter": "nmap",
+            "profile": "lab_extended_service_discovery",
+        },
+    )
+
+    assert response.status_code == 403
+    assert "in flight" in response.json()["decision_reason"]
+    event = client.get(f"/api/dockyards/{dockyard_id}/lab/audit").json()[0]
+    assert event["decision"] == "denied"
+    assert event["discovery_run_id"] == response.json()["id"]
+
+
+def test_execution_refuses_when_a_name_changes_to_multiple_hosts(
+    client, dockyard_id, add_scope, monkeypatch, runner_module
+):
+    from app.discovery.nmap import NmapAdapter
+
+    _enable_lab(monkeypatch)
+    add_scope(dockyard_id, "app.lab.local")
+    assert _authorize(client, dockyard_id).status_code == 201
+    resolutions = iter(
+        (("192.0.2.10",), ("192.0.2.10", "192.0.2.11"))
+    )
+    monkeypatch.setattr(runner_module, "system_resolver", lambda _hostname: next(resolutions))
+    monkeypatch.setattr(runner_module, "submit_run", lambda _run_id: None)
+    created = client.post(
+        f"/api/dockyards/{dockyard_id}/discoveries",
+        json={
+            "target": "app.lab.local",
+            "adapter": "nmap",
+            "profile": "lab_extended_service_discovery",
+        },
+    ).json()
+
+    def should_not_run(*_args, **_kwargs):
+        raise AssertionError("multi-address lab target reached the adapter")
+
+    monkeypatch.setattr(NmapAdapter, "run", should_not_run)
+    runner_module.execute_run(created["id"])
+
+    run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{created['id']}").json()
+    assert run["status"] == "denied"
+    assert "resolved to 2 addresses" in run["decision_reason"]
+    event = next(
+        item
+        for item in client.get(f"/api/dockyards/{dockyard_id}/lab/audit").json()
+        if item["action"] == "execute"
+    )
+    assert event["decision"] == "denied"
+    assert event["discovery_run_id"] == created["id"]
 
 
 def test_execution_rechecks_revocation_before_adapter_runs(

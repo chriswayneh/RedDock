@@ -49,7 +49,7 @@ def test_phase_0_data_survives_the_phase_1_schema_upgrade(phase_0_database: Path
     import app.main
 
     app.database.initialize_database()
-    with TestClient(app.main.app) as client:
+    with TestClient(app.main.app, base_url="http://localhost") as client:
         dockyards = client.get("/api/dockyards").json()
         assert [dockyard["name"] for dockyard in dockyards] == ["Existing engagement"]
 
@@ -327,7 +327,7 @@ def test_phase_1_data_survives_and_phase_2_runs_on_top_of_it(phase_1_database: P
     import app.main
 
     app.database.initialize_database()
-    with TestClient(app.main.app) as client:
+    with TestClient(app.main.app, base_url="http://localhost") as client:
         assert [row["name"] for row in client.get("/api/dockyards").json()] == [
             "Existing engagement"
         ]

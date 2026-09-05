@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
 from app.config import get_settings
@@ -51,6 +52,11 @@ async def lifespan(_: FastAPI):
 
 settings = get_settings()
 app = FastAPI(title="RedDock Core", version=settings.version, lifespan=lifespan)
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1"],
+    www_redirect=False,
+)
 app.include_router(router)
 
 if STATIC_DIRECTORY.exists():

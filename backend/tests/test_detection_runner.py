@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.detection import registry as detection_registry
 from app.detection import runner as detection_runner
 from app.detection.base import (
@@ -98,6 +99,40 @@ def findings_of(recorder: Recorder) -> list[Finding]:
             .order_by(Finding.id)
         )
     )
+
+
+@pytest.mark.parametrize(
+    ("setting", "kind"),
+    [
+        ("max_detection_assets", "asset"),
+        ("max_detection_services", "service"),
+        ("max_detection_observations", "observation"),
+    ],
+)
+def test_snapshot_overflow_fails_before_detectors_and_preserves_open_findings(
+    endpoint: Recorder,
+    monkeypatch: pytest.MonkeyPatch,
+    setting: str,
+    kind: str,
+):
+    install(monkeypatch, StubDetector())
+    assert detect(endpoint).status == "completed"
+    existing = findings_of(endpoint)[0]
+    original_last_seen = existing.last_seen
+
+    detector = StubDetector(produce=_no_findings)
+    install(monkeypatch, detector)
+    monkeypatch.setattr(get_settings(), setting, 0)
+    run = detect(endpoint)
+
+    endpoint.session.expire_all()
+    retained = endpoint.session.get(Finding, existing.id)
+    assert run.status == "failed"
+    assert f"{kind} safety limit" in run.error
+    assert detector.contexts == []
+    assert retained is not None
+    assert retained.status == "open"
+    assert retained.last_seen == original_last_seen
 
 
 @pytest.fixture()

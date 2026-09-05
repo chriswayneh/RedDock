@@ -23,6 +23,10 @@ from app.detection.base import (
 from app.models import Asset, Observation, Service
 
 
+class SnapshotLimitExceeded(ValueError):
+    """Raised when a complete detection snapshot would exceed a fixed bound."""
+
+
 def build_context(
     session: Session,
     dockyard_id: int,
@@ -32,7 +36,12 @@ def build_context(
 ) -> DetectionContext:
     """Snapshot one Dockyard's recorded state, bounded by the Phase 2 limits."""
     settings = get_settings()
-    assets = _assets(session, dockyard_id, settings.max_detection_assets)
+    assets = _assets(
+        session,
+        dockyard_id,
+        settings.max_detection_assets,
+        settings.max_detection_services,
+    )
     observations = _observations(session, dockyard_id, settings.max_detection_observations)
     return DetectionContext(
         dockyard_id=dockyard_id,
@@ -43,23 +52,42 @@ def build_context(
     )
 
 
-def _assets(session: Session, dockyard_id: int, limit: int) -> tuple[AssetView, ...]:
+def _assets(
+    session: Session,
+    dockyard_id: int,
+    asset_limit: int,
+    service_limit: int,
+) -> tuple[AssetView, ...]:
     rows = list(
         session.scalars(
             select(Asset)
             .where(Asset.dockyard_id == dockyard_id)
             .order_by(Asset.id)
-            .limit(limit)
+            .limit(asset_limit + 1)
         )
     )
+    if len(rows) > asset_limit:
+        raise SnapshotLimitExceeded(
+            f"Detection snapshot exceeds the {asset_limit} asset safety limit"
+        )
     if not rows:
         return ()
 
     services: dict[int, list[ServiceView]] = {}
     asset_ids = [asset.id for asset in rows]
-    for service in session.scalars(
-        select(Service).where(Service.asset_id.in_(asset_ids)).order_by(Service.id)
-    ):
+    service_rows = list(
+        session.scalars(
+            select(Service)
+            .where(Service.asset_id.in_(asset_ids))
+            .order_by(Service.id)
+            .limit(service_limit + 1)
+        )
+    )
+    if len(service_rows) > service_limit:
+        raise SnapshotLimitExceeded(
+            f"Detection snapshot exceeds the {service_limit} service safety limit"
+        )
+    for service in service_rows:
         services.setdefault(service.asset_id, []).append(
             ServiceView(
                 id=service.id,
@@ -103,9 +131,13 @@ def _observations(session: Session, dockyard_id: int, limit: int) -> tuple[Obser
             select(Observation)
             .where(Observation.dockyard_id == dockyard_id)
             .order_by(Observation.id.desc())
-            .limit(limit)
+            .limit(limit + 1)
         )
     )
+    if len(newest) > limit:
+        raise SnapshotLimitExceeded(
+            f"Detection snapshot exceeds the {limit} observation safety limit"
+        )
     return tuple(
         ObservationView(
             id=observation.id,

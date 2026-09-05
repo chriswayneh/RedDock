@@ -37,7 +37,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
 def client(environment: Path) -> Iterator[TestClient]:
     import app.main
 
-    with TestClient(app.main.app) as test_client:
+    with TestClient(app.main.app, base_url="http://localhost") as test_client:
         yield test_client
 
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.config import get_settings
+from app.detection import declarative
 from app.detection.base import DetectionContext, ObservationView
 from app.detection.registry import available_detectors, clear_plugin_cache
 from app.detector_plugins import PluginConfigurationError, load_declarative_detectors
@@ -50,12 +51,14 @@ def observation(
     value: object,
     *,
     observed_at: datetime | None = None,
+    asset_id: int = 5,
+    service_id: int = 7,
 ) -> ObservationView:
     return ObservationView(
         id=observation_id,
         discovery_run_id=3,
-        asset_id=5,
-        service_id=7,
+        asset_id=asset_id,
+        service_id=service_id,
         adapter="nmap",
         observation_type="service_identified",
         summary="A service was identified",
@@ -128,6 +131,37 @@ def test_rule_emits_a_fixed_evidence_linked_finding(tmp_path: Path):
     assert finding.asset_id == 5
     assert finding.service_id == 7
     assert finding.detail["observed"] == "ExampleServer"
+
+
+def test_matching_stops_at_one_over_the_runner_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(get_settings(), "max_findings_per_detector", 1)
+    write_manifest(tmp_path, manifest())
+    (detector,) = load_declarative_detectors(str(tmp_path))
+    calls = 0
+    original = declarative._finding
+
+    def counted_finding(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(declarative, "_finding", counted_finding)
+    produced = detector.detect(
+        DetectionContext(
+            dockyard_id=1,
+            generated_at=datetime.now(UTC),
+            observations=(
+                observation(1, "ExampleServer", asset_id=5, service_id=7),
+                observation(2, "ExampleServer", asset_id=6, service_id=8),
+                observation(3, "ExampleServer", asset_id=9, service_id=10),
+            ),
+        )
+    )
+
+    assert len(produced) == 2
+    assert calls == 2
 
 
 def test_json_boolean_does_not_match_an_integer(tmp_path: Path):

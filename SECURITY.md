@@ -47,7 +47,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 **Lab mode**
 
 - Lab capability requires two independent gates: the deployment owner must enable a process-level switch that the API cannot change, and an operator must create a 5–120 minute authorization for one capability and Dockyard using the exact acknowledgement shown in the Lab console.
-- The current lab profile accepts one host only and uses a fixed TCP connect scan of Nmap's top 1,000 ports with bounded version detection. It still has no scripts, UDP, OS detection, evasion, credential testing, brute force, payload, exploit, or operator-supplied flag.
+- The current lab profile accepts exactly one effective host only, including after hostname resolution, and uses a fixed TCP connect scan of Nmap's top 1,000 ports with bounded version detection. It still has no scripts, UDP, OS detection, evasion, credential testing, brute force, payload, exploit, or operator-supplied flag.
 - RedDock rechecks the deployment switch, active authorization, single-host constraint, and DockGuard immediately before execution. A network target is refused even when it is in ordinary DockGuard scope.
 - Authorization, request, execute, deny, and revoke decisions are append-only audit events. Expiration, supersession, revocation, and denial do not erase history.
 
@@ -58,7 +58,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Built-in detectors are registered explicitly in code. Optional Phase 7 extensions are bounded, deployment-owned JSON rules loaded outside the detection package; they cannot name a module, command, URL, template, target, or tool, and there is no dynamic import, `eval`, or `exec` anywhere in the detection package.
 - The complete plugin set is schema-checked and frozen at startup. Symlinks, path escapes, duplicate JSON keys or IDs, unknown fields, excessive sizes, and IDs outside the `plugin.` namespace fail startup closed. The API and detection evidence expose each manifest's SHA-256; a manifest still requires human review because data can author a misleading claim without executing code.
 - Every finding must cite at least one observation from the snapshot it was drawn from. A finding that cites none, names another Dockyard's data, or carries an unknown severity, confidence, or category is refused, and the detector that produced it is failed as a whole rather than partially trusted.
-- A detector that fails resolves nothing. Not running is never treated as evidence that an issue went away.
+- Detection snapshots fail before detector execution if any asset, service, or observation bound would omit stored state. A detector that fails or exceeds its fixed output bound resolves nothing. Not running is never treated as evidence that an issue went away.
 - Findings are never deleted. An issue that a later run no longer reproduces is marked resolved; an operator may suppress, accept, or reopen one but may not declare it resolved.
 - Ratings are stated conservatively and separately. Severity and confidence are distinct fields, missing hardening headers are reported as `low`, and RedDock produces no risk score, CVSS vector, or aggregate rating because it does not compute one.
 - RedDock downloads no CVE data. Enrichment is off unless an operator supplies a local catalogue, matches only an exact product and version, and never changes a finding's severity, confidence, or status.
@@ -104,6 +104,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - SQLite data and evidence are held in a named volume, not baked into the image.
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
+- Requests are accepted only for the documented `localhost` and `127.0.0.1` Host values, preventing an arbitrary Host from using browser DNS rebinding to reach the loopback API.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.

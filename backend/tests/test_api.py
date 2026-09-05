@@ -15,6 +15,14 @@ def test_health_endpoint(client):
     assert response.json() == {"status": "healthy", "service": "reddock-core"}
 
 
+def test_only_documented_loopback_hosts_reach_the_api(client):
+    for host in ("localhost", "localhost:8080", "127.0.0.1", "127.0.0.1:8080"):
+        assert client.get("/api/health", headers={"Host": host}).status_code == 200
+
+    for host in ("attacker.invalid", "attacker.invalid:8080"):
+        assert client.get("/api/health", headers={"Host": host}).status_code == 400
+
+
 def test_version_endpoint(client):
     response = client.get("/api/version")
     assert response.status_code == 200

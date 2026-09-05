@@ -40,7 +40,7 @@ from app.detection.base import (
     FindingConfidence,
     Severity,
 )
-from app.detection.context import build_context
+from app.detection.context import SnapshotLimitExceeded, build_context
 from app.detection.enrichment import load_enrichment
 from app.detection.fingerprint import fingerprint as compute_fingerprint
 from app.evidence import DETECTION_SCOPE, EVIDENCE_SCHEMA, EvidenceStore
@@ -151,6 +151,12 @@ def execute_run(session: Session, run: DetectionRun) -> DetectionRun:
 
     try:
         return _perform(session, run)
+    except SnapshotLimitExceeded as error:
+        run.status = str(DetectionRunStatus.FAILED)
+        run.error = str(error)[:500]
+        run.completed_at = datetime.now(UTC)
+        session.commit()
+        return run
     except Exception:  # a detection run must not leave the record ambiguous
         logger.exception("Detection run %s failed unexpectedly", run.id)
         run.status = str(DetectionRunStatus.FAILED)

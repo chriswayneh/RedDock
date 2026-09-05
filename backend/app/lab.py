@@ -118,6 +118,29 @@ def check_capability(
     return decision
 
 
+def record_denial(
+    session: Session,
+    dockyard_id: int,
+    capability_id: str,
+    *,
+    action: str,
+    reason: str,
+    discovery_run_id: int | None = None,
+) -> PolicyDecision:
+    """Retain a denial imposed before the ordinary capability check can run."""
+    decision = PolicyDecision(False, reason)
+    _record(
+        session,
+        dockyard_id=dockyard_id,
+        capability_id=capability_id,
+        action=action,
+        decision="denied",
+        reason=reason,
+        discovery_run_id=discovery_run_id,
+    )
+    return decision
+
+
 def revoke_authorization(
     session: Session, dockyard_id: int, authorization_id: int
 ) -> LabAuthorization | None:

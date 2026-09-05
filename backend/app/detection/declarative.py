@@ -51,6 +51,7 @@ class DeclarativeDetector(Detector):
         description: str,
         rules: tuple[DeclarativeRule, ...],
         manifest_sha256: str,
+        finding_limit: int,
     ):
         self.id = detector_id
         self.version = f"{version}+{manifest_sha256[:12]}"
@@ -59,6 +60,7 @@ class DeclarativeDetector(Detector):
         self.rules = tuple(sorted(rules, key=lambda item: item.id))
         self.consumes = tuple(sorted({rule.observation_type for rule in self.rules}))
         self.manifest_sha256 = manifest_sha256
+        self.finding_limit = finding_limit
 
     def detect(self, context: DetectionContext) -> tuple[DetectedFinding, ...]:
         findings: list[DetectedFinding] = []
@@ -68,6 +70,8 @@ class DeclarativeDetector(Detector):
                 if not _scalar_equal(observation.detail.get(rule.detail_key), rule.equals):
                     continue
                 findings.append(_finding(rule, observation))
+                if len(findings) > self.finding_limit:
+                    return tuple(findings)
         return tuple(findings)
 
 
