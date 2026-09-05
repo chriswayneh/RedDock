@@ -12,6 +12,9 @@ import type {
   Health,
   IntelligenceProvider,
   IntelligenceRun,
+  LabAuditEvent,
+  LabAuthorization,
+  LabStatus,
   Observation,
   RedPathGraph,
   ReportRun,
@@ -76,6 +79,25 @@ export const api = {
   health: () => request<Health>("/health"),
   version: () => request<Version>("/version"),
   adapters: () => request<Adapter[]>("/adapters"),
+  labStatus: () => request<LabStatus>("/lab/status"),
+  labAuthorizations: (id: number) =>
+    request<LabAuthorization[]>(`/dockyards/${id}/lab/authorizations`),
+  labAudit: (id: number) => request<LabAuditEvent[]>(`/dockyards/${id}/lab/audit`),
+  authorizeLab: (
+    id: number,
+    capability: string,
+    acknowledgement: string,
+    note: string,
+    durationMinutes: number,
+  ) =>
+    post<LabAuthorization>(`/dockyards/${id}/lab/authorizations`, {
+      capability,
+      acknowledgement,
+      note,
+      duration_minutes: durationMinutes,
+    }),
+  revokeLab: (id: number, authorizationId: number) =>
+    post<LabAuthorization>(`/dockyards/${id}/lab/authorizations/${authorizationId}/revoke`, {}),
 
   dockyards: () => request<Dockyard[]>("/dockyards"),
   dockyard: (id: number) => request<Dockyard>(`/dockyards/${id}`),

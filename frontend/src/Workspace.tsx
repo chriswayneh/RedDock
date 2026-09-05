@@ -356,6 +356,7 @@ function DiscoveryPanel({
   const [busy, setBusy] = useState(false);
 
   const adapter = adapters.find((item) => item.name === adapterName) ?? adapters[0];
+  const selectedProfile = adapter?.profiles.find((item) => item.name === profile);
 
   useEffect(() => {
     setProfile(adapter?.profiles[0]?.name ?? "");
@@ -384,7 +385,7 @@ function DiscoveryPanel({
       return;
     }
     if (!outcome.accepted) {
-      onError(`DockGuard denied this run: ${outcome.run.decision_reason}`);
+      onError(`RedDock denied this run: ${outcome.run.decision_reason}`);
       return;
     }
     onError(null);
@@ -432,13 +433,16 @@ function DiscoveryPanel({
             <select value={profile} onChange={(event) => setProfile(event.target.value)}>
               {adapter?.profiles.map((item) => (
                 <option key={item.name} value={item.name}>
-                  {item.title}
+                  {item.title}{item.requires_lab_authorization ? " — LAB" : ""}
                 </option>
               ))}
             </select>
           </label>
-          <p className="hint">
-            {adapter?.profiles.find((item) => item.name === profile)?.description}
+          <p className={selectedProfile?.requires_lab_authorization ? "hint lab-warning" : "hint"}>
+            {selectedProfile?.description}
+            {selectedProfile?.requires_lab_authorization && (
+              <> This profile also requires deployment opt-in and an active Dockyard lab authorization.</>
+            )}
           </p>
           <div className="button-row">
             <button className="secondary-button" onClick={() => void check()} type="button">

@@ -10,6 +10,7 @@ import {
 } from "./components";
 import { FindingsPanel } from "./Findings";
 import { Intelligence } from "./Intelligence";
+import { Lab } from "./Lab";
 import { RedPath } from "./RedPath";
 import { Reports } from "./Reports";
 import { formatBytes, formatDate } from "./format";
@@ -33,6 +34,7 @@ type Page =
   | "Findings"
   | "RedPath"
   | "Intelligence"
+  | "Lab"
   | "RedLedger"
   | "Reports"
   | "Settings";
@@ -44,12 +46,13 @@ const pages: Page[] = [
   "Findings",
   "RedPath",
   "Intelligence",
+  "Lab",
   "RedLedger",
   "Reports",
   "Settings",
 ];
 
-// Phase 6 adds deterministic reports and portable, hash-verifiable DockPacks.
+// Lab is available only as a policy console; the deployment gate stays outside the API.
 const availablePages = new Set<Page>([
   "Dashboard",
   "Dockyards",
@@ -57,6 +60,7 @@ const availablePages = new Set<Page>([
   "Findings",
   "RedPath",
   "Intelligence",
+  "Lab",
   "RedLedger",
   "Reports",
 ]);
@@ -183,6 +187,7 @@ export function App() {
         {page === "Findings" && <FindingsPage dockyards={dockyards} onError={setError} />}
         {page === "RedPath" && <RedPath dockyards={dockyards} onError={setError} />}
         {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
+        {page === "Lab" && <Lab dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
         {page === "Reports" && <Reports dockyards={dockyards} onError={setError} />}
         {!availablePages.has(page) && <Planned page={page} />}

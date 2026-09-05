@@ -105,7 +105,15 @@ export type EvidenceRecord = {
   created_at: string;
 };
 
-export type AdapterProfile = { name: string; title: string; description: string };
+export type AdapterProfile = {
+  name: string;
+  title: string;
+  description: string;
+  risk: "standard" | "lab";
+  capability: string | null;
+  requires_lab_authorization: boolean;
+  single_host_only: boolean;
+};
 
 export type Adapter = {
   name: string;
@@ -122,6 +130,45 @@ export type Detector = {
   title: string;
   description: string;
   consumes: string[];
+};
+
+export type LabCapability = {
+  id: string;
+  title: string;
+  description: string;
+  risk: "lab";
+  single_host_only: boolean;
+};
+
+export type LabStatus = {
+  deployment_enabled: boolean;
+  acknowledgement: string;
+  max_authorization_minutes: number;
+  capabilities: LabCapability[];
+};
+
+export type LabAuthorization = {
+  id: number;
+  dockyard_id: number;
+  capability: string;
+  status: "active" | "expired" | "revoked" | "superseded" | "denied";
+  acknowledgement: string;
+  note: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+};
+
+export type LabAuditEvent = {
+  id: number;
+  dockyard_id: number;
+  capability: string;
+  action: "authorize" | "request" | "execute" | "revoke";
+  decision: "allowed" | "denied";
+  reason: string;
+  authorization_id: number | null;
+  discovery_run_id: number | null;
+  created_at: string;
 };
 
 export type DetectorOutcome = {
