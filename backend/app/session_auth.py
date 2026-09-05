@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import AuthorizationContext, Role
 from app.models import BrowserSession, Membership, User
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 
 SESSION_LIFETIME = timedelta(hours=8)
 MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP = 8
@@ -94,6 +95,22 @@ def issue_browser_session(
         expires_at=expires_at,
     )
     session.add(record)
+    session.flush()
+    append_security_event(
+        session,
+        organization_id=membership.organization_id,
+        actor=AuthorizationContext(
+            organization_id=membership.organization_id,
+            user_id=membership.user_id,
+            membership_id=membership.id,
+            role=Role(membership.role),
+        ),
+        action=SecurityAction.SESSION_ISSUE,
+        outcome=SecurityOutcome.SUCCESS,
+        target_type="browser_session",
+        target_id=str(record.id),
+        reason_code="session_created",
+    )
     session.commit()
     session.refresh(record)
     return IssuedSession(
@@ -157,16 +174,39 @@ def revoke_browser_session(
     if not _valid_token(token):
         return False
     revoked_at = _as_utc(now or _now())
-    result = session.execute(
-        update(BrowserSession)
-        .where(
-            BrowserSession.token_hash == _digest(token),
-            BrowserSession.revoked_at.is_(None),
+    row = session.execute(
+        select(BrowserSession, Membership)
+        .join(Membership, Membership.id == BrowserSession.membership_id)
+        .where(BrowserSession.token_hash == _digest(token))
+        .with_for_update(of=BrowserSession)
+    ).one_or_none()
+    if row is None or row[0].revoked_at is not None:
+        return False
+    browser_session, membership = row
+    browser_session.revoked_at = revoked_at
+    try:
+        role = Role(membership.role)
+    except ValueError:
+        actor = None
+    else:
+        actor = AuthorizationContext(
+            organization_id=membership.organization_id,
+            user_id=membership.user_id,
+            membership_id=membership.id,
+            role=role,
         )
-        .values(revoked_at=revoked_at)
+    append_security_event(
+        session,
+        organization_id=membership.organization_id,
+        actor=actor,
+        action=SecurityAction.SESSION_REVOKE,
+        outcome=SecurityOutcome.SUCCESS,
+        target_type="browser_session",
+        target_id=str(browser_session.id),
+        reason_code="session_logout",
     )
     session.commit()
-    return result.rowcount == 1
+    return True
 
 
 def revoke_membership_sessions(

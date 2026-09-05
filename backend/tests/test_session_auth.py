@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.models import BrowserSession, Membership, User
+from app.security_audit import list_security_events
 from app.session_auth import (
     MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP,
     SESSION_LIFETIME,
@@ -96,6 +97,10 @@ def test_logout_revocation_is_hash_only_and_idempotent(session: Session):
     assert revoke_browser_session(session, issued.token, now=NOW)
     assert not revoke_browser_session(session, issued.token, now=NOW)
     assert resolve_browser_session(session, issued.token, now=NOW) is None
+    assert [event.action for event in list_security_events(session, 1)] == [
+        "session.revoke",
+        "session.issue",
+    ]
 
 
 def test_membership_revocation_invalidates_all_of_its_sessions(session: Session):

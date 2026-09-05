@@ -418,7 +418,8 @@ idempotently, revoke every session for a membership after an access change, and
 purge only expired or revoked rows at an explicit retention cutoff. Issuance
 locks the membership and evicts the oldest session above an eight-active-session
 cap, serializing that decision on PostgreSQL. No cookie or login route uses this
-primitive yet.
+primitive yet. Session issuance and self-revocation append their typed audit
+event before the shared transaction commits, preventing an action/event split.
 
 Future security decisions have a separate event foundation. Events are bound to
 one organization, optionally snapshot a verified actor and role, and accept only

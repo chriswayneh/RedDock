@@ -71,7 +71,8 @@ resolves a context only while the session, membership, user, and role remain
 valid. It also supports idempotent single-session logout, membership-wide
 revocation after access changes, an eight-session per-membership cap that evicts
 the oldest active record, and operator-cutoff cleanup. No route issues or accepts
-these tokens yet.
+these tokens yet. Issuance and self-revocation commit their structured security
+events in the same database transaction.
 
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from
