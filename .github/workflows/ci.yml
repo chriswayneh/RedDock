@@ -47,11 +47,23 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker build -t reddock:ci .
-      - run: docker run -d --name reddock -p 8080:8080 reddock:ci
+      - name: Prepare reviewed data-only detector manifest
+        run: |
+          mkdir -p "$RUNNER_TEMP/reddock-detectors"
+          cp plugins/examples/example-server.json.example "$RUNNER_TEMP/reddock-detectors/example-server.json"
+      - name: Start the production image with Phase 7 test gates
+        run: |
+          docker run -d --name reddock -p 8080:8080 \
+            -e REDDOCK_LAB_MODE_ENABLED=true \
+            -e REDDOCK_DETECTOR_PLUGIN_DIR=/etc/reddock/detectors \
+            -v "$RUNNER_TEMP/reddock-detectors:/etc/reddock/detectors:ro" \
+            reddock:ci
       - name: Wait for the health endpoint
         run: for attempt in {1..12}; do curl --fail http://localhost:8080/api/health && exit 0; sleep 2; done; exit 1
-      - name: Phase 1 discovery smoke test
-        # Scans the container's own loopback interface only; no external host is contacted.
+      - name: Full product smoke test
+        # Both discovery profiles scan the container's own loopback only.
+        env:
+          REDDOCK_EXPECT_PLUGIN: "true"
         run: python3 scripts/smoke_test.py
       - if: always()
         run: docker logs reddock

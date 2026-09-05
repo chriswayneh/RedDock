@@ -11,13 +11,19 @@ Usage: python scripts/smoke_test.py [base-url]
 
 import json
 from hashlib import sha256
+from io import BytesIO
+import os
 import sys
 import time
 import urllib.error
 import urllib.request
+from zipfile import ZipFile
 
 TIMEOUT = 10
 RUN_DEADLINE = 240
+LAB_ACKNOWLEDGEMENT = (
+    "I confirm this Dockyard is an isolated lab that I am authorized to test."
+)
 
 
 def call(
@@ -152,11 +158,12 @@ def main(base: str) -> None:
     check("repeat discovery did not duplicate assets", len(repeated) == len(assets))
 
     print("\nPhase 1 discovery verified.\n")
+    lab_event_minimum = lab_checks(base, dockyard_id)
     findings = detection_checks(base, dockyard_id)
     validation_checks(base, dockyard_id, findings)
     correlation_checks(base, dockyard_id)
     intelligence_checks(base, dockyard_id)
-    reporting_checks(base, dockyard_id)
+    reporting_checks(base, dockyard_id, lab_event_minimum)
     print("\nSmoke test passed.")
 
 
@@ -191,6 +198,17 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
 
     status, detectors = call(base, "GET", "/api/detectors")
     check("detectors advertised", status == 200 and len(detectors) >= 1, len(detectors))
+    check(
+        "detector provenance is published",
+        all(item["source"] and item["execution"] == "passive" for item in detectors),
+    )
+    if os.getenv("REDDOCK_EXPECT_PLUGIN", "").lower() == "true":
+        plugins = [item for item in detectors if item["source"] == "declarative"]
+        check(
+            "reviewed manifest loaded with SHA-256 provenance",
+            len(plugins) == 1 and len(plugins[0]["manifest_sha256"]) == 64,
+            [item["id"] for item in plugins],
+        )
 
     status, run = call(base, "POST", f"/api/dockyards/{dockyard_id}/detections", {})
     check(
@@ -263,6 +281,77 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
         refused["detail"][0]["msg"],
     )
     return findings
+
+
+def lab_checks(base: str, dockyard_id: int) -> int:
+    """Phase 7: two lab gates, fixed loopback execution, and policy audit."""
+    status, capability = call(base, "GET", "/api/lab/status")
+    check("lab capability boundary is advertised", status == 200 and capability["capabilities"])
+    authorization_body = {
+        "capability": "discovery.nmap.extended-service",
+        "acknowledgement": LAB_ACKNOWLEDGEMENT,
+        "note": "CI-authorized container loopback only",
+        "duration_minutes": 5,
+    }
+    status, authorization = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/lab/authorizations",
+        authorization_body,
+    )
+    if not capability["deployment_enabled"]:
+        check(
+            "closed deployment gate refuses lab authorization",
+            status == 403 and authorization["detail"],
+            authorization["detail"],
+        )
+        return 1
+    check(
+        "temporary Dockyard lab authorization created",
+        status == 201 and authorization["status"] == "active",
+        authorization,
+    )
+
+    status, run = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/discoveries",
+        {
+            "target": "127.0.0.1",
+            "adapter": "nmap",
+            "profile": "lab_extended_service_discovery",
+        },
+    )
+    check("lab discovery accepted for one scoped host", status == 202, run)
+    wait_for_runs(base, dockyard_id)
+    _, runs = call(base, "GET", f"/api/dockyards/{dockyard_id}/discoveries")
+    completed = next(item for item in runs if item["id"] == run["id"])
+    check(
+        "fixed lab discovery completed on container loopback",
+        completed["status"] == "completed",
+        completed.get("error") or "",
+    )
+
+    _, audit = call(base, "GET", f"/api/dockyards/{dockyard_id}/lab/audit")
+    check(
+        "lab request and execution decisions are audited",
+        any(item["action"] == "request" and item["decision"] == "allowed" for item in audit)
+        and any(
+            item["action"] == "execute"
+            and item["decision"] == "allowed"
+            and item["discovery_run_id"] == run["id"]
+            for item in audit
+        ),
+        [(item["action"], item["decision"]) for item in audit],
+    )
+    status, revoked = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/lab/authorizations/{authorization['id']}/revoke",
+        {},
+    )
+    check("lab authorization revoked after use", status == 200 and revoked["status"] == "revoked")
+    return 4
 
 
 def validation_checks(base: str, dockyard_id: int, findings: list[dict]) -> None:
@@ -377,8 +466,8 @@ def intelligence_checks(base: str, dockyard_id: int) -> None:
     )
 
 
-def reporting_checks(base: str, dockyard_id: int) -> None:
-    """Phase 6: reports are bounded, reproducible exports of retained evidence."""
+def reporting_checks(base: str, dockyard_id: int, lab_event_minimum: int) -> None:
+    """Phases 6–7: evidence and lab policy export reproducibly."""
     status, rejected = call(
         base,
         "POST",
@@ -410,6 +499,13 @@ def reporting_checks(base: str, dockyard_id: int) -> None:
         first["source_counts"]["evidence_files"] > 0,
         first["source_counts"],
     )
+    check(
+        "report snapshot includes the lab policy ledger",
+        first["report_schema"] == "reddock.reporting/2"
+        and first["source_counts"]["lab_authorizations"] >= 1
+        and first["source_counts"]["lab_audit_events"] >= lab_event_minimum,
+        first["source_counts"],
+    )
 
     status, manifest = call(
         base, "GET", f"/api/dockyards/{dockyard_id}/reports/{first['id']}/manifest"
@@ -431,6 +527,16 @@ def reporting_checks(base: str, dockyard_id: int) -> None:
         and package.startswith(b"PK")
         and sha256(package).hexdigest() == first["dockpack_sha256"],
         f"{len(package)} bytes",
+    )
+    with ZipFile(BytesIO(package)) as archive:
+        snapshot = json.loads(archive.read("reports/technical.json"))
+        technical = archive.read("reports/technical.md").decode()
+    check(
+        "DockPack carries bounded lab authorization and decision history",
+        snapshot["schema"] == "reddock.reporting/2"
+        and len(snapshot["lab"]["authorizations"]) >= 1
+        and len(snapshot["lab"]["audit_events"]) >= lab_event_minimum
+        and "## Lab authorization and policy audit" in technical,
     )
 
     status, second = call(base, "POST", f"/api/dockyards/{dockyard_id}/reports", {})

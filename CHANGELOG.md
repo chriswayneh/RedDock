@@ -37,6 +37,9 @@ All notable changes to RedDock are documented here.
   registry, API provenance, lab-policy, and complete regression coverage
 - Frontend lab authorization/revocation and detector provenance coverage, plus
   browser verification against the rebuilt production container
+- CI now boots the production image with a read-only reviewed manifest and the
+  lab gate, executes the fixed lab profile against container loopback only,
+  revokes the grant, and verifies the policy ledger inside the downloaded DockPack
 
 ## [0.7.0] — Phase 6 Reporting
 
