@@ -9,6 +9,7 @@ import {
   StatusPill,
 } from "./components";
 import { FindingsPanel } from "./Findings";
+import { Intelligence } from "./Intelligence";
 import { RedPath } from "./RedPath";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
@@ -30,6 +31,7 @@ type Page =
   | "Assets"
   | "Findings"
   | "RedPath"
+  | "Intelligence"
   | "RedLedger"
   | "Reports"
   | "Settings";
@@ -40,18 +42,20 @@ const pages: Page[] = [
   "Assets",
   "Findings",
   "RedPath",
+  "Intelligence",
   "RedLedger",
   "Reports",
   "Settings",
 ];
 
-// Phase 4 adds evidence-linked correlation and RedPath; reporting remains planned.
+// Phase 5 adds reviewable, approval-gated intelligence; reporting remains planned.
 const availablePages = new Set<Page>([
   "Dashboard",
   "Dockyards",
   "Assets",
   "Findings",
   "RedPath",
+  "Intelligence",
   "RedLedger",
 ]);
 
@@ -145,7 +149,7 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 4 — Correlation").toUpperCase()}
+            {(version?.phase ?? "Phase 5 — Intelligence").toUpperCase()}
           </span>
         </header>
         {error && (
@@ -176,6 +180,7 @@ export function App() {
         {page === "Assets" && <AssetsPage dockyards={dockyards} onError={setError} />}
         {page === "Findings" && <FindingsPage dockyards={dockyards} onError={setError} />}
         {page === "RedPath" && <RedPath dockyards={dockyards} onError={setError} />}
+        {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
         {!availablePages.has(page) && <Planned page={page} />}
       </main>

@@ -12,6 +12,7 @@ app/detection/      detector contract, detectors, registry, enrichment, and run 
 app/findings.py     finding persistence, deduplication, and lifecycle rules
 app/validation/     approval-gated, fixed HTTP-origin validation orchestration
 app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath assembly
+app/intelligence/   approval-gated, provider-neutral advice over reviewed evidence packets
 app/evidence.py     hashed evidence storage
 ```
 
@@ -32,3 +33,9 @@ Correlation is passive too. It accepts no target or options and relates only
 stored records with exact identifiers and retained evidence hashes. RedPath
 renders those relationships and their explanations; it does not infer an attack
 path, exploitability, causation, or aggregate risk.
+
+Intelligence is optional and advice-only. Creating a run stores the exact
+evidence-linked packet without contacting a provider. A separate approval note
+sends that reviewed packet to the process-configured OpenAI-compatible endpoint;
+the provider response must match a strict schema and may cite only findings and
+hashes in the packet. It receives no tools and cannot change RedDock state.

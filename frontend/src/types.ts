@@ -297,3 +297,69 @@ export type FindingDetail = Finding & {
   evidence: FindingEvidence[];
   validations: ValidationRun[];
 };
+
+export type IntelligenceProvider = {
+  available: boolean;
+  provider: string | null;
+  model: string | null;
+  destination: string | null;
+  sends_data_external: boolean;
+  reason: string | null;
+};
+
+export type IntelligencePacket = {
+  schema: string;
+  purpose: string;
+  constraints: string[];
+  dockyard_id: number;
+  correlation_run_id: number;
+  findings: Array<{
+    id: number;
+    rule_id: string;
+    title: string;
+    description: string;
+    remediation: string | null;
+    severity: string;
+    confidence: string;
+    status: string;
+    asset_id: number | null;
+    service_id: number | null;
+    evidence_sha256: string[];
+  }>;
+};
+
+export type IntelligenceAdvice = {
+  summary: string;
+  priorities: Array<{
+    finding_id: number;
+    priority: string;
+    rationale: string;
+    remediation_steps: string[];
+    evidence_sha256: string[];
+  }>;
+  limitations: string[];
+};
+
+export type IntelligenceRun = {
+  id: number;
+  dockyard_id: number;
+  correlation_run_id: number;
+  status: string;
+  provider: string;
+  model: string;
+  destination: string;
+  sends_data_external: boolean;
+  prompt_version: string;
+  approval_note: string | null;
+  input: IntelligencePacket;
+  output: IntelligenceAdvice | null;
+  input_sha256: string;
+  result_sha256: string | null;
+  metadata_sha256: string | null;
+  evidence_path: string | null;
+  error: string | null;
+  created_at: string;
+  approved_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+};

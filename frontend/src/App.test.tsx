@@ -236,6 +236,60 @@ const redpath = {
   ],
 };
 
+const intelligenceProvider = {
+  available: true,
+  provider: "openai-compatible",
+  model: "local-model",
+  destination: "http://127.0.0.1:11434/v1",
+  sends_data_external: false,
+  reason: null,
+};
+
+const intelligenceRun = {
+  id: 14,
+  dockyard_id: 1,
+  correlation_run_id: 8,
+  status: "pending_approval",
+  provider: "openai-compatible",
+  model: "local-model",
+  destination: "http://127.0.0.1:11434/v1",
+  sends_data_external: false,
+  prompt_version: "1",
+  approval_note: null,
+  input: {
+    schema: "reddock.intelligence-input/1",
+    purpose: "advice-only remediation and prioritization",
+    constraints: ["Stored evidence only."],
+    dockyard_id: 1,
+    correlation_run_id: 8,
+    findings: [
+      {
+        id: finding.id,
+        rule_id: finding.rule_id,
+        title: finding.title,
+        description: findingDetail.description,
+        remediation: findingDetail.remediation,
+        severity: finding.severity,
+        confidence: finding.confidence,
+        status: finding.status,
+        asset_id: finding.asset_id,
+        service_id: finding.service_id,
+        evidence_sha256: ["a".repeat(64)],
+      },
+    ],
+  },
+  output: null,
+  input_sha256: "f".repeat(64),
+  result_sha256: null,
+  metadata_sha256: null,
+  evidence_path: "1/intelligence/14",
+  error: null,
+  created_at: "2026-08-18T12:34:00Z",
+  approved_at: null,
+  started_at: null,
+  completed_at: null,
+};
+
 const allowed = {
   decision: "allowed",
   target: "127.0.0.1",
@@ -266,6 +320,8 @@ type Options = {
   observations?: unknown[];
   validations?: unknown[];
   redpath?: unknown;
+  intelligenceProvider?: unknown;
+  intelligenceRuns?: unknown[];
 };
 
 type Calls = {
@@ -275,6 +331,8 @@ type Calls = {
   validationRequest: ReturnType<typeof vi.fn>;
   validationApproval: ReturnType<typeof vi.fn>;
   correlation: ReturnType<typeof vi.fn>;
+  intelligenceCreate: ReturnType<typeof vi.fn>;
+  intelligenceApproval: ReturnType<typeof vi.fn>;
 };
 
 function stubApi({
@@ -285,6 +343,15 @@ function stubApi({
   observations = [],
   validations = [],
   redpath: redpathResponse = { run: null, nodes: [], edges: [], mappings: [] },
+  intelligenceProvider: providerResponse = {
+    available: false,
+    provider: null,
+    model: null,
+    destination: null,
+    sends_data_external: false,
+    reason: "Configure a model provider.",
+  },
+  intelligenceRuns = [],
 }: Options = {}): Calls {
   const calls: Calls = {
     discovery: vi.fn(),
@@ -293,6 +360,8 @@ function stubApi({
     validationRequest: vi.fn(),
     validationApproval: vi.fn(),
     correlation: vi.fn(),
+    intelligenceCreate: vi.fn(),
+    intelligenceApproval: vi.fn(),
   };
   vi.stubGlobal(
     "fetch",
@@ -304,7 +373,7 @@ function stubApi({
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
-        return json({ name: "RedDock", version: "0.5.0", phase: "Phase 4 — Correlation" });
+        return json({ name: "RedDock", version: "0.6.0", phase: "Phase 5 — Intelligence" });
       if (path.endsWith("/adapters")) return json(adapters);
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);
@@ -314,6 +383,38 @@ function stubApi({
       if (path.endsWith("/observations")) return json(observations);
       if (path.endsWith("/evidence")) return json([]);
       if (path.endsWith("/redpath")) return json(redpathResponse);
+      if (path.endsWith("/intelligence/provider")) return json(providerResponse);
+      if (/\/intelligence\/\d+\/approve$/.test(path) && init?.method === "POST") {
+        calls.intelligenceApproval(JSON.parse(String(init.body)));
+        return json({
+          ...intelligenceRun,
+          status: "completed",
+          approval_note: JSON.parse(String(init.body)).note,
+          output: {
+            summary: "Review this finding first.",
+            priorities: [
+              {
+                finding_id: finding.id,
+                priority: "high",
+                rationale: "The evidence supports review.",
+                remediation_steps: ["Apply the documented remediation."],
+                evidence_sha256: ["a".repeat(64)],
+              },
+            ],
+            limitations: ["Stored evidence only."],
+          },
+          result_sha256: "1".repeat(64),
+          metadata_sha256: "2".repeat(64),
+          completed_at: "2026-08-18T12:35:00Z",
+        });
+      }
+      if (path.endsWith("/intelligence")) {
+        if (init?.method === "POST") {
+          calls.intelligenceCreate(JSON.parse(String(init.body)));
+          return json(intelligenceRun, 201);
+        }
+        return json(intelligenceRuns);
+      }
       if (path.endsWith("/correlations")) {
         if (init?.method === "POST") {
           calls.correlation(JSON.parse(String(init.body)));
@@ -390,7 +491,7 @@ describe("RedDock application", () => {
   it("shows healthy status and the current phase", async () => {
     render(<App />);
     expect(await screen.findByText("Healthy")).toBeInTheDocument();
-    expect(screen.getByText("PHASE 4 — CORRELATION")).toBeInTheDocument();
+    expect(screen.getByText("PHASE 5 — INTELLIGENCE")).toBeInTheDocument();
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
@@ -699,5 +800,77 @@ describe("Phase 3 validation", () => {
         note: "Confirm this authorized recheck.",
       }),
     );
+  });
+});
+
+describe("Phase 5 intelligence", () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("creates a review packet without sending it to the provider", async () => {
+    const calls = stubApi({ intelligenceProvider });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: "Intelligence" })[0]);
+
+    expect(await screen.findByText("local-model")).toBeInTheDocument();
+    expect(screen.getByText("Local")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Create intelligence packet" }));
+
+    await waitFor(() => expect(calls.intelligenceCreate).toHaveBeenCalledWith({}));
+    expect(calls.intelligenceApproval).not.toHaveBeenCalled();
+  });
+
+  it("requires an approval note before sending the reviewed packet", async () => {
+    const calls = stubApi({ intelligenceProvider, intelligenceRuns: [intelligenceRun] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: "Intelligence" })[0]);
+
+    const reviewPacket = await screen.findByText("Review exact provider packet");
+    const approve = screen.getByRole("button", { name: "Approve and send to local-model" });
+    expect(approve).toBeDisabled();
+    expect(calls.intelligenceApproval).not.toHaveBeenCalled();
+
+    await user.type(
+      screen.getByLabelText("Approval note for intelligence 14"),
+      "Send this reviewed packet to the configured local model.",
+    );
+    expect(approve).toBeDisabled();
+    await user.click(reviewPacket);
+    expect(approve).toBeEnabled();
+    await user.click(approve);
+
+    await waitFor(() =>
+      expect(calls.intelligenceApproval).toHaveBeenCalledWith({
+        note: "Send this reviewed packet to the configured local model.",
+      }),
+    );
+  });
+
+  it("refuses a stale packet that does not match the selected Dockyard", async () => {
+    const calls = stubApi({ intelligenceProvider, intelligenceRuns: [intelligenceRun] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: "Intelligence" })[0]);
+    await screen.findByText("Review exact provider packet");
+
+    await user.selectOptions(screen.getByLabelText("Dockyard"), "2");
+    await user.click(await screen.findByText("Review exact provider packet"));
+    await user.type(
+      screen.getByLabelText("Approval note for intelligence 14"),
+      "This packet should not be sent.",
+    );
+    await user.click(screen.getByRole("button", { name: "Approve and send to local-model" }));
+
+    expect(calls.intelligenceApproval).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/does not belong to the selected Dockyard/),
+    ).toBeInTheDocument();
   });
 });

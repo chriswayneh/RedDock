@@ -16,3 +16,26 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 @media (max-width: 800px) { .inline-form { grid-template-columns: 1fr; }.workspace-header { flex-direction: column; }.workspace-counts { text-align: left; grid-auto-flow: column; justify-content: start; gap: 16px; } }
 .compact-metrics { margin-top: 22px; }.redpath-canvas-wrap { overflow: auto; border: 1px solid #30363d; border-radius: 9px; background: radial-gradient(circle at 30% 20%, #1d232d, #0d1117 70%); }.redpath-canvas { display: block; width: 100%; min-width: 760px; max-height: 720px; }.redpath-line { stroke: #596574; stroke-width: 2; opacity: .75; }.redpath-line.asset_relationship { stroke: #58a6ff; stroke-width: 3; }.redpath-line.finding_correlation { stroke: #d29922; stroke-dasharray: 7 5; }.redpath-node { fill: #161b22; stroke: #596574; stroke-width: 1.5; }.redpath-node.asset { stroke: #58a6ff; }.redpath-node.finding { stroke: #d7263d; }.redpath-node-title { fill: #f0f3f6; font-size: 12px; font-weight: 700; }.redpath-node-detail { fill: #8b949e; font-size: 10px; }.redpath-details-grid { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(0, 1.25fr); gap: 20px; margin-top: 20px; }.relationship-list { display: grid; gap: 7px; max-height: 430px; overflow: auto; }.relationship-row { display: grid; gap: 5px; padding: 12px; border: 1px solid #30363d; border-radius: 7px; background: #0d1117; color: #f0f3f6; text-align: left; }.relationship-row:hover, .relationship-row.selected { border-color: #d7263d; background: #251419; }.relationship-row strong { text-transform: capitalize; }.relationship-row small { color: #8b949e; overflow-wrap: anywhere; }.relationship-detail p { color: #c9d1d9; line-height: 1.55; }.relationship-detail dl { display: grid; gap: 16px; margin: 24px 0 0; }.relationship-detail dt { color: #8b949e; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.relationship-detail dd { margin: 6px 0 0; overflow-wrap: anywhere; }.block-hash { display: block; margin-top: 5px; }.redpath-mappings { margin-top: 20px; }
 @media (max-width: 860px) { .redpath-details-grid { grid-template-columns: 1fr; } }
+.intelligence-packet,
+.intelligence-result {
+  border-top: 1px solid var(--line);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.intelligence-packet label {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.packet-preview {
+  background: #101317;
+  border-radius: 6px;
+  color: #dce4ec;
+  max-height: 28rem;
+  overflow: auto;
+  padding: 1rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

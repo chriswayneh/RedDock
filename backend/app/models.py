@@ -512,3 +512,40 @@ class FrameworkMapping(Base):
     mapping_version: Mapped[str] = mapped_column(String(16), nullable=False)
     evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IntelligenceRun(Base):
+    """One immutable, approval-gated model-analysis exchange.
+
+    The retained input is exactly what an approved provider receives. Output is
+    advice only and has no relationship that could mutate findings or actions.
+    """
+
+    __tablename__ = "intelligence_runs"
+    __table_args__ = (Index("ix_intelligence_dockyard_status", "dockyard_id", "status"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dockyard_id: Mapped[int] = mapped_column(
+        ForeignKey("dockyards.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    correlation_run_id: Mapped[int] = mapped_column(
+        ForeignKey("correlation_runs.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    provider: Mapped[str] = mapped_column(String(48), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    destination: Mapped[str] = mapped_column(String(500), nullable=False)
+    sends_data_external: Mapped[bool] = mapped_column(nullable=False)
+    prompt_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    approval_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    input: Mapped[dict] = mapped_column(JSON, nullable=False)
+    output: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    input_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    result_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    evidence_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

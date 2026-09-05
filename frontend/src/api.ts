@@ -10,6 +10,8 @@ import type {
   Finding,
   FindingDetail,
   Health,
+  IntelligenceProvider,
+  IntelligenceRun,
   Observation,
   RedPathGraph,
   ScopeEntry,
@@ -94,6 +96,15 @@ export const api = {
   /** Correlation reads stored state only and accepts no selectors or weights. */
   startCorrelation: (id: number) => post<CorrelationRun>(`/dockyards/${id}/correlations`, {}),
   redpath: (id: number) => request<RedPathGraph>(`/dockyards/${id}/redpath`),
+
+  intelligenceProvider: () => request<IntelligenceProvider>("/intelligence/provider"),
+  intelligenceRuns: (id: number) =>
+    request<IntelligenceRun[]>(`/dockyards/${id}/intelligence`),
+  /** Packet creation contacts nothing and accepts no prompt, target, or provider option. */
+  createIntelligence: (id: number) =>
+    post<IntelligenceRun>(`/dockyards/${id}/intelligence`, {}),
+  approveIntelligence: (id: number, runId: number, note: string) =>
+    post<IntelligenceRun>(`/dockyards/${id}/intelligence/${runId}/approve`, { note }),
 
   findings: (id: number, filters: { severity?: string; status?: string } = {}) =>
     request<Finding[]>(`/dockyards/${id}/findings${query(filters)}`),

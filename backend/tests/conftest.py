@@ -12,6 +12,8 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
     """Point RedDock at a throwaway database and evidence root."""
     monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    for name in ("REDDOCK_LLM_BASE_URL", "REDDOCK_LLM_MODEL", "REDDOCK_LLM_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     # Modules read settings at import time; isolate after changing the environment.
     import app.config
 

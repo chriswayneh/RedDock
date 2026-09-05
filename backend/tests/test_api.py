@@ -60,7 +60,7 @@ def test_dockyard_is_persisted_for_a_new_client(client):
 
 
 def test_version_reports_the_current_phase(client):
-    assert client.get("/api/version").json()["phase"].startswith("Phase 4")
+    assert client.get("/api/version").json()["phase"].startswith("Phase 5")
 
 
 def test_the_application_and_both_packages_report_one_version(client):

@@ -2,6 +2,27 @@
 
 All notable changes to RedDock are documented here.
 
+## [0.6.0] — Phase 5 Intelligence
+
+### Added
+
+- An opt-in OpenAI-compatible provider boundary for local or cloud remediation and prioritization advice
+- A two-step workflow that freezes, displays, retains, and hashes the exact stored-data packet before any provider request
+- Separate local approval notes bound to the configured provider, model, destination, and local/external classification
+- Strict structured response validation whose finding IDs and evidence hashes must be present in the approved packet
+- Atomic one-shot approval, retained-packet integrity verification, prompt-version binding, and a true total provider deadline
+- An Intelligence workspace for provider status, packet review, approvals, results, hashes, and limitations
+- Additive `IntelligenceRun` persistence, restart recovery, API and UI coverage, and ADR 0010
+
+### Security
+
+- Intelligence is disabled by default and accepts no API-supplied provider credentials, destinations, prompts, targets, commands, tools, or actions
+- API keys remain process-only; they are never stored, returned to the browser, retained in evidence, or logged
+- External destinations require HTTPS; redirects are refused; total time, raw wire bytes, decoded bytes, response fragments, packet size, findings, and retained runs are independently bounded
+- FastAPI and the development test stack are updated to current compatible release lines so Starlette and pytest include their published security fixes
+- Model output is advice only and cannot modify finding state, trigger validation, widen scope, invoke a tool, or perform remediation
+- Stored strings are treated as untrusted data, and output that cites an unknown finding or evidence hash fails closed
+
 ## [0.5.0] — Phase 4 Correlation
 
 ### Added

@@ -16,6 +16,7 @@ from app.discovery import registry
 from app.discovery import runner as discovery_runner
 from app.dockguard import Evaluation, ScopeRejected, evaluate, system_resolver
 from app.findings import get_finding, list_evidence, list_findings, set_status
+from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
 from app.models import Asset, Dockyard, EvidenceRecord, Finding, FindingEvidence, Service
 from app.schemas import (
@@ -37,6 +38,10 @@ from app.schemas import (
     FindingRead,
     FindingStatusUpdate,
     HealthRead,
+    IntelligenceApprovalCreate,
+    IntelligenceCreate,
+    IntelligenceProviderRead,
+    IntelligenceRunRead,
     ObservationRead,
     ProfileRead,
     RedPathGraphRead,
@@ -388,6 +393,64 @@ def read_redpath(
 ) -> RedPathGraphRead:
     require_dockyard(dockyard_id, session)
     return RedPathGraphRead.model_validate(correlation_runner.graph(session, dockyard_id))
+
+
+@router.get("/intelligence/provider", response_model=IntelligenceProviderRead)
+def read_intelligence_provider() -> IntelligenceProviderRead:
+    """Describe configured capability without ever exposing a credential."""
+    return IntelligenceProviderRead.model_validate(intelligence_runner.provider_status())
+
+
+@router.get(
+    "/dockyards/{dockyard_id}/intelligence", response_model=list[IntelligenceRunRead]
+)
+def read_intelligence_runs(
+    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+) -> list[IntelligenceRunRead]:
+    require_dockyard(dockyard_id, session)
+    return intelligence_runner.list_runs(session, dockyard_id, limit)
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/intelligence",
+    response_model=IntelligenceRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_intelligence_run(
+    dockyard_id: int,
+    payload: IntelligenceCreate,
+    session: Session = Depends(get_session),
+) -> IntelligenceRunRead:
+    """Create and retain the exact packet; do not contact a provider."""
+    require_dockyard(dockyard_id, session)
+    try:
+        return intelligence_runner.create_run(session, dockyard_id)
+    except intelligence_runner.RunRejected as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.post(
+    "/dockyards/{dockyard_id}/intelligence/{run_id}/approve",
+    response_model=IntelligenceRunRead,
+)
+def approve_intelligence_run(
+    dockyard_id: int,
+    run_id: int,
+    payload: IntelligenceApprovalCreate,
+    session: Session = Depends(get_session),
+) -> IntelligenceRunRead:
+    """Approve sending only the retained packet to its bound provider."""
+    require_dockyard(dockyard_id, session)
+    try:
+        return intelligence_runner.approve_run(session, dockyard_id, run_id, payload.note)
+    except intelligence_runner.RunRejected as error:
+        message = str(error)
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if message == "Intelligence run not found"
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=code, detail=message) from error
 
 
 @router.get("/dockyards/{dockyard_id}/validations", response_model=list[ValidationRunRead])

@@ -12,9 +12,11 @@ Browser → React UI (static files) → FastAPI → DockGuard → discovery adap
                                     findings → correlation → RedPath
                                         ↓
                                     validation request → approval → DockGuard → fixed HTTP recheck
+                                        ↓
+                                    intelligence packet → approval → configured model → advice
 ```
 
-Discovery goes through DockGuard to a target and records what it saw. Detection and correlation go the other way: they read stored state and write findings or relationship snapshots without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. The network boundary is therefore limited to discovery and the narrowly bounded recheck.
+Discovery goes through DockGuard to a target and records what it saw. Detection and correlation go the other way: they read stored state and write findings or relationship snapshots without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. Optional intelligence creates an exact stored-data packet first, then a separate approval may send only that packet to the configured model provider. The provider receives no target or tool capability.
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
 
@@ -30,6 +32,7 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/findings.py`: finding persistence, deduplication, and lifecycle rules.
 - `backend/app/validation/`: approval-gated validation orchestration and the fixed HTTP-origin profile.
 - `backend/app/correlation/`: stored-state correlation, fixed CWE mappings, and RedPath assembly.
+- `backend/app/intelligence/`: reviewed evidence packets, provider boundary, structured advice, and run orchestration.
 - `backend/app/evidence.py`: the evidence store.
 - `backend/app/models.py` and `schemas.py`: persistence mappings and input/output contracts.
 - `frontend/src`: presentation and API client only.
@@ -111,6 +114,7 @@ prepare → execute → parse → normalize → artifacts
 - **AssetRelationship** — an exact-address link from a web asset to a host asset, citing the observation, discovery run, evidence record, explanation, confidence, and SHA-256 that support it.
 - **FindingCorrelation** — a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
 - **FrameworkMapping** — a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
+- **IntelligenceRun** — one immutable reviewed packet and, after separate approval, one structured advice result. It binds provider identity, prompt version, approval note, timestamps, packet and result hashes, and failure state to the latest completed correlation snapshot.
 - **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
@@ -184,6 +188,34 @@ supporting SHA-256 value or values. Fixed CWE mappings classify detector rules;
 they are not additional evidence. Neither the runner nor the graph claims
 reachability, exploitability, causation, likelihood, or risk. See [ADR 0009](docs/adr/0009-correlation-asserts-only-evidence-linked-facts.md).
 
+## Intelligence boundary
+
+Intelligence is disabled by default and keeps packet construction separate from
+transmission:
+
+```text
+latest correlation + active evidence-linked findings
+  → freeze exact versioned packet
+  → retain + hash
+  → operator review
+  → separate approval note
+  → provider identity recheck
+  → configured OpenAI-compatible endpoint
+  → strict schema + reference validation
+  → retained, hashed advice
+```
+
+There is no arbitrary prompt or finding selector in the API. The packet contains
+only stored finding facts and evidence hashes under fixed instructions that mark
+all evidence strings as untrusted data. The provider gets no shell, tools,
+credentials, target-selection surface, DockGuard access, or state-changing API.
+Its output may refer only to IDs and hashes in that packet and cannot update the
+source findings. External destinations and every credentialed connection require
+HTTPS; redirects are refused and the packet, response, total duration, finding
+count, and retained run count are bounded. Approval atomically claims one packet,
+and re-verifies its prompt version and retained packet hash before transmission.
+See [ADR 0010](docs/adr/0010-intelligence-is-reviewable-advice.md).
+
 ## Evidence flow (RedLedger)
 
 Every completed run writes through the same store:
@@ -211,6 +243,12 @@ evidence/<dockyard-id>/correlation/<correlation-run-id>/
   metadata.json          input and output counts, method, and artifact hash
   normalized/result.json assets, findings, relationships, mappings, explanations,
                          observation identifiers, and supporting evidence hashes
+
+evidence/<dockyard-id>/intelligence/<intelligence-run-id>/
+  normalized/result.json exact versioned packet reviewed before approval
+  raw/advice.json         schema-validated provider advice
+  metadata.json           provider identity, prompt version, approval, timestamps,
+                          packet and advice hashes
 ```
 
 Paths are built from integer identifiers, a fixed scope name and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Every artifact is SHA-256 hashed. Session material such as cookies is deliberately never retained, and detection has nothing raw to retain because it contacts nothing.
@@ -234,6 +272,9 @@ Portable exports still belong to later phases; the Phase 3 package is retained l
 | API → correlation runner | One Dockyard identifier and an empty body. The runner reads stored state, requires evidence hashes, and has no active capability or operator option. |
 | API → validation runner | One finding identifier and an approval note only; the runner derives the origin from persisted state and has no arbitrary target or tool option. |
 | Validation runner → target | DockGuard must allow the recorded origin at approval time; the only contact is the fixed bounded HTTP probe. |
+| API → intelligence runner | One Dockyard identifier and an empty create body; approval adds only a bounded note. Provider credentials and destinations never come from the API. |
+| Intelligence runner → model provider | Only the exact retained packet after approval and provider-identity recheck. The request has no tools or action channel; external endpoints require HTTPS and redirects are refused. |
+| Model provider → RedDock | Untrusted, size-bounded JSON. Schema, finding IDs, evidence hashes, and duplicates are validated before the advice is retained. |
 | RedDock → disk | Writes confined to the database file and the evidence root. |
 
 ## Concurrency and restart
@@ -247,6 +288,11 @@ edges per snapshot. Startup marks a correlation run left active by a process
 restart as failed instead of leaving its audit state ambiguous.
 
 Validation is synchronous only after approval. It is bounded to 500 retained requests per Dockyard, makes at most the two requests owned by the HTTP probe, and records a failed outcome if the process-level probe cannot complete. There is no background retry or task queue.
+
+Intelligence is synchronous only after approval. A Dockyard may retain 200 runs,
+one may be active at a time, a packet may contain 200 findings and 512 KiB, and a
+provider response is capped at 1 MiB under a fixed 60-second timeout. Startup
+marks an interrupted send failed; there is no retry or background queue.
 
 | Detection limit | Value | Why |
 | --- | --- | --- |
@@ -262,6 +308,10 @@ Database setup is isolated in `backend/app/database.py` and each domain model ow
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
-## AI boundary
+## Deterministic core
 
-AI is still not integrated, and remains optional whenever it arrives. It may propose structured actions, but DockGuard evaluates them exactly as it evaluates an operator's, and it never receives shell access or the ability to widen scope. Nothing in detection is AI-driven: every detector is a deterministic rule over recorded data, and the same input produces the same findings. RedDock must remain useful with no AI provider configured.
+Nothing in discovery, detection, validation, or correlation is AI-driven.
+Detectors remain deterministic rules over recorded data, and the same input
+produces the same findings. Phase 5 intelligence is an optional downstream
+advice view: it cannot become evidence, change a conclusion, invoke a tool, or
+widen scope. RedDock remains fully useful with no model provider configured.

@@ -12,6 +12,7 @@ from app.correlation.runner import recover_interrupted_runs as recover_interrupt
 from app.database import SessionLocal, initialize_database
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
+from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
 
 STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 
@@ -28,12 +29,15 @@ async def lifespan(_: FastAPI):
         interrupted = recover_interrupted_runs(session)
         detections = recover_interrupted_detections(session)
         correlations = recover_interrupted_correlations(session)
+        intelligence = recover_interrupted_intelligence(session)
     if interrupted:
         logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
     if detections:
         logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
     if correlations:
         logger.warning("Marked %s correlation run(s) as interrupted by restart", correlations)
+    if intelligence:
+        logger.warning("Marked %s intelligence run(s) as interrupted by restart", intelligence)
     yield
 
 

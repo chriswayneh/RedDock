@@ -288,6 +288,53 @@ class RedPathGraphRead(BaseModel):
     mappings: list[FrameworkMappingRead]
 
 
+class IntelligenceCreate(BaseModel):
+    """Packet construction has no target, prompt, selector, or provider option."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntelligenceApprovalCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str = Field(min_length=3, max_length=500)
+
+
+class IntelligenceProviderRead(BaseModel):
+    available: bool
+    provider: str | None
+    model: str | None
+    destination: str | None
+    sends_data_external: bool
+    reason: str | None
+
+
+class IntelligenceRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    dockyard_id: int
+    correlation_run_id: int
+    status: str
+    provider: str
+    model: str
+    destination: str
+    sends_data_external: bool
+    prompt_version: str
+    approval_note: str | None
+    input: dict
+    output: dict | None
+    input_sha256: str
+    result_sha256: str | None
+    metadata_sha256: str | None
+    evidence_path: str | None
+    error: str | None
+    created_at: UtcDatetime
+    approved_at: UtcDatetime | None
+    started_at: UtcDatetime | None
+    completed_at: UtcDatetime | None
+
+
 class CveReferenceRead(BaseModel):
     cve_id: str
     source: str

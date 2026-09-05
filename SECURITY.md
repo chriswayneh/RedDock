@@ -8,7 +8,7 @@ RedDock can contact a network target. Scoping a target in RedDock is a statement
 
 ## Product safety model
 
-Every action passes DockGuard before a tool runs, and DockGuard fails closed: anything it cannot positively place inside the Dockyard's authorized scope is denied. AI will never receive unrestricted shell access or the ability to expand target scope.
+Every target action passes DockGuard before a tool runs, and DockGuard fails closed: anything it cannot positively place inside the Dockyard's authorized scope is denied. Optional intelligence receives no tool access at all and cannot expand target scope or change RedDock state.
 
 ## Safety controls
 
@@ -63,12 +63,21 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - Fixed CWE mappings classify existing detector rules only; they never create a finding or alter severity, confidence, status, or validation outcome.
 - RedPath is not attack-path analysis. It does not claim reachability, exploitability, causation, likelihood, or aggregate risk, and correlation output is capped at 5,000 edges per snapshot.
 
+**Intelligence**
+
+- Intelligence is disabled unless an operator supplies a provider base URL and model through process environment variables. Provider credentials are not accepted by the API, stored, returned to the browser, retained as evidence, or logged.
+- Creating a run makes no provider request. It freezes and hashes the exact versioned packet from active, evidence-linked findings in the latest completed correlation; the browser displays that JSON and the destination before a separate approval note can send it.
+- Approval is bound to the provider, model, destination, local/external classification, and prompt version recorded at creation. A configuration or prompt-version change blocks the send. External endpoints require HTTPS; loopback endpoints may use HTTP only without a credential. Redirects are refused, and requests have total-time and response-size bounds.
+- The API accepts no arbitrary prompt, destination, target, command, tool, credential, action, or finding selection. Stored strings are explicitly treated as untrusted data in the fixed prompt.
+- Provider output must match a strict schema and may cite only finding IDs and evidence hashes in the reviewed packet. Unknown or duplicate references fail the run as a whole.
+- Output is retained, hashed advice only. It cannot alter a finding, trigger validation or discovery, invoke a tool, modify scope, or apply remediation. An operator remains responsible for reviewing both the advice and a provider's data-handling terms.
+
 **Evidence and data**
 
 - Evidence paths are built from integer identifiers and a validated artifact name, and each resolved destination is confirmed to be inside its run directory before a write.
 - Raw artifacts are capped at 2 MiB and marked when truncated.
 - Only a small allowlist of response headers is retained; cookies and other session material are never written to evidence.
-- Every stored artifact is SHA-256 hashed and recorded, for detection and correlation runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
+- Every stored artifact is SHA-256 hashed and recorded, for detection, correlation, and intelligence runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
 - Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
 **Runtime**
@@ -77,15 +86,15 @@ Every action passes DockGuard before a tool runs, and DockGuard fails closed: an
 - SQLite data and evidence are held in a named volume, not baked into the image.
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
-- Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation requests are bounded per Dockyard and run synchronously only after approval.
+- Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
 
 ## What RedDock does not do
 
-RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, AI reasoning, automated remediation, or report generation. No operator-supplied script or shell command is executed anywhere in the product.
+RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, autonomous AI action, automated remediation, or report generation. No operator-supplied script or shell command is executed anywhere in the product.
 
-It performs no exploitation or broad active vulnerability testing. Detection and correlation reason over data an earlier, non-invasive discovery already recorded; they send nothing. RedPath visualizes evidence-linked relationships, not attack reachability. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association or CWE classification is never a statement that a service is exploitable.
+It performs no exploitation or broad active vulnerability testing. Detection and correlation reason over data an earlier, non-invasive discovery already recorded; they send nothing. RedPath visualizes evidence-linked relationships, not attack reachability. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. Phase 5 can send a separately approved evidence packet to a configured model for advice, but provides no action channel. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association or CWE classification is never a statement that a service is exploitable.
 
 ## Reporting a vulnerability
 
@@ -95,7 +104,8 @@ Do not open a public issue for a suspected security flaw. When GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.5.x | Yes — current published release |
+| 0.6.x | Yes — current published release |
+| 0.5.x | No — superseded by 0.6.0 |
 | 0.4.x | No — superseded by 0.5.0 |
 | 0.3.x | No — superseded by 0.4.0 |
 | 0.2.x | No — superseded by 0.3.0 |

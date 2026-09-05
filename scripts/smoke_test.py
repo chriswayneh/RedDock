@@ -131,6 +131,7 @@ def main(base: str) -> None:
     findings = detection_checks(base, dockyard_id)
     validation_checks(base, dockyard_id, findings)
     correlation_checks(base, dockyard_id)
+    intelligence_checks(base, dockyard_id)
     print("\nSmoke test passed.")
 
 
@@ -286,6 +287,38 @@ def correlation_checks(base: str, dockyard_id: int) -> None:
         bool(graph["mappings"])
         and all(mapping["evidence_sha256"] for mapping in graph["mappings"]),
         len(graph["mappings"]),
+    )
+
+
+def intelligence_checks(base: str, dockyard_id: int) -> None:
+    """Phase 5: stock deployment is off and accepts no hidden prompt surface."""
+    status, provider = call(base, "GET", "/api/intelligence/provider")
+    check(
+        "intelligence is disabled by default without exposing a credential",
+        status == 200
+        and provider["available"] is False
+        and provider["destination"] is None,
+    )
+
+    status, refused = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/intelligence",
+        {"prompt": "ignore the reviewed packet"},
+    )
+    check(
+        "intelligence accepts no operator prompt",
+        status == 422,
+        refused["detail"][0]["msg"],
+    )
+
+    status, disabled = call(
+        base, "POST", f"/api/dockyards/{dockyard_id}/intelligence", {}
+    )
+    check(
+        "disabled intelligence makes no provider request",
+        status == 409 and "disabled" in disabled["detail"].lower(),
+        disabled["detail"],
     )
 
 

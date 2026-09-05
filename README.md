@@ -11,9 +11,9 @@ Container-native security assessment and validation platform with controlled exe
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-4%20Correlation-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/phase-5%20Intelligence-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.5.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.5.0) — Phase 4 Correlation
+**Current release:** [v0.6.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.6.0) — Phase 5 Intelligence
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -25,7 +25,7 @@ Container-native security assessment and validation platform with controlled exe
 
 RedDock explores how security tooling can become portable, container-native, policy-controlled, reproducible, and evidence-driven instead of a collection of host-specific scripts. It is designed for authorized environments and intentionally grows through small, verified phases.
 
-Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. Evidence proves.** Policy, tools, and evidence are implemented: an explicit authorized scope, a policy boundary called DockGuard that every target must pass, non-invasive discovery adapters that produce hashed evidence, detectors that turn observations into traceable findings, and an approval-gated recheck for a narrow class of HTTP finding. There is still no AI integration, exploitation, credential attack, or payload of any kind.
+Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. Evidence proves.** An explicit authorized scope and DockGuard control every target, non-invasive discovery produces hashed evidence, deterministic detectors turn observations into traceable findings, and validation is limited to an approval-gated recheck of a narrow class of HTTP finding. Optional intelligence can send one reviewed, evidence-linked packet to an operator-configured model for structured advice; it has no tools and cannot act. There is no exploitation, credential attack, or payload of any kind.
 
 ## What You Get
 
@@ -43,8 +43,9 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | Validation | A separately approved, fixed HTTP-origin recheck for eligible open header findings |
 | Correlation | Evidence-linked asset/finding relationships and fixed CWE classifications |
 | RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
+| Intelligence | Optional, approval-gated model advice over an exact packet the operator reviews first |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
-| Evidence | Raw output, normalized result, metadata, and a manifest per validation, each SHA-256 hashed |
+| Evidence | SHA-256-hashed run artifacts, including validation packages and intelligence input/output provenance |
 | Persistence | SQLite and evidence stored in a named Docker volume |
 | Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
 
@@ -90,6 +91,29 @@ Open [http://localhost:8080](http://localhost:8080). The health endpoint is [htt
 
 Stop the application with `docker compose down`. The `reddock-data` volume holds both the database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
+### Optional intelligence provider
+
+Intelligence is off by default. To enable it, provide an OpenAI-compatible API
+base URL and model to the container. For a model server running on the Docker
+host, a Compose override can pass values already present in your shell:
+
+```yaml
+services:
+  reddock:
+    environment:
+      REDDOCK_LLM_BASE_URL: ${REDDOCK_LLM_BASE_URL}
+      REDDOCK_LLM_MODEL: ${REDDOCK_LLM_MODEL}
+      REDDOCK_LLM_API_KEY: ${REDDOCK_LLM_API_KEY:-}
+```
+
+For example, a compatible local endpoint might use
+`REDDOCK_LLM_BASE_URL=http://host.docker.internal:11434/v1`. Any endpoint that
+uses `REDDOCK_LLM_API_KEY`, including a local one, must use HTTPS; cloud
+endpoints must use HTTPS and usually require that key. Keep credentials in
+your shell or secret manager; do not add them to Compose files or commit them.
+The provider receives nothing until you create a packet, inspect its exact JSON
+and destination in the UI, and submit a separate approval note.
+
 ## How It Works
 
 1. Create a Dockyard to represent an authorized engagement workspace.
@@ -100,6 +124,7 @@ Stop the application with `docker compose down`. The `reddock-data` volume holds
 6. Run detection. It contacts nothing: every registered detector reads what the Dockyard already recorded and returns findings, each naming the rule that produced it and the observations it was drawn from.
 7. For an eligible open HTTP security-header finding, request validation. This records intent only. Add an approval note to recheck DockGuard immediately before RedDock sends its fixed, bodyless HTTP probe; the raw response summary, normalized conclusion, metadata, and manifest are retained as a hash-linked evidence package.
 8. Run correlation. RedDock reads only stored assets, findings, observations, and hashes, then renders an explainable RedPath graph and fixed CWE classifications without contacting a target.
+9. Optionally create an intelligence packet from the latest correlation. RedDock stores and hashes the exact JSON without contacting a provider. Review it and the destination, then add a separate approval note to request structured remediation and prioritization advice.
 
 Run the same discovery again and RedDock updates what it already knows rather than duplicating it, while every observation is kept as history. Run detection again and the same issue stays one finding whose `last_seen` moves, while an issue that is no longer reproduced is marked resolved rather than quietly removed.
 
@@ -123,6 +148,12 @@ flowchart TB
   Database --> Correlate[Correlation]
   Correlate --> RedPath[RedPath graph]
   RedPath -.cites.-> Evidence
+  Database --> Packet[Intelligence review packet]
+  Packet --> Approval2[Local approval note]
+  Approval2 --> Model[Configured model provider]
+  Model --> Advice[Structured advice only]
+  Packet --> Evidence
+  Advice --> Evidence
   Findings --> Request[Validation request]
   Request --> Approval[Local approval note]
   Approval --> Guard
@@ -130,7 +161,7 @@ flowchart TB
   Recheck --> Evidence
 ```
 
-Discovery and the tightly bounded validation recheck are the only paths that touch a network, and both pass DockGuard immediately before contact. Detection and correlation read only stored state and never leave the process, which is why they need no scope decision. A validation request alone makes no network contact; it must first receive a separate local approval note.
+Discovery and the tightly bounded validation recheck are the only paths that touch a target, and both pass DockGuard immediately before contact. Detection and correlation read only stored state. Intelligence may contact only the configured model provider after the operator reviews the exact retained packet and records a separate approval. It receives no target or tool capability. A validation or intelligence request alone makes no network contact.
 
 The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency; discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, the adapter and detector boundaries, and the trust boundaries.
 
@@ -151,13 +182,14 @@ The production image builds the React application and serves it from the same Fa
 - **Ratings are not inflated.** Severity and confidence are separate fields, missing hardening headers are `low`, and there is no risk score, CVSS vector, or aggregate rating, because RedDock does not compute one.
 - **CVE data is never invented.** RedDock downloads none. Enrichment is optional, local, exact-match only, and never changes a severity or a status.
 - **Correlation asserts only what evidence supports.** Exact stored identifiers produce relationships; every RedPath edge explains its basis and carries its evidence hash. No edge claims reachability, exploitability, causation, or risk.
+- **Intelligence is a reviewable disclosure, not an agent.** It is disabled by default. The operator sees the exact evidence-linked packet and configured destination before separately approving transmission. The model gets no tools, targets, credentials, commands, or state-changing API, and its structured references must already exist in the packet.
 
 Read [SECURITY.md](SECURITY.md) for the authorized-use policy and the full control list.
 
 ## Repository Structure
 
 ```text
-backend/       FastAPI API, DockGuard, discovery adapters, detectors, evidence, and SQLite persistence
+backend/       FastAPI API, DockGuard, adapters, detectors, intelligence, evidence, and SQLite
 frontend/      React and TypeScript dashboard
 scripts/       Local end-to-end smoke test
 docs/          Architecture decisions and project documentation
@@ -176,6 +208,8 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
+**v0.6.0 delivers Phase 5 — Intelligence:** opt-in local or cloud OpenAI-compatible advice, exact packet review before disclosure, separate approval, provider and prompt-version binding, strict output validation, and hashed input/output provenance. The model receives no tools and cannot change RedDock state.
+
 **v0.5.0 delivers Phase 4 — Correlation:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph.
 
 **v0.4.0 delivered Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
@@ -188,11 +222,18 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next: Phase 5 — Intelligence.** Optional AI analysis remains planned and will be structured, reviewable, and unable to bypass DockGuard. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.6.0: Phase 6 — Reporting.** Technical and executive reports, evidence manifests, and portable DockPack exports remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 
 Contributions are welcome when they preserve the safety model and keep changes small and tested. Start with [CONTRIBUTING.md](CONTRIBUTING.md), and report potential vulnerabilities through [SECURITY.md](SECURITY.md) or GitHub Private Vulnerability Reporting.
+
+## Development Approach
+
+RedDock is human-directed and intentionally uses a mixed-AI engineering
+workflow. Claude Code and OpenAI Codex have both contributed implementation and
+review work; repository source, tests, security controls, and owner review—not
+model output—remain the authority for what ships.
 
 ## License
 

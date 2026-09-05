@@ -14,6 +14,7 @@ to share an identifier cannot share a directory:
     evidence/<dockyard-id>/detection/<detection-run-id>/
     evidence/<dockyard-id>/validation/<validation-run-id>/
     evidence/<dockyard-id>/correlation/<correlation-run-id>/
+    evidence/<dockyard-id>/intelligence/<intelligence-run-id>/
 """
 
 import json
@@ -33,11 +34,18 @@ DISCOVERY_SCOPE = ""
 DETECTION_SCOPE = "detection"
 VALIDATION_SCOPE = "validation"
 CORRELATION_SCOPE = "correlation"
+INTELLIGENCE_SCOPE = "intelligence"
 
 _ARTIFACT_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 #: A closed set, so a scope can never become a path fragment an operator chose.
 _SCOPES = frozenset(
-    {DISCOVERY_SCOPE, DETECTION_SCOPE, VALIDATION_SCOPE, CORRELATION_SCOPE}
+    {
+        DISCOVERY_SCOPE,
+        DETECTION_SCOPE,
+        VALIDATION_SCOPE,
+        CORRELATION_SCOPE,
+        INTELLIGENCE_SCOPE,
+    }
 )
 
 

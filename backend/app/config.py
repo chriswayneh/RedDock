@@ -9,14 +9,21 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.5.0"
-    phase: str = "Phase 4 — Correlation"
+    version: str = "0.6.0"
+    phase: str = "Phase 5 — Intelligence"
     database_url: str = "sqlite:///./data/reddock.db"
     evidence_dir: str = "./data/evidence"
     nmap_path: str | None = None
     # Optional, local, and off unless an operator supplies it. RedDock never
     # downloads CVE data; see app/detection/enrichment.py.
     cve_catalog_path: str | None = None
+    # Phase 5 is disabled unless the operator supplies a trusted process-level
+    # OpenAI-compatible endpoint and model. The API never accepts provider
+    # destinations or credentials.
+    llm_base_url: str | None = None
+    llm_model: str | None = None
+    llm_api_key: str | None = None
+    llm_timeout_seconds: int = 60
 
     # Scope and execution bounds. These are constants rather than environment
     # settings because relaxing them would weaken the exact guarantees
@@ -50,6 +57,12 @@ class Settings(BaseModel):
     max_correlation_findings: int = 2_000
     max_correlation_edges: int = 5_000
 
+    # Intelligence receives a bounded projection of stored, evidence-linked
+    # findings. These constants cannot be relaxed through environment input.
+    max_intelligence_findings: int = 200
+    max_intelligence_input_bytes: int = 512 * 1024
+    max_intelligence_runs_per_dockyard: int = 200
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -62,4 +75,7 @@ def get_settings() -> Settings:
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),
         nmap_path=os.getenv("REDDOCK_NMAP_PATH") or None,
         cve_catalog_path=os.getenv("REDDOCK_CVE_CATALOG") or None,
+        llm_base_url=os.getenv("REDDOCK_LLM_BASE_URL") or None,
+        llm_model=os.getenv("REDDOCK_LLM_MODEL") or None,
+        llm_api_key=os.getenv("REDDOCK_LLM_API_KEY") or None,
     )

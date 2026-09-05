@@ -22,9 +22,9 @@ Controlled non-destructive validation is now limited to one fixed HTTP-origin re
 
 Finding correlation, exact-address asset relationships, fixed CWE mappings, and the RedPath visualization are implemented. Correlation reads stored state only, accepts no target or tuning parameters, and retains a hashed snapshot. Every displayed relationship states its basis and carries the discovery evidence hash or hashes that support it; it does not infer exploitability, reachability, or aggregate risk. Released as v0.5.0.
 
-## Phase 5 — Intelligence
+## Completed — Phase 5: Intelligence
 
-Optional local or cloud LLM analysis for remediation and prioritization. Complete when AI output is structured, reviewable, and never bypasses DockGuard.
+Optional local or cloud OpenAI-compatible analysis now produces remediation and prioritization advice from stored, evidence-linked findings. Creating a run freezes and hashes the exact packet without contacting a provider; a separate approval note is required after review, and provider identity is bound to that approval. Output is schema-checked against the packet's finding IDs and evidence hashes, retained as hashed advice, and cannot change findings, targets, scope, tools, or commands. RedDock remains fully functional with intelligence disabled. Released as v0.6.0.
 
 ## Phase 6 — Reporting
 
