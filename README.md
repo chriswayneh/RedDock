@@ -13,7 +13,7 @@ Container-native security assessment and validation platform with controlled exe
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/phase-4%20Correlation-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.4.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.4.0) — Phase 3 Validation
+**Current release:** [v0.5.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.5.0) — Phase 4 Correlation
 
 [Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
 
@@ -176,7 +176,7 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-**Development head implements Phase 4 — Correlation for v0.5.0:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph. v0.5.0 has not been tagged or published yet.
+**v0.5.0 delivers Phase 4 — Correlation:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph.
 
 **v0.4.0 delivered Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
 
@@ -188,7 +188,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after the v0.5.0 release: Phase 5 — Intelligence.** Optional AI analysis remains planned and will be structured, reviewable, and unable to bypass DockGuard. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next: Phase 5 — Intelligence.** Optional AI analysis remains planned and will be structured, reviewable, and unable to bypass DockGuard. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 

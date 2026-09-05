@@ -2,7 +2,7 @@
 
 All notable changes to RedDock are documented here.
 
-## [Unreleased] — Phase 4 Correlation
+## [0.5.0] — Phase 4 Correlation
 
 ### Added
 
