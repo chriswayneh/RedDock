@@ -97,6 +97,12 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 
 <br><br>
 
+<a href="docs/screenshots/manifest-view.png"><img src="docs/screenshots/manifest-view.png" alt="RedDock readable HTML evidence manifest showing verified file count, total size, digest algorithm, and per-artifact provenance" width="900"></a>
+
+<sub>Manifest view: the evidence manifest is readable and clickable in the app, while the original raw JSON remains available for machine verification.</sub>
+
+<br><br>
+
 <a href="docs/screenshots/swagger.png"><img src="docs/screenshots/swagger.png" alt="RedDock Swagger UI showing the interactive OpenAPI documentation for the reporting endpoints" width="900"></a>
 
 <sub>API explorer: the OpenAPI 3.1 contract is available through the built-in Swagger UI.</sub>
