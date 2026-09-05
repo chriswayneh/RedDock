@@ -2,7 +2,7 @@
 
 ## Completed — Phase 0: Foundation
 
-Containerized application, React UI shell, FastAPI API, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
+Containerized application, React UI shell, FastAPI API, OpenAPI 3.1 schema and Swagger UI explorer, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
 
 ## Completed — Phase 1: Discovery
 
@@ -26,9 +26,9 @@ Finding correlation, exact-address asset relationships, fixed CWE mappings, and 
 
 Optional local or cloud OpenAI-compatible analysis now produces remediation and prioritization advice from stored, evidence-linked findings. Creating a run freezes and hashes the exact packet without contacting a provider; a separate approval note is required after review, and provider identity is bound to that approval. Output is schema-checked against the packet's finding IDs and evidence hashes, retained as hashed advice, and cannot change findings, targets, scope, tools, or commands. RedDock remains fully functional with intelligence disabled. Released as v0.6.0.
 
-## Phase 6 — Reporting
+## Completed — Phase 6: Reporting
 
-Technical and executive reports, evidence manifests, and portable DockPack exports. Complete when reports are reproducible from retained evidence.
+Technical and executive reports, evidence manifests, and portable DockPack exports are implemented. A report freezes one bounded Dockyard snapshot, re-verifies every database-referenced source artifact against its retained SHA-256, and produces deterministic Markdown, JSON, a manifest, and a byte-reproducible ZIP without contacting a target or model. Downloads are hash-checked again before delivery. Released as v0.7.0.
 
 ## Phase 7 — Advanced / Lab
 

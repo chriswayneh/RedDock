@@ -2,6 +2,33 @@
 
 All notable changes to RedDock are documented here.
 
+## [0.7.0] — Phase 6 Reporting
+
+### Added
+
+- Deterministic technical and executive reports generated only from one Dockyard's retained database state and evidence
+- A SHA-256 evidence manifest binding the scope snapshot, finding claims, cited run IDs, and every included discovery, detection, validation, correlation, and completed-intelligence artifact
+- Portable DockPack ZIP exports containing the technical JSON and Markdown report, executive Markdown report, evidence manifest, and verified source artifacts
+- A Reporting workspace for snapshot generation, report history, technical/executive/manifest preview, and DockPack download
+- Additive `ReportRun` persistence, interrupted-run recovery, bounded export settings, API coverage, and ADR 0011
+- Interactive Swagger UI documentation called out in the roadmap and project presentation, with the OpenAPI 3.1 document available at `/openapi.json`
+
+### Security
+
+- Reporting accepts an empty request only: no target, model, prompt, output path, selector, command, URL, credential, or operator-supplied archive name crosses the boundary
+- A snapshot is refused while discovery, detection, validation, or correlation source work is active
+- Every source artifact is resolved beneath RedLedger, re-hashed before packaging, and assigned a fixed portable archive path; missing, changed, escaping, duplicated, or oversized input fails closed
+- Assets, services, findings, finding-evidence links, validation rows, evidence files, retained report runs, and total DockPack bytes are independently bounded before unbounded materialization
+- DockPack members are sorted with fixed timestamps and modes, so unchanged retained state produces byte-identical exports; downloads verify the retained artifact hash again
+- Database inputs are captured under one explicit consistent transaction, and restart recovery removes partial report directories containing sensitive material
+- Stored target and tool strings remain untrusted data and are rendered inside delimiter-safe literal Markdown code spans, including bare URLs and email addresses
+
+### Testing
+
+- Backend coverage for complete hash linkage, byte reproducibility, archive safety, Dockyard isolation, source tampering, missing evidence, active runs, download tampering, and Markdown neutralization
+- Frontend coverage for report generation, previews, manifest display, downloads, empty request bodies, and stale Dockyard response protection
+- The end-to-end Docker smoke test now creates two unchanged report snapshots and verifies identical hashes plus the downloaded DockPack bytes
+
 ## [0.6.0] — Phase 5 Intelligence
 
 ### Added

@@ -14,9 +14,11 @@ Browser → React UI (static files) → FastAPI → DockGuard → discovery adap
                                     validation request → approval → DockGuard → fixed HTTP recheck
                                         ↓
                                     intelligence packet → approval → configured model → advice
+                                        ↓
+                                    reporting snapshot → reports + manifest + DockPack
 ```
 
-Discovery goes through DockGuard to a target and records what it saw. Detection and correlation go the other way: they read stored state and write findings or relationship snapshots without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. Optional intelligence creates an exact stored-data packet first, then a separate approval may send only that packet to the configured model provider. The provider receives no target or tool capability.
+Discovery goes through DockGuard to a target and records what it saw. Detection, correlation, and reporting go the other way: they read stored state and write findings, relationship snapshots, or portable reports without ever reaching a target. Validation begins with a request that records intent only; a separately noted approval rechecks DockGuard and may send one fixed HTTP-origin probe. Optional intelligence creates an exact stored-data packet first, then a separate approval may send only that packet to the configured model provider. The provider receives no target or tool capability. Reporting re-verifies retained artifacts and packages them locally without contacting a target or model.
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. A named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. There is deliberately no reverse proxy, separate frontend service, queue, or remote dependency.
 
@@ -33,6 +35,7 @@ The production image builds the React/Vite application and serves it as static c
 - `backend/app/validation/`: approval-gated validation orchestration and the fixed HTTP-origin profile.
 - `backend/app/correlation/`: stored-state correlation, fixed CWE mappings, and RedPath assembly.
 - `backend/app/intelligence/`: reviewed evidence packets, provider boundary, structured advice, and run orchestration.
+- `backend/app/reporting/`: deterministic snapshot assembly, report rendering, evidence verification, and DockPack packaging.
 - `backend/app/evidence.py`: the evidence store.
 - `backend/app/models.py` and `schemas.py`: persistence mappings and input/output contracts.
 - `frontend/src`: presentation and API client only.
@@ -115,6 +118,7 @@ prepare → execute → parse → normalize → artifacts
 - **FindingCorrelation** — a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
 - **FrameworkMapping** — a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
 - **IntelligenceRun** — one immutable reviewed packet and, after separate approval, one structured advice result. It binds provider identity, prompt version, approval note, timestamps, packet and result hashes, and failure state to the latest completed correlation snapshot.
+- **ReportRun** — one immutable, bounded snapshot of completed retained state. It records source counts and the SHA-256 values of the technical JSON, technical Markdown, executive Markdown, evidence manifest, and DockPack, plus failure and restart state.
 - **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
@@ -216,6 +220,38 @@ count, and retained run count are bounded. Approval atomically claims one packet
 and re-verifies its prompt version and retained packet hash before transmission.
 See [ADR 0010](docs/adr/0010-intelligence-is-reviewable-advice.md).
 
+## Reporting boundary
+
+Reporting accepts an empty request and has no target, source selector, model,
+prompt, network, subprocess, output path, or archive-name surface:
+
+```text
+completed Dockyard state + database-referenced evidence
+  → refuse active source runs
+  → enumerate bounded source artifacts
+  → resolve beneath RedLedger + re-verify every SHA-256
+  → freeze canonical snapshot
+  → render technical + executive reports
+  → build complete evidence manifest
+  → package deterministic DockPack
+  → retain + hash every output
+```
+
+Discovery artifacts come from `EvidenceRecord`; later-phase artifacts come from
+the hashes on their completed run records. Validation manifests must describe
+the exact fixed raw artifact, and only completed intelligence advice joins the
+always-retained reviewed packet. No directory is scanned to discover extra
+files. Missing, changed, duplicated, unsafe, or oversized input fails the whole
+run rather than creating a partial export.
+
+The snapshot excludes reporting history, so creating a report does not change
+the next report's source state. Source queries and evidence verification run
+inside one explicit SQLite transaction, so concurrent mutations wait until the
+snapshot is frozen. JSON is canonical, ZIP members are sorted, and
+timestamps, modes, and compression are fixed. Unchanged retained state produces
+byte-identical output. See [ADR 0011](docs/adr/0011-reporting-is-a-deterministic-snapshot.md)
+and the [DockPack format](docs/DOCKPACK.md).
+
 ## Evidence flow (RedLedger)
 
 Every completed run writes through the same store:
@@ -249,15 +285,22 @@ evidence/<dockyard-id>/intelligence/<intelligence-run-id>/
   raw/advice.json         schema-validated provider advice
   metadata.json           provider identity, prompt version, approval, timestamps,
                           packet and advice hashes
+
+evidence/<dockyard-id>/reporting/<report-run-id>/
+  normalized/result.json canonical technical snapshot used by every report
+  technical.md            evidence-oriented technical report
+  executive.md            bounded summary without an aggregate risk score
+  raw/manifest.json       complete source-artifact membership and SHA-256 values
+  raw/dockpack.zip        deterministic portable package containing all of the above
 ```
 
 Paths are built from integer identifiers, a fixed scope name and a validated artifact name, and the resolved destination is checked to be inside its run directory, so no operator input can direct a write elsewhere. Every artifact is SHA-256 hashed. Session material such as cookies is deliberately never retained, and detection has nothing raw to retain because it contacts nothing.
 
 A finding is therefore checkable end to end. `FindingEvidence` names the observations it was drawn from; each of those names its discovery run and that run's hashed `EvidenceRecord`; the detection run records the hash of the normalized result the finding appears in. Which detector produced it, from what observation, during which run, and which hash verifies it are all answerable without leaving the database.
 
-Detection, validation, and correlation artifact hashes are recorded as columns on their runs rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and keeping the evolution additive avoids relaxing it in place. Unifying them behind one table is the first job of a future versioned migration.
+Detection, validation, correlation, intelligence, and reporting artifact hashes are recorded as columns on their runs rather than as `evidence_records` rows, because that table's `discovery_run_id` is NOT NULL and keeping the evolution additive avoids relaxing it in place. Unifying them behind one table is the first job of a future versioned migration.
 
-Portable exports still belong to later phases; the Phase 3 package is retained locally and is not an export format.
+A DockPack is the Phase 6 portable export. It includes the snapshot, both rendered reports, the evidence manifest, and exactly the verified artifacts referenced by the database. The validation package remains one source inside it rather than a competing export format.
 
 ## Trust boundaries
 
@@ -275,6 +318,9 @@ Portable exports still belong to later phases; the Phase 3 package is retained l
 | API → intelligence runner | One Dockyard identifier and an empty create body; approval adds only a bounded note. Provider credentials and destinations never come from the API. |
 | Intelligence runner → model provider | Only the exact retained packet after approval and provider-identity recheck. The request has no tools or action channel; external endpoints require HTTPS and redirects are refused. |
 | Model provider → RedDock | Untrusted, size-bounded JSON. Schema, finding IDs, evidence hashes, and duplicates are validated before the advice is retained. |
+| API → reporting runner | One Dockyard identifier and an empty body. The runner reads retained state only and accepts no operator-selected path, source, target, or option. |
+| RedLedger → DockPack | Only database-referenced regular files whose resolved paths stay under the evidence root and whose bytes match retained SHA-256 values. Portable member names and total size are bounded. |
+| DockPack → operator | Potentially sensitive engagement data. The archive and its member manifest must be verified and handled under the engagement's access controls. |
 | RedDock → disk | Writes confined to the database file and the evidence root. |
 
 ## Concurrency and restart
@@ -294,6 +340,15 @@ one may be active at a time, a packet may contain 200 findings and 512 KiB, and 
 provider response is capped at 1 MiB under a fixed 60-second timeout. Startup
 marks an interrupted send failed; there is no retry or background queue.
 
+Reporting is synchronous under a single-process creation lock and captures its
+database inputs under one explicit transaction. It refuses a snapshot while
+discovery, detection, validation, or correlation is active, may retain at most
+200 report runs per Dockyard, includes at most 2,000 assets, 20,000 services,
+5,000 findings, 20,000 finding-evidence links, 500 validation rows, and 2,000
+evidence files, and caps a DockPack at 64 MiB. Query and streaming-read bounds
+apply before oversized inputs can be fully materialized. Startup marks an
+interrupted report failed and removes its partial reporting directory.
+
 | Detection limit | Value | Why |
 | --- | --- | --- |
 | Assets per snapshot | 2 000 | A snapshot cannot grow without bound |
@@ -310,8 +365,9 @@ That constraint has already shaped a decision rather than merely being stated: d
 
 ## Deterministic core
 
-Nothing in discovery, detection, validation, or correlation is AI-driven.
+Nothing in discovery, detection, validation, correlation, or reporting is AI-driven.
 Detectors remain deterministic rules over recorded data, and the same input
-produces the same findings. Phase 5 intelligence is an optional downstream
+produces the same findings; the same unchanged retained state produces the same
+report bytes. Phase 5 intelligence is an optional downstream
 advice view: it cannot become evidence, change a conclusion, invoke a tool, or
 widen scope. RedDock remains fully useful with no model provider configured.

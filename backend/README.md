@@ -13,6 +13,7 @@ app/findings.py     finding persistence, deduplication, and lifecycle rules
 app/validation/     approval-gated, fixed HTTP-origin validation orchestration
 app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath assembly
 app/intelligence/   approval-gated, provider-neutral advice over reviewed evidence packets
+app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/evidence.py     hashed evidence storage
 ```
 
@@ -39,3 +40,10 @@ evidence-linked packet without contacting a provider. A separate approval note
 sends that reviewed packet to the process-configured OpenAI-compatible endpoint;
 the provider response must match a strict schema and may cite only findings and
 hashes in the packet. It receives no tools and cannot change RedDock state.
+
+Reporting is passive and deterministic. It accepts an empty request, refuses a
+snapshot while source work is active, and reads only database-referenced
+artifacts beneath RedLedger. Every source hash is re-verified before RedDock
+renders technical and executive Markdown, creates the evidence manifest, and
+packages a portable DockPack. Fixed archive metadata makes unchanged retained
+state byte-reproducible; the package hash is checked again before download.
