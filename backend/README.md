@@ -54,9 +54,11 @@ validation profile, not the future authenticated server mode. See
 [Optional PostgreSQL](../docs/POSTGRESQL.md).
 
 Phase 8 also defines the deny-by-default owner, admin, operator, auditor, and
-viewer permission sets. They are not authentication: the only supported runtime
-mode remains the account-free loopback `local` mode, and requesting `server`
-mode fails startup until OIDC sessions and route enforcement are complete.
+viewer permission sets. Every API method/path is classified as public or bound
+to one named permission, and a test rejects unclassified routes. These controls
+are not authentication: the only supported runtime mode remains the account-free
+loopback `local` mode, and requesting `server` mode fails startup until OIDC
+sessions and permission enforcement are complete.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

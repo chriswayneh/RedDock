@@ -19,6 +19,8 @@ All notable changes to RedDock are documented here.
   session tables, plus non-null organization ownership for every Dockyard
 - A centralized least-privilege role/permission contract with fail-closed
   handling for unknown roles and inactive principals
+- An exhaustive route-permission manifest that fails tests when a new API route
+  lacks an explicit public/protected classification
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
 

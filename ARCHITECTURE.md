@@ -386,7 +386,9 @@ That constraint has already shaped a decision rather than merely being stated: d
 contract for Phase 8. Unknown roles and inactive users or memberships receive no
 authority. The local account-free workflow maps explicitly to the reserved
 organization, user, and owner membership; it is not inferred from a missing
-identity. Server mode remains unavailable, and configuration rejects
+identity. Every API method/path is also classified as one of two public health
+routes or assigned a named permission, and a completeness test fails if a route
+is added without a decision. Server mode remains unavailable, and configuration rejects
 `REDDOCK_DEPLOYMENT_MODE=server`, until sessions, organization-scoped resource
 loading, and permission dependencies are wired to every route. The API remains
 the future enforcement point; UI visibility will never grant authority.

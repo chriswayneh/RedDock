@@ -2,7 +2,9 @@ import pytest
 
 from app.authorization import (
     LOCAL_AUTHORIZATION,
+    PUBLIC_ROUTES,
     ROLE_PERMISSIONS,
+    ROUTE_PERMISSIONS,
     AuthorizationContext,
     AuthorizationDenied,
     Permission,
@@ -38,6 +40,8 @@ def test_roles_follow_the_reviewed_least_privilege_boundaries():
     assert Permission.WORKFLOW_RUN not in auditor
     assert Permission.RAW_EVIDENCE_READ in auditor
     assert Permission.SCOPE_READ in auditor
+    assert Permission.INTELLIGENCE_READ in auditor
+    assert Permission.INTELLIGENCE_READ not in viewer
     assert Permission.MEMBERSHIP_MANAGE not in operator
     assert admin == (auditor | operator | {Permission.MEMBERSHIP_MANAGE})
     assert admin < ROLE_PERMISSIONS[Role.OWNER]
@@ -63,3 +67,48 @@ def test_local_mode_is_explicitly_the_reserved_owner_context():
         LOCAL_AUTHORIZATION.role,
     ) == (1, 1, 1, Role.OWNER)
     assert LOCAL_AUTHORIZATION.allows(Permission.ORGANIZATION_TRANSFER)
+
+
+def test_every_api_route_has_one_explicit_public_or_permission_decision():
+    from app.api import router
+
+    api_routes = {
+        (method, route.path)
+        for route in router.routes
+        for method in (route.methods or set())
+    }
+
+    assert PUBLIC_ROUTES.isdisjoint(ROUTE_PERMISSIONS)
+    assert api_routes == PUBLIC_ROUTES | ROUTE_PERMISSIONS.keys()
+    assert PUBLIC_ROUTES == {("GET", "/api/health"), ("GET", "/api/version")}
+
+
+def test_sensitive_route_classes_have_distinct_permissions():
+    assert (
+        ROUTE_PERMISSIONS[("GET", "/api/dockyards/{dockyard_id}/evidence")]
+        is Permission.RAW_EVIDENCE_READ
+    )
+    assert (
+        ROUTE_PERMISSIONS[("GET", "/api/dockyards/{dockyard_id}/reports/{run_id}/dockpack")]
+        is Permission.REPORT_EXPORT
+    )
+    assert all(
+        permission is Permission.REPORT_EXPORT
+        for (method, path), permission in ROUTE_PERMISSIONS.items()
+        if method == "GET"
+        and any(
+            path.endswith(suffix)
+            for suffix in ("/technical", "/executive", "/manifest", "/dockpack")
+        )
+    )
+    assert (
+        ROUTE_PERMISSIONS[
+            ("POST", "/api/dockyards/{dockyard_id}/intelligence/{run_id}/approve")
+        ]
+        is Permission.INTELLIGENCE_APPROVE
+    )
+    assert all(
+        permission is Permission.LAB_AUTHORIZE
+        for (method, path), permission in ROUTE_PERMISSIONS.items()
+        if method == "POST" and "/lab/authorizations" in path
+    )

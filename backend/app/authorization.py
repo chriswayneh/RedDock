@@ -20,6 +20,7 @@ class Permission(StrEnum):
     INVENTORY_READ = "inventory:read"
     FINDING_READ = "finding:read"
     CORRELATION_READ = "correlation:read"
+    INTELLIGENCE_READ = "intelligence:read"
     REPORT_READ = "report:read"
     RAW_EVIDENCE_READ = "evidence:read_raw"
     WORKFLOW_RUN = "workflow:run"
@@ -44,6 +45,7 @@ _VIEWER = frozenset(
 _AUDITOR = _VIEWER | {
     Permission.RAW_EVIDENCE_READ,
     Permission.SCOPE_READ,
+    Permission.INTELLIGENCE_READ,
     Permission.REPORT_EXPORT,
     Permission.AUDIT_READ,
 }
@@ -52,6 +54,7 @@ _OPERATOR = _VIEWER | {
     Permission.SCOPE_MANAGE,
     Permission.SCOPE_READ,
     Permission.RAW_EVIDENCE_READ,
+    Permission.INTELLIGENCE_READ,
     Permission.WORKFLOW_RUN,
     Permission.FINDING_UPDATE,
     Permission.INTELLIGENCE_APPROVE,
@@ -68,6 +71,90 @@ ROLE_PERMISSIONS: Final = MappingProxyType(
         Role.OPERATOR: frozenset(_OPERATOR),
         Role.AUDITOR: frozenset(_AUDITOR),
         Role.VIEWER: _VIEWER,
+    }
+)
+
+# This manifest is deliberately separate from enforcement while server mode is
+# unavailable. Its completeness test prevents a route from reaching that mode
+# without an explicit public/protected decision and reviewed permission.
+PUBLIC_ROUTES: Final = frozenset(
+    {
+        ("GET", "/api/health"),
+        ("GET", "/api/version"),
+    }
+)
+ROUTE_PERMISSIONS: Final = MappingProxyType(
+    {
+        ("GET", "/api/detectors"): Permission.DOCKYARD_READ,
+        ("GET", "/api/adapters"): Permission.DOCKYARD_READ,
+        ("GET", "/api/lab/status"): Permission.DOCKYARD_READ,
+        ("GET", "/api/dockyards"): Permission.DOCKYARD_READ,
+        ("POST", "/api/dockyards"): Permission.DOCKYARD_MANAGE,
+        ("GET", "/api/dockyards/{dockyard_id}"): Permission.DOCKYARD_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/lab/authorizations"): Permission.AUDIT_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/lab/authorizations"): Permission.LAB_AUTHORIZE,
+        (
+            "POST",
+            "/api/dockyards/{dockyard_id}/lab/authorizations/{authorization_id}/revoke",
+        ): Permission.LAB_AUTHORIZE,
+        ("GET", "/api/dockyards/{dockyard_id}/lab/audit"): Permission.AUDIT_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/scope"): Permission.SCOPE_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/scope"): Permission.SCOPE_MANAGE,
+        ("DELETE", "/api/dockyards/{dockyard_id}/scope/{entry_id}"): Permission.SCOPE_MANAGE,
+        ("POST", "/api/dockyards/{dockyard_id}/scope/evaluate"): Permission.SCOPE_MANAGE,
+        ("GET", "/api/dockyards/{dockyard_id}/assets"): Permission.INVENTORY_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/assets/{asset_id}"): Permission.INVENTORY_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/services"): Permission.INVENTORY_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/observations"): Permission.INVENTORY_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/discoveries"): Permission.INVENTORY_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/discoveries"): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/discoveries/{run_id}"): Permission.INVENTORY_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/evidence"): Permission.RAW_EVIDENCE_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/detections"): Permission.FINDING_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/detections"): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/detections/{run_id}"): Permission.FINDING_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/correlations"): Permission.CORRELATION_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/correlations"): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/redpath"): Permission.CORRELATION_READ,
+        ("GET", "/api/intelligence/provider"): Permission.INTELLIGENCE_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/intelligence"): Permission.INTELLIGENCE_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/intelligence"): Permission.WORKFLOW_RUN,
+        (
+            "POST",
+            "/api/dockyards/{dockyard_id}/intelligence/{run_id}/approve",
+        ): Permission.INTELLIGENCE_APPROVE,
+        ("GET", "/api/dockyards/{dockyard_id}/reports"): Permission.REPORT_READ,
+        ("POST", "/api/dockyards/{dockyard_id}/reports"): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/reports/{run_id}"): Permission.REPORT_READ,
+        (
+            "GET",
+            "/api/dockyards/{dockyard_id}/reports/{run_id}/technical",
+        ): Permission.REPORT_EXPORT,
+        (
+            "GET",
+            "/api/dockyards/{dockyard_id}/reports/{run_id}/executive",
+        ): Permission.REPORT_EXPORT,
+        (
+            "GET",
+            "/api/dockyards/{dockyard_id}/reports/{run_id}/manifest",
+        ): Permission.REPORT_EXPORT,
+        (
+            "GET",
+            "/api/dockyards/{dockyard_id}/reports/{run_id}/dockpack",
+        ): Permission.REPORT_EXPORT,
+        ("GET", "/api/dockyards/{dockyard_id}/validations"): Permission.FINDING_READ,
+        (
+            "POST",
+            "/api/dockyards/{dockyard_id}/findings/{finding_id}/validations",
+        ): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/validations/{run_id}"): Permission.FINDING_READ,
+        (
+            "POST",
+            "/api/dockyards/{dockyard_id}/validations/{run_id}/approve",
+        ): Permission.WORKFLOW_RUN,
+        ("GET", "/api/dockyards/{dockyard_id}/findings"): Permission.FINDING_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/findings/{finding_id}"): Permission.FINDING_READ,
+        ("PATCH", "/api/dockyards/{dockyard_id}/findings/{finding_id}"): Permission.FINDING_UPDATE,
     }
 )
 
