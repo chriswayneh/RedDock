@@ -20,7 +20,13 @@ function short(value: string, limit = 35): string {
   return value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
 }
 
-function RedPathCanvas({ graph }: { graph: RedPathGraph }) {
+function RedPathCanvas({
+  graph,
+  onOpenNode,
+}: {
+  graph: RedPathGraph;
+  onOpenNode: (node: RedPathNode) => void;
+}) {
   const layout = useMemo(() => positions(graph.nodes), [graph.nodes]);
   const height = Math.max(
     260,
@@ -31,7 +37,12 @@ function RedPathCanvas({ graph }: { graph: RedPathGraph }) {
   );
   return (
     <div className="redpath-canvas-wrap" aria-label="RedPath relationship graph">
-      <svg className="redpath-canvas" viewBox={`0 0 800 ${height}`} role="img">
+      <svg
+        className="redpath-canvas"
+        viewBox={`0 0 800 ${height}`}
+        role="group"
+        aria-label="Evidence-linked assets and findings"
+      >
         <title>Evidence-linked assets and findings</title>
         {graph.edges.map((edge) => {
           const source = layout.get(edge.source);
@@ -52,7 +63,21 @@ function RedPathCanvas({ graph }: { graph: RedPathGraph }) {
           const point = layout.get(node.id);
           if (!point) return null;
           return (
-            <g key={node.id} transform={`translate(${point.x - 120} ${point.y - 29})`}>
+            <g
+              key={node.id}
+              className="redpath-node-link"
+              transform={`translate(${point.x - 120} ${point.y - 29})`}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open ${node.kind} ${node.label}`}
+              onClick={() => onOpenNode(node)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenNode(node);
+                }
+              }}
+            >
               <rect width="240" height="58" rx="8" className={`redpath-node ${node.kind}`} />
               <text x="12" y="23" className="redpath-node-title">
                 {short(node.label)}
@@ -95,9 +120,13 @@ function EdgeDetail({ edge }: { edge: RedPathEdge }) {
 
 export function RedPath({
   dockyards,
+  onOpenAsset,
+  onOpenFinding,
   onError,
 }: {
   dockyards: Dockyard[];
+  onOpenAsset: (dockyardId: number) => void;
+  onOpenFinding: (dockyardId: number, findingId: number) => void;
   onError: (message: string | null) => void;
 }) {
   const [selectedDockyard, setSelectedDockyard] = useState<number | null>(dockyards[0]?.id ?? null);
@@ -137,6 +166,14 @@ export function RedPath({
 
   const detail = graph.edges.find((edge) => edge.id === selectedEdge) ?? null;
 
+  function openNode(node: RedPathNode) {
+    if (activeDockyard === null) return;
+    const id = Number(node.id.split(":", 2)[1]);
+    if (!Number.isSafeInteger(id) || id < 1) return;
+    if (node.kind === "asset") onOpenAsset(activeDockyard);
+    else onOpenFinding(activeDockyard, id);
+  }
+
   if (!dockyards.length) {
     return <section className="panel"><EmptyState message="Create a Dockyard before building a RedPath." /></section>;
   }
@@ -166,7 +203,7 @@ export function RedPath({
               <Metric label="Relationships" value={String(graph.edges.length)} note="Explainable graph edges" />
               <Metric label="Mappings" value={String(graph.mappings.length)} note="Fixed CWE classifications" />
             </div>
-            <RedPathCanvas graph={graph} />
+            <RedPathCanvas graph={graph} onOpenNode={openNode} />
           </>
         ) : (
           <EmptyState message="No correlation snapshot yet. Run correlation over this Dockyard's stored assets and findings." />
@@ -193,7 +230,7 @@ export function RedPath({
           <div className="section-heading"><div><p className="eyebrow">CLASSIFICATION, NOT PROOF</p><h2>Framework mappings</h2></div></div>
           <DataTable headers={["Finding", "Framework", "Control", "Title", "Evidence"]}>
             {graph.mappings.map((mapping) => (
-              <tr key={mapping.id}><td>#{mapping.finding_id}</td><td>{mapping.framework}</td><td><code>{mapping.external_id}</code></td><td>{mapping.title}</td><td><code className="hash">{mapping.evidence_sha256.slice(0, 16)}…</code></td></tr>
+              <tr key={mapping.id}><td><button className="link-button" type="button" onClick={() => activeDockyard !== null && onOpenFinding(activeDockyard, mapping.finding_id)}>#{mapping.finding_id}</button></td><td>{mapping.framework}</td><td><a className="inline-link" href={`https://cwe.mitre.org/data/definitions/${mapping.external_id.replace("CWE-", "")}.html`} target="_blank" rel="noreferrer"><code>{mapping.external_id}</code></a></td><td>{mapping.title}</td><td><code className="hash">{mapping.evidence_sha256.slice(0, 16)}…</code></td></tr>
             ))}
           </DataTable>
         </section>

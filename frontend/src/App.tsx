@@ -15,6 +15,7 @@ import { RedPath } from "./RedPath";
 import { Reports } from "./Reports";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
+import type { WorkspaceTab } from "./Workspace";
 import type {
   Adapter,
   Asset,
@@ -74,6 +75,9 @@ export function App() {
   const [version, setVersion] = useState<Version | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Dockyard | null>(null);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("Scope");
+  const [contextDockyardId, setContextDockyardId] = useState<number | null>(null);
+  const [contextFindingId, setContextFindingId] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -121,15 +125,37 @@ export function App() {
   function open(item: Page) {
     setPage(item);
     setSelected(null);
+    setContextDockyardId(null);
+    setContextFindingId(null);
+  }
+
+  function openDockyard(dockyard: Dockyard, tab: WorkspaceTab = "Scope") {
+    setWorkspaceTab(tab);
+    setSelected(dockyard);
+    setPage("Dockyards");
+    setContextDockyardId(dockyard.id);
+    setContextFindingId(null);
+  }
+
+  function openScoped(item: "Assets" | "Findings", dockyardId: number, findingId?: number) {
+    setSelected(null);
+    setContextDockyardId(dockyardId);
+    setContextFindingId(findingId ?? null);
+    setPage(item);
   }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
+        <button
+          className="brand brand-button"
+          type="button"
+          aria-label="Go to the RedDock dashboard"
+          onClick={() => open("Dashboard")}
+        >
           <span className="brand-mark">R</span>
           <span>RedDock</span>
-        </div>
+        </button>
         <p className="tagline">Discover. Validate. Prove.</p>
         <nav aria-label="Primary navigation">
           {pages.map((item) => (
@@ -167,7 +193,8 @@ export function App() {
           <Dashboard
             dockyards={dockyards}
             health={health}
-            openDockyards={() => open("Dockyards")}
+            openPage={open}
+            openDockyard={openDockyard}
             onError={setError}
           />
         )}
@@ -177,15 +204,23 @@ export function App() {
               dockyard={selected}
               adapters={adapters}
               detectors={detectors}
+              initialTab={workspaceTab}
               onBack={() => setSelected(null)}
               onError={setError}
             />
           ) : (
-            <Dockyards dockyards={dockyards} setSelected={setSelected} onCreate={createDockyard} />
+            <Dockyards
+              dockyards={dockyards}
+              setSelected={(dockyard) => {
+                if (dockyard) openDockyard(dockyard);
+                else setSelected(null);
+              }}
+              onCreate={createDockyard}
+            />
           ))}
-        {page === "Assets" && <AssetsPage dockyards={dockyards} onError={setError} />}
-        {page === "Findings" && <FindingsPage dockyards={dockyards} onError={setError} />}
-        {page === "RedPath" && <RedPath dockyards={dockyards} onError={setError} />}
+        {page === "Assets" && <AssetsPage dockyards={dockyards} initialDockyardId={contextDockyardId} onError={setError} />}
+        {page === "Findings" && <FindingsPage dockyards={dockyards} initialDockyardId={contextDockyardId} initialFindingId={contextFindingId} onError={setError} />}
+        {page === "RedPath" && <RedPath dockyards={dockyards} onOpenAsset={(dockyardId) => openScoped("Assets", dockyardId)} onOpenFinding={(dockyardId, findingId) => openScoped("Findings", dockyardId, findingId)} onError={setError} />}
         {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
         {page === "Lab" && <Lab dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
@@ -199,12 +234,14 @@ export function App() {
 function Dashboard({
   dockyards,
   health,
-  openDockyards,
+  openPage,
+  openDockyard,
   onError,
 }: {
   dockyards: Dockyard[];
   health: Health | null;
-  openDockyards: () => void;
+  openPage: (page: Page) => void;
+  openDockyard: (dockyard: Dockyard, tab?: WorkspaceTab) => void;
   onError: (message: string | null) => void;
 }) {
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
@@ -236,7 +273,7 @@ function Dashboard({
             its fixed, non-destructive HTTP-origin probe.
           </p>
         </div>
-        <button className="primary-button" onClick={openDockyards}>
+        <button className="primary-button" onClick={() => openPage("Dockyards")}>
           Manage Dockyards
         </button>
       </section>
@@ -246,13 +283,14 @@ function Dashboard({
           value={health?.status === "healthy" ? "Healthy" : "Checking"}
           tone="success"
         />
-        <Metric label="Dockyards" value={String(dockyards.length)} />
-        <Metric label="Assets discovered" value={String(assetCount)} />
-        <Metric label="Discovery runs" value={String(runs.length)} />
+        <Metric label="Dockyards" value={String(dockyards.length)} onClick={() => openPage("Dockyards")} />
+        <Metric label="Assets discovered" value={String(assetCount)} onClick={() => openPage("Assets")} />
+        <Metric label="Discovery runs" value={String(runs.length)} onClick={() => openPage("RedLedger")} />
         <Metric
           label="Open findings"
           value={String(findings.length)}
           note="Produced by a detector, from recorded observations"
+          onClick={() => openPage("Findings")}
         />
       </section>
       <section className="panel">
@@ -261,12 +299,12 @@ function Dashboard({
             <p className="eyebrow">ENGAGEMENT WORKSPACES</p>
             <h2>Recent Dockyards</h2>
           </div>
-          <button className="text-button" onClick={openDockyards}>
+          <button className="text-button" onClick={() => openPage("Dockyards")}>
             View all
           </button>
         </div>
         {dockyards.length ? (
-          <DockyardList dockyards={dockyards.slice(0, 5)} onSelect={openDockyards} />
+          <DockyardList dockyards={dockyards.slice(0, 5)} onSelect={openDockyard} />
         ) : (
           <EmptyState message="No Dockyards yet. Create an authorized engagement workspace to begin." />
         )}
@@ -281,7 +319,21 @@ function Dashboard({
           </div>
           <DataTable headers={["Run", "Target", "Adapter", "Status", "Requested"]}>
             {runs.slice(0, 8).map((run) => (
-              <tr key={`${run.dockyard_id}-${run.id}`}>
+              <tr
+                key={`${run.dockyard_id}-${run.id}`}
+                className="clickable-row"
+                tabIndex={0}
+                onClick={() => {
+                  const dockyard = dockyards.find((item) => item.id === run.dockyard_id);
+                  if (dockyard) openDockyard(dockyard, "Runs");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" && event.key !== " ") return;
+                  event.preventDefault();
+                  const dockyard = dockyards.find((item) => item.id === run.dockyard_id);
+                  if (dockyard) openDockyard(dockyard, "Runs");
+                }}
+              >
                 <td>#{run.id}</td>
                 <td>
                   <code>{run.normalized_target ?? run.requested_target}</code>
@@ -378,8 +430,9 @@ function useDockyardScoped<T>(
   dockyards: Dockyard[],
   load: (id: number) => Promise<T[]>,
   onError: (message: string | null) => void,
+  initialDockyardId: number | null = null,
 ) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(initialDockyardId);
   const [rows, setRows] = useState<T[]>([]);
 
   useEffect(() => {
@@ -400,13 +453,15 @@ function useDockyardScoped<T>(
 
 function AssetsPage({
   dockyards,
+  initialDockyardId,
   onError,
 }: {
   dockyards: Dockyard[];
+  initialDockyardId: number | null;
   onError: (message: string | null) => void;
 }) {
   const load = useCallback((id: number) => api.assets(id), []);
-  const { selected, setSelected, rows } = useDockyardScoped<Asset>(dockyards, load, onError);
+  const { selected, setSelected, rows } = useDockyardScoped<Asset>(dockyards, load, onError, initialDockyardId);
 
   if (!dockyards.length) {
     return (
@@ -427,12 +482,16 @@ function AssetsPage({
 
 function FindingsPage({
   dockyards,
+  initialDockyardId,
+  initialFindingId,
   onError,
 }: {
   dockyards: Dockyard[];
+  initialDockyardId: number | null;
+  initialFindingId: number | null;
   onError: (message: string | null) => void;
 }) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(initialDockyardId);
 
   useEffect(() => {
     if (selected === null && dockyards.length) setSelected(dockyards[0].id);
@@ -451,7 +510,7 @@ function FindingsPage({
         <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
       </div>
       {selected !== null && (
-        <FindingsPanel dockyardId={selected} refreshKey={selected} onError={onError} />
+        <FindingsPanel dockyardId={selected} refreshKey={selected} initialFindingId={initialFindingId} onError={onError} />
       )}
     </>
   );

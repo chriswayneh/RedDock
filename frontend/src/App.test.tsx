@@ -499,6 +499,18 @@ describe("RedDock application", () => {
     expect(screen.getByText("Lab review")).toBeInTheDocument();
   });
 
+  it("uses the persistent RedDock brand as a dashboard home control", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+
+    await user.click(screen.getAllByRole("button", { name: "Dockyards" })[0]);
+    expect(screen.getByRole("heading", { level: 1, name: "Dockyards" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Go to the RedDock dashboard" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
+  });
+
   it("creates a Dockyard", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -606,6 +618,19 @@ describe("RedDock application", () => {
 
     await user.click(screen.getByRole("button", { name: "Run correlation" }));
     await waitFor(() => expect(calls.correlation).toHaveBeenCalledWith({}));
+  });
+
+  it("opens RedPath finding nodes in the matching finding detail", async () => {
+    stubApi({ redpath, findings: [finding] });
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText("Lab review");
+    await user.click(screen.getAllByRole("button", { name: "RedPath" })[0]);
+
+    await user.click(await screen.findByRole("button", { name: `Open finding ${finding.title}` }));
+
+    expect(screen.getByRole("heading", { level: 1, name: "Findings" })).toBeInTheDocument();
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
   });
 });
 

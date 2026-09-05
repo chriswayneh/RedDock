@@ -30,18 +30,27 @@ export function Metric({
   value,
   tone,
   note,
+  onClick,
 }: {
   label: string;
   value: string;
   tone?: "success" | "warning";
   note?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <article className="metric">
+  const content = (
+    <>
       <p>{label}</p>
       <strong className={tone ? `tone-${tone}` : ""}>{value}</strong>
       {note && <small>{note}</small>}
-    </article>
+    </>
+  );
+  return onClick ? (
+    <button className="metric metric-link" type="button" onClick={onClick}>
+      {content}
+    </button>
+  ) : (
+    <article className="metric">{content}</article>
   );
 }
 

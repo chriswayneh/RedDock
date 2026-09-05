@@ -23,10 +23,12 @@ export function SeverityTag({ severity }: { severity: string }) {
 export function FindingsPanel({
   dockyardId,
   refreshKey,
+  initialFindingId = null,
   onError,
 }: {
   dockyardId: number;
   refreshKey: number;
+  initialFindingId?: number | null;
   onError: (message: string | null) => void;
 }) {
   const [findings, setFindings] = useState<Finding[]>([]);
@@ -47,11 +49,15 @@ export function FindingsPanel({
     void load();
   }, [load, refreshKey]);
 
-  // A finding belongs to one Dockyard. Changing workspace must not leave the
-  // previous one's finding open beside another workspace's list.
   useEffect(() => {
     setSelected(null);
-  }, [dockyardId]);
+    if (initialFindingId === null) return;
+    api.finding(dockyardId, initialFindingId)
+      .then(setSelected)
+      .catch((error) =>
+        onError(error instanceof Error ? error.message : "Could not load this finding."),
+      );
+  }, [dockyardId, initialFindingId, onError]);
 
   async function open(finding: Finding) {
     try {

@@ -72,3 +72,17 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 .lab-history { margin-top: 20px; }
 .lab-warning { border-left: 3px solid #d29922; color: #e3b341; padding-left: 10px; }
 @media (max-width: 980px) { .lab-layout { grid-template-columns: 1fr; } }
+
+/* Navigation affordances: visually actionable summaries and graph nodes behave like controls. */
+.metric { color: #f0f3f6; text-align: left; }
+.metric-link { cursor: pointer; width: 100%; }
+.metric-link:hover, .metric-link:focus-visible { background: #1c222b; border-color: #d7263d; outline: none; }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover td, .clickable-row:focus-visible td { background: #1c222b; }
+.clickable-row:focus-visible { outline: 2px solid #d7263d; outline-offset: -2px; }
+.redpath-node-link { cursor: pointer; outline: none; }
+.redpath-node-link:hover .redpath-node, .redpath-node-link:focus-visible .redpath-node { fill: #251419; stroke-width: 2.5; }
+.inline-link { color: #ff9ba5; text-decoration-color: #6e3037; text-underline-offset: 3px; }
+.brand-button { background: transparent; border: 0; color: inherit; cursor: pointer; font: inherit; width: 100%; }
+.brand-button:hover span:last-child, .brand-button:focus-visible span:last-child { color: #ff9ba5; }
+.brand-button:focus-visible { border-radius: 7px; outline: 2px solid #d7263d; outline-offset: 3px; }

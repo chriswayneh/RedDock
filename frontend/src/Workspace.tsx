@@ -29,7 +29,7 @@ const tabs = [
   "Validation",
   "Runs",
 ] as const;
-type Tab = (typeof tabs)[number];
+export type WorkspaceTab = (typeof tabs)[number];
 
 const ACTIVE = new Set(["pending", "running"]);
 
@@ -37,16 +37,18 @@ export function Workspace({
   dockyard,
   adapters,
   detectors,
+  initialTab = "Scope",
   onBack,
   onError,
 }: {
   dockyard: Dockyard;
   adapters: Adapter[];
   detectors: Detector[];
+  initialTab?: WorkspaceTab;
   onBack: () => void;
   onError: (message: string | null) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("Scope");
+  const [tab, setTab] = useState<WorkspaceTab>(initialTab);
   const [scope, setScope] = useState<ScopeEntry[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [services, setServices] = useState<ServiceRow[]>([]);
