@@ -56,6 +56,9 @@ All notable changes to RedDock are documented here.
 - A pinned PyPA `pip-audit` gate for known vulnerabilities in the resolved
   runtime dependency graph, aligned across CI and the documented local test
   command
+- Weekly grouped Dependabot version updates for GitHub Actions, Docker, npm,
+  and pip; minor and patch updates share reviewable pull requests while major
+  updates remain isolated
 
 ### Security
 

@@ -430,6 +430,10 @@ and workflow permissions are declared at the minimum needed by each workflow.
 Its first run identified the HTTP probe's implicit TLS floor; the shared client
 context now requires TLS 1.2 or newer on verified and certificate-observation
 handshakes, matching the detector's stated current-client boundary.
+Dependabot separately checks GitHub Actions, Docker, npm, and pip each week.
+Minor and patch changes are grouped per ecosystem to limit review noise, while
+major changes stay isolated and every proposed update must pass the same CI and
+CodeQL controls before a human merges it.
 
 The dormant server-session primitive generates independent 256-bit browser and
 CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
