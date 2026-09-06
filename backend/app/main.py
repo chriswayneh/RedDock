@@ -16,6 +16,7 @@ from app.detection.runner import recover_interrupted_runs as recover_interrupted
 from app.discovery.runner import recover_interrupted_runs
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
 from app.reporting.runner import recover_interrupted_runs as recover_interrupted_reports
+from app.response_security import ResponseSecurityMiddleware
 
 STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 
@@ -57,6 +58,8 @@ app.add_middleware(
     allowed_hosts=["localhost", "127.0.0.1"],
     www_redirect=False,
 )
+# Added after TrustedHost so the security policy also wraps rejected requests.
+app.add_middleware(ResponseSecurityMiddleware)
 app.include_router(router)
 
 if STATIC_DIRECTORY.exists():

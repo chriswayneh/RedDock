@@ -17,6 +17,7 @@ app/reporting/      deterministic reports, evidence manifests, and DockPack expo
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
 app/browser_security.py exact HTTPS origin and secure session-cookie contract
+app/response_security.py uniform response headers and API no-store policy
 app/security_audit.py bounded, tenant-scoped security-event writer and reader
 app/evidence.py     hashed evidence storage
 ```
@@ -84,6 +85,12 @@ request verifier extracts exactly one unquoted bearer cookie and, for every
 unsafe method, exactly one Origin and CSRF header; both proofs must match the
 same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`; these
 helpers remain unused until the complete OIDC/session route boundary is ready.
+
+Every current HTTP response, including Host rejections, receives a fixed
+anti-framing, no-sniff, referrer, browser-capability, opener, and resource
+policy. Paths beneath `/api/` also receive `Cache-Control: no-store`, so browser
+caches do not retain inventory, findings, raw evidence, reports, or DockPacks.
+Static application assets are not forced to `no-store`.
 
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from

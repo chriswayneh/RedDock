@@ -36,7 +36,7 @@ flowchart LR
 
 | Component | Responsibility | Source evidence |
 | --- | --- | --- |
-| UI and API | One-origin UI and typed HTTP entry points | `backend/app/main.py:54-69`, `backend/app/api.py:163-179` |
+| UI and API | One-origin UI, typed HTTP entry points, fixed response security headers, and API `no-store` caching | `backend/app/main.py`, `backend/app/response_security.py`, `backend/app/api.py` |
 | DockGuard | Canonical scope decisions and narrow network bounds | `backend/app/dockguard.py:226-246`, `backend/app/config.py:136-145` |
 | Discovery | Fixed, bounded active contact without a shell | `backend/app/discovery/nmap.py:162-169`, `backend/app/config.py:140-145` |
 | Persistence | SQLAlchemy sessions and versioned Alembic upgrades | `backend/app/database.py:22-64`, `backend/app/migration_runner.py:336-354` |

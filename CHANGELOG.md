@@ -46,6 +46,9 @@ All notable changes to RedDock are documented here.
   contextual navigation including dashboard-return branding
 - Immutable official GitHub Action pins refreshed to Node 24-compatible v7
   releases after the hosted runner deprecated the older action runtime
+- Centralized response hardening across success and error paths, including
+  anti-framing/content-sniffing/browser-capability headers and `Cache-Control:
+  no-store` for every API and evidence-download response
 
 ### Security
 
@@ -61,6 +64,8 @@ All notable changes to RedDock are documented here.
   silently exposing the account-free API under server-looking configuration
 - PostgreSQL and optional Ollama remain private Compose services without host
   ports, and credentials do not appear in rendered service environments
+- Security headers wrap Host rejection as well as application routes, while
+  static application assets retain their normal caching behavior
 
 ### Testing
 
