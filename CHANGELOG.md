@@ -42,6 +42,8 @@ All notable changes to RedDock are documented here.
   dormant session issue/logout operations record events in the same transaction
 - A readable evidence-manifest view, expanded screenshot gallery, and
   contextual navigation including dashboard-return branding
+- Immutable official GitHub Action pins refreshed to Node 24-compatible v7
+  releases after the hosted runner deprecated the older action runtime
 
 ### Security
 
