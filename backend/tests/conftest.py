@@ -25,6 +25,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
         "REDDOCK_DATABASE_USER",
         "REDDOCK_DATABASE_PASSWORD_FILE",
         "REDDOCK_DEPLOYMENT_MODE",
+        "REDDOCK_PUBLIC_ORIGIN",
     ):
         monkeypatch.delenv(name, raising=False)
     # Modules read settings at import time; isolate after changing the environment.

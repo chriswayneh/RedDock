@@ -36,7 +36,9 @@ All notable changes to RedDock are documented here.
 - A dormant browser boundary that accepts one canonical HTTPS origin, rejects
   credentials and every path/query/fragment form, performs exact origin
   comparison, and sets only a host-bound `Secure`, `HttpOnly`, `SameSite=Lax`
-  eight-hour session cookie
+  eight-hour session cookie; its request verifier also rejects duplicate or
+  ambiguous credentials and requires both exact Origin and CSRF proof for every
+  unsafe HTTP method
 - An additive security-audit migration and tenant-scoped structured event
   primitive that rejects cross-organization actors and free-form metadata;
   dormant session issue/logout operations record events in the same transaction

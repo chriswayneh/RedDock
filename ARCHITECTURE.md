@@ -424,9 +424,11 @@ event before the shared transaction commits, preventing an action/event split.
 `backend/app/browser_security.py` defines the browser-facing half of that
 future boundary without activating it. One public origin is canonicalized as
 HTTPS and must contain no credentials, path, query, fragment, whitespace, or
-wildcard. State-changing routes will compare the supplied Origin against that
-single value; missing, opaque, malformed, prefix/suffix, and wrong-port values
-all fail. The bearer helper can emit only the host-bound
+wildcard. A dormant request verifier compares the supplied Origin against that
+single value and verifies the CSRF token against the same hash-only session for
+every unsafe method; missing, opaque, malformed, duplicated, prefix/suffix, and
+wrong-port values all fail. It also refuses duplicate or quoted session
+cookies. The bearer helper can emit only the host-bound
 `__Host-reddock_session` cookie with `Secure`, `HttpOnly`, `SameSite=Lax`, `/`,
 no `Domain`, and the same eight-hour bound as the database record. Local mode
 rejects `REDDOCK_PUBLIC_ORIGIN`, and no current route invokes these helpers.

@@ -303,7 +303,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.8.0: Phase 8 — Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, and hardened session-cookie contract are complete. Shared mode is explicitly rejected and authentication is not enabled yet: integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.8.0: Phase 8 — Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie contract, and dual Origin/CSRF request verifier are complete. Shared mode is explicitly rejected and authentication is not enabled yet: integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 

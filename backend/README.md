@@ -79,9 +79,11 @@ The browser boundary separately canonicalizes one exact HTTPS public origin,
 rejects credentials and all path/query/fragment forms, and fails closed for a
 missing, opaque, malformed, prefix, suffix, or wrong-port Origin header. Its
 session-cookie helper is fixed to `__Host-reddock_session`, an eight-hour
-`Max-Age`, `Secure`, `HttpOnly`, `SameSite=Lax`, `/`, and no `Domain`. Local
-mode rejects `REDDOCK_PUBLIC_ORIGIN`; these helpers remain unused until the
-complete OIDC/session route boundary is ready.
+`Max-Age`, `Secure`, `HttpOnly`, `SameSite=Lax`, `/`, and no `Domain`. A
+request verifier extracts exactly one unquoted bearer cookie and, for every
+unsafe method, exactly one Origin and CSRF header; both proofs must match the
+same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`; these
+helpers remain unused until the complete OIDC/session route boundary is ready.
 
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from

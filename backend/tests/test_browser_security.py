@@ -1,6 +1,8 @@
 from http.cookies import SimpleCookie
 
 import pytest
+from sqlalchemy.orm import Session
+from starlette.requests import Request
 from starlette.responses import Response
 
 from app.browser_security import (
@@ -8,11 +10,30 @@ from app.browser_security import (
     SESSION_COOKIE_MAX_AGE,
     SESSION_COOKIE_NAME,
     BrowserSecurityError,
+    authenticate_browser_request,
     clear_browser_session_cookie,
     origin_matches,
     parse_public_origin,
     set_browser_session_cookie,
 )
+from app.session_auth import issue_browser_session
+
+
+def _request(method: str, headers: list[tuple[str, str]]) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": method,
+            "scheme": "https",
+            "path": "/api/dockyards",
+            "raw_path": b"/api/dockyards",
+            "query_string": b"",
+            "server": ("red.example", 443),
+            "client": ("127.0.0.1", 12345),
+            "headers": [(name.lower().encode(), value.encode()) for name, value in headers],
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -104,3 +125,84 @@ def test_session_cookie_refuses_non_session_values_and_clears_symmetrically():
     assert "SameSite=lax" in header
     assert "Path=/" in header
     assert "Domain=" not in header
+
+
+def test_safe_browser_request_requires_one_valid_session_cookie(session: Session):
+    issued = issue_browser_session(session, 1)
+    expected = parse_public_origin("https://red.example")
+
+    context = authenticate_browser_request(
+        session,
+        _request("GET", [("Cookie", f"other=x; {SESSION_COOKIE_NAME}={issued.token}")]),
+        expected,
+    )
+
+    assert context is not None
+    assert context.organization_id == 1
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "CUSTOM"])
+def test_unsafe_browser_request_requires_session_exact_origin_and_csrf(
+    session: Session, method: str
+):
+    issued = issue_browser_session(session, 1)
+    expected = parse_public_origin("https://red.example")
+    request = _request(
+        method,
+        [
+            ("Cookie", f"{SESSION_COOKIE_NAME}={issued.token}"),
+            ("Origin", expected.value),
+            (CSRF_HEADER_NAME, issued.csrf_token),
+        ],
+    )
+
+    assert authenticate_browser_request(session, request, expected) is not None
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [],
+        [("Origin", "https://red.example")],
+        [(CSRF_HEADER_NAME, "A" * 43)],
+        [("Origin", "https://attacker.example"), (CSRF_HEADER_NAME, "A" * 43)],
+        [("Origin", "https://red.example"), (CSRF_HEADER_NAME, "B" * 43)],
+        [
+            ("Origin", "https://red.example"),
+            ("Origin", "https://attacker.example"),
+            (CSRF_HEADER_NAME, "A" * 43),
+        ],
+        [
+            ("Origin", "https://red.example"),
+            (CSRF_HEADER_NAME, "A" * 43),
+            (CSRF_HEADER_NAME, "A" * 43),
+        ],
+    ],
+)
+def test_unsafe_browser_request_rejects_missing_wrong_or_duplicate_proof(
+    session: Session, headers: list[tuple[str, str]]
+):
+    issued = issue_browser_session(session, 1)
+    expected = parse_public_origin("https://red.example")
+    request = _request(
+        "POST",
+        [("Cookie", f"{SESSION_COOKIE_NAME}={issued.token}"), *headers],
+    )
+
+    assert authenticate_browser_request(session, request, expected) is None
+
+
+def test_browser_request_rejects_duplicate_or_quoted_session_cookie(session: Session):
+    issued = issue_browser_session(session, 1)
+    expected = parse_public_origin("https://red.example")
+    duplicate = _request(
+        "GET",
+        [
+            ("Cookie", f"{SESSION_COOKIE_NAME}={issued.token}"),
+            ("Cookie", f"{SESSION_COOKIE_NAME}={issued.token}"),
+        ],
+    )
+    quoted = _request("GET", [("Cookie", f'{SESSION_COOKIE_NAME}="{issued.token}"')])
+
+    assert authenticate_browser_request(session, duplicate, expected) is None
+    assert authenticate_browser_request(session, quoted, expected) is None

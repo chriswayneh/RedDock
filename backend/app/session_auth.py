@@ -125,6 +125,7 @@ def resolve_browser_session(
     session: Session,
     token: str,
     *,
+    csrf_token: str | None = None,
     now: datetime | None = None,
 ) -> AuthorizationContext | None:
     if not is_browser_session_token(token):
@@ -144,6 +145,10 @@ def resolve_browser_session(
         or _as_utc(browser_session.expires_at) <= resolved_at
         or membership.status != "active"
         or user.status != "active"
+        or (
+            csrf_token is not None
+            and not csrf_token_matches(csrf_token, browser_session.csrf_token_hash)
+        )
     ):
         return None
     try:

@@ -9,15 +9,23 @@ from dataclasses import dataclass
 from hmac import compare_digest
 from urllib.parse import urlsplit
 
+from sqlalchemy.orm import Session
+from starlette.requests import Request
 from starlette.responses import Response
 
-from app.session_auth import SESSION_LIFETIME, is_browser_session_token
+from app.authorization import AuthorizationContext
+from app.session_auth import (
+    SESSION_LIFETIME,
+    is_browser_session_token,
+    resolve_browser_session,
+)
 from app.targets import TargetError, TargetKind, normalize_target
 
 MAX_PUBLIC_ORIGIN_LENGTH = 512
 SESSION_COOKIE_NAME = "__Host-reddock_session"
 CSRF_HEADER_NAME = "X-RedDock-CSRF"
 SESSION_COOKIE_MAX_AGE = int(SESSION_LIFETIME.total_seconds())
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class BrowserSecurityError(ValueError):
@@ -73,6 +81,43 @@ def origin_matches(presented: str | None, expected: PublicOrigin) -> bool:
     except BrowserSecurityError:
         return False
     return compare_digest(candidate.value, expected.value)
+
+
+def _unique_header(request: Request, name: str) -> str | None:
+    values = request.headers.getlist(name)
+    return values[0] if len(values) == 1 else None
+
+
+def _session_cookie(request: Request) -> str | None:
+    """Extract exactly one unquoted session cookie from all Cookie headers."""
+    candidates: list[str] = []
+    for header in request.headers.getlist("cookie"):
+        for item in header.split(";"):
+            name, separator, value = item.partition("=")
+            if separator and name.strip() == SESSION_COOKIE_NAME:
+                candidates.append(value)
+    if len(candidates) != 1 or not is_browser_session_token(candidates[0]):
+        return None
+    return candidates[0]
+
+
+def authenticate_browser_request(
+    session: Session,
+    request: Request,
+    expected_origin: PublicOrigin,
+) -> AuthorizationContext | None:
+    """Resolve one request, requiring exact Origin and CSRF proof for mutations."""
+    token = _session_cookie(request)
+    if token is None:
+        return None
+    if request.method.upper() in _SAFE_METHODS:
+        return resolve_browser_session(session, token)
+
+    origin = _unique_header(request, "origin")
+    csrf_token = _unique_header(request, CSRF_HEADER_NAME)
+    if not origin_matches(origin, expected_origin) or csrf_token is None:
+        return None
+    return resolve_browser_session(session, token, csrf_token=csrf_token)
 
 
 def set_browser_session_cookie(response: Response, token: str) -> None:
