@@ -19,6 +19,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -e ".[dev]"
+      - run: pip-audit --progress-spinner off .
       - run: ruff check app tests
       - run: pytest
 

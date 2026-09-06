@@ -9,7 +9,7 @@ follows the checks and constraints below.
 ## Local checks
 
 ```bash
-cd backend && pip install -e ".[dev]" && ruff check app tests && pytest
+cd backend && pip install -e ".[dev]" && pip-audit --progress-spinner off . && ruff check app tests && pytest
 cd frontend && npm ci && npm run lint && npm run check && npm run test && npm run build
 docker compose build
 ```

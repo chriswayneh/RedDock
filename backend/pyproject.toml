@@ -20,6 +20,7 @@ postgres = [
 ]
 dev = [
   "httpx==0.28.1",
+  "pip-audit==2.10.1",
   "psycopg[binary]==3.3.5",
   "pytest==9.0.3",
   "ruff==0.11.2",

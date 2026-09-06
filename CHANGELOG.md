@@ -53,6 +53,9 @@ All notable changes to RedDock are documented here.
   Compose, image health checks, and product smoke tests using readiness
 - Weekly and change-triggered CodeQL `security-extended` analysis for GitHub
   Actions, JavaScript/TypeScript, and Python using verified immutable pins
+- A pinned PyPA `pip-audit` gate for known vulnerabilities in the resolved
+  runtime dependency graph, aligned across CI and the documented local test
+  command
 
 ### Security
 
