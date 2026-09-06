@@ -1,0 +1,106 @@
+from http.cookies import SimpleCookie
+
+import pytest
+from starlette.responses import Response
+
+from app.browser_security import (
+    CSRF_HEADER_NAME,
+    SESSION_COOKIE_MAX_AGE,
+    SESSION_COOKIE_NAME,
+    BrowserSecurityError,
+    clear_browser_session_cookie,
+    origin_matches,
+    parse_public_origin,
+    set_browser_session_cookie,
+)
+
+
+@pytest.mark.parametrize(
+    ("raw", "canonical", "trusted_host"),
+    [
+        ("https://red.example", "https://red.example", "red.example"),
+        ("HTTPS://RED.EXAMPLE:443", "https://red.example", "red.example"),
+        ("https://red.example:8443", "https://red.example:8443", "red.example"),
+        ("https://[2001:db8::10]:8443", "https://[2001:db8::10]:8443", "2001:db8::10"),
+    ],
+)
+def test_public_origin_is_canonical_and_yields_one_trusted_host(
+    raw: str, canonical: str, trusted_host: str
+):
+    origin = parse_public_origin(raw)
+
+    assert origin.value == canonical
+    assert origin.trusted_host == trusted_host
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "",
+        "http://red.example",
+        "https://user:password@red.example",
+        "https://red.example/",
+        "https://red.example/path",
+        "https://red.example?query",
+        "https://red.example#fragment",
+        " https://red.example",
+        "https://red.example ",
+        "https://red.example:",
+        "https://red.example\\@attacker.example",
+        "https://*.example",
+        "null",
+    ],
+)
+def test_public_origin_rejects_every_non_origin_or_ambiguous_form(raw: str):
+    with pytest.raises(BrowserSecurityError):
+        parse_public_origin(raw)
+
+
+def test_origin_check_is_canonical_but_not_prefix_suffix_or_missing():
+    expected = parse_public_origin("https://red.example")
+
+    assert origin_matches("https://red.example", expected)
+    assert origin_matches("HTTPS://RED.EXAMPLE:443", expected)
+    assert not origin_matches(None, expected)
+    assert not origin_matches("null", expected)
+    assert not origin_matches("https://red.example.attacker.test", expected)
+    assert not origin_matches("https://attacker.test/red.example", expected)
+    assert not origin_matches("https://red.example:8443", expected)
+    assert not origin_matches("https://red.example, https://attacker.test", expected)
+
+
+def test_session_cookie_is_host_only_http_only_secure_and_bounded():
+    response = Response()
+    token = "A" * 43
+    set_browser_session_cookie(response, token)
+
+    header = response.headers["set-cookie"]
+    parsed = SimpleCookie()
+    parsed.load(header)
+    morsel = parsed[SESSION_COOKIE_NAME]
+    assert morsel.value == token
+    assert morsel["path"] == "/"
+    assert morsel["max-age"] == str(SESSION_COOKIE_MAX_AGE)
+    assert morsel["secure"]
+    assert morsel["httponly"]
+    assert morsel["samesite"].lower() == "lax"
+    assert not morsel["domain"]
+    assert CSRF_HEADER_NAME == "X-RedDock-CSRF"
+
+
+def test_session_cookie_refuses_non_session_values_and_clears_symmetrically():
+    response = Response()
+    with pytest.raises(BrowserSecurityError, match="malformed"):
+        set_browser_session_cookie(response, "not-a-session")
+    with pytest.raises(BrowserSecurityError, match="malformed"):
+        set_browser_session_cookie(response, None)  # type: ignore[arg-type]
+
+    clear_browser_session_cookie(response)
+    header = response.headers["set-cookie"]
+    assert header.startswith(f'{SESSION_COOKIE_NAME}=""')
+    assert "Max-Age=0" in header
+    assert "HttpOnly" in header
+    assert "Secure" in header
+    assert "SameSite=lax" in header
+    assert "Path=/" in header
+    assert "Domain=" not in header

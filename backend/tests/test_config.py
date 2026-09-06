@@ -23,6 +23,17 @@ def test_local_deployment_mode_is_default(monkeypatch: pytest.MonkeyPatch):
     assert get_settings().deployment_mode == "local"
 
 
+def test_public_origin_cannot_silently_widen_local_mode(monkeypatch: pytest.MonkeyPatch):
+    from app.config import ConfigurationError, get_settings
+
+    monkeypatch.delenv("REDDOCK_DEPLOYMENT_MODE", raising=False)
+    monkeypatch.setenv("REDDOCK_PUBLIC_ORIGIN", "https://red.example")
+    get_settings.cache_clear()
+
+    with pytest.raises(ConfigurationError, match="REDDOCK_PUBLIC_ORIGIN"):
+        get_settings()
+
+
 @pytest.mark.parametrize("mode", ["server", "shared", "production", "invalid"])
 def test_unimplemented_or_unknown_deployment_modes_fail_closed(
     mode: str, monkeypatch: pytest.MonkeyPatch

@@ -42,8 +42,8 @@ def _digest(token: str) -> str:
     return sha256(token.encode("ascii")).hexdigest()
 
 
-def _valid_token(token: str) -> bool:
-    return bool(_TOKEN.fullmatch(token))
+def is_browser_session_token(token: str) -> bool:
+    return isinstance(token, str) and bool(_TOKEN.fullmatch(token))
 
 
 def issue_browser_session(
@@ -127,7 +127,7 @@ def resolve_browser_session(
     *,
     now: datetime | None = None,
 ) -> AuthorizationContext | None:
-    if not _valid_token(token):
+    if not is_browser_session_token(token):
         return None
     resolved_at = _as_utc(now or _now())
     row = session.execute(
@@ -159,7 +159,9 @@ def resolve_browser_session(
 
 
 def csrf_token_matches(presented: str, expected_hash: str) -> bool:
-    if not _valid_token(presented) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+    if not is_browser_session_token(presented) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_hash
+    ):
         return False
     return compare_digest(_digest(presented), expected_hash)
 
@@ -171,7 +173,7 @@ def revoke_browser_session(
     now: datetime | None = None,
 ) -> bool:
     """Revoke one bearer token without storing or querying its plaintext value."""
-    if not _valid_token(token):
+    if not is_browser_session_token(token):
         return False
     revoked_at = _as_utc(now or _now())
     row = session.execute(

@@ -33,6 +33,10 @@ All notable changes to RedDock are documented here.
   constant-time CSRF verification, expiry, targeted and membership-wide
   revocation, a concurrency-aware active-session cap, inactive-record cleanup,
   and active-membership checks
+- A dormant browser boundary that accepts one canonical HTTPS origin, rejects
+  credentials and every path/query/fragment form, performs exact origin
+  comparison, and sets only a host-bound `Secure`, `HttpOnly`, `SameSite=Lax`
+  eight-hour session cookie
 - An additive security-audit migration and tenant-scoped structured event
   primitive that rejects cross-organization actors and free-form metadata;
   dormant session issue/logout operations record events in the same transaction
@@ -49,6 +53,8 @@ All notable changes to RedDock are documented here.
   without changing IDs, evidence hashes, or the account-free local workflow
 - Unsupported deployment-mode values, including the not-yet-implemented
   `server` mode, are rejected instead of widening the local trust boundary
+- Supplying a public origin in local mode also fails startup rather than
+  silently exposing the account-free API under server-looking configuration
 - PostgreSQL and optional Ollama remain private Compose services without host
   ports, and credentials do not appear in rendered service environments
 

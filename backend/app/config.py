@@ -96,6 +96,10 @@ def _deployment_mode() -> Literal["local"]:
         )
     if mode != "local":
         raise ConfigurationError("REDDOCK_DEPLOYMENT_MODE must be 'local'")
+    if os.getenv("REDDOCK_PUBLIC_ORIGIN"):
+        raise ConfigurationError(
+            "REDDOCK_PUBLIC_ORIGIN requires the not-yet-available authenticated server mode"
+        )
     return mode
 
 

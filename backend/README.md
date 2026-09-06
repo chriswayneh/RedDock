@@ -16,6 +16,7 @@ app/intelligence/   approval-gated, provider-neutral advice over reviewed eviden
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
+app/browser_security.py exact HTTPS origin and secure session-cookie contract
 app/security_audit.py bounded, tenant-scoped security-event writer and reader
 app/evidence.py     hashed evidence storage
 ```
@@ -73,6 +74,14 @@ revocation after access changes, an eight-session per-membership cap that evicts
 the oldest active record, and operator-cutoff cleanup. No route issues or accepts
 these tokens yet. Issuance and self-revocation commit their structured security
 events in the same database transaction.
+
+The browser boundary separately canonicalizes one exact HTTPS public origin,
+rejects credentials and all path/query/fragment forms, and fails closed for a
+missing, opaque, malformed, prefix, suffix, or wrong-port Origin header. Its
+session-cookie helper is fixed to `__Host-reddock_session`, an eight-hour
+`Max-Age`, `Secure`, `HttpOnly`, `SameSite=Lax`, `/`, and no `Domain`. Local
+mode rejects `REDDOCK_PUBLIC_ORIGIN`; these helpers remain unused until the
+complete OIDC/session route boundary is ready.
 
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from

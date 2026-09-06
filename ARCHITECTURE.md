@@ -421,6 +421,16 @@ cap, serializing that decision on PostgreSQL. No cookie or login route uses this
 primitive yet. Session issuance and self-revocation append their typed audit
 event before the shared transaction commits, preventing an action/event split.
 
+`backend/app/browser_security.py` defines the browser-facing half of that
+future boundary without activating it. One public origin is canonicalized as
+HTTPS and must contain no credentials, path, query, fragment, whitespace, or
+wildcard. State-changing routes will compare the supplied Origin against that
+single value; missing, opaque, malformed, prefix/suffix, and wrong-port values
+all fail. The bearer helper can emit only the host-bound
+`__Host-reddock_session` cookie with `Secure`, `HttpOnly`, `SameSite=Lax`, `/`,
+no `Domain`, and the same eight-hour bound as the database record. Local mode
+rejects `REDDOCK_PUBLIC_ORIGIN`, and no current route invokes these helpers.
+
 Future security decisions have a separate event foundation. Events are bound to
 one organization, optionally snapshot a verified actor and role, and accept only
 typed actions/outcomes plus length- and character-bounded opaque identifiers.
