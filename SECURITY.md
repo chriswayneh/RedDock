@@ -112,6 +112,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
+- GitHub push protection and secret scanning are enabled, while a pinned CodeQL `security-extended` matrix analyzes workflow, frontend, and backend languages on changes and weekly. CodeQL receives read-only contents plus only the `security-events: write` permission required to publish results.
 
 ## What RedDock does not do
 

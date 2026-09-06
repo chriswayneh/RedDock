@@ -51,6 +51,8 @@ All notable changes to RedDock are documented here.
   no-store` for every API and evidence-download response
 - Separate process-liveness and database-backed readiness endpoints, with
   Compose, image health checks, and product smoke tests using readiness
+- Weekly and change-triggered CodeQL `security-extended` analysis for GitHub
+  Actions, JavaScript/TypeScript, and Python using verified immutable pins
 
 ### Security
 

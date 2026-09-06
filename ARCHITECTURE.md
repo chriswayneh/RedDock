@@ -422,6 +422,12 @@ PostgreSQL database cannot answer. Compose, the production image, and the smoke
 test use readiness so an alive process with unavailable persistence is removed
 from service rather than advertised as healthy.
 
+Repository security analysis is also explicit rather than badge-only. The
+ordinary test/build/smoke workflow and a separate weekly/change-triggered
+CodeQL `security-extended` matrix cover GitHub Actions, JavaScript/TypeScript,
+and Python. Every third-party action reference is a verified full commit SHA,
+and workflow permissions are declared at the minimum needed by each workflow.
+
 The dormant server-session primitive generates independent 256-bit browser and
 CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
 the generated URL-safe shape, joins through one membership to its user and
