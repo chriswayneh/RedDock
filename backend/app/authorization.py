@@ -80,6 +80,7 @@ ROLE_PERMISSIONS: Final = MappingProxyType(
 PUBLIC_ROUTES: Final = frozenset(
     {
         ("GET", "/api/health"),
+        ("GET", "/api/ready"),
         ("GET", "/api/version"),
     }
 )

@@ -80,7 +80,11 @@ def test_every_api_route_has_one_explicit_public_or_permission_decision():
 
     assert PUBLIC_ROUTES.isdisjoint(ROUTE_PERMISSIONS)
     assert api_routes == PUBLIC_ROUTES | ROUTE_PERMISSIONS.keys()
-    assert PUBLIC_ROUTES == {("GET", "/api/health"), ("GET", "/api/version")}
+    assert PUBLIC_ROUTES == {
+        ("GET", "/api/health"),
+        ("GET", "/api/ready"),
+        ("GET", "/api/version"),
+    }
 
 
 def test_sensitive_route_classes_have_distinct_permissions():

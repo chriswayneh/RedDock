@@ -10,6 +10,13 @@ def test_api_responses_are_not_cacheable_and_have_browser_security_headers(clien
         assert response.headers[name] == value
 
 
+def test_readiness_response_uses_the_same_no_store_policy(client):
+    response = client.get("/api/ready")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+
 def test_application_response_has_security_headers_without_disabling_asset_caching(client):
     response = client.get("/")
 

@@ -92,6 +92,11 @@ policy. Paths beneath `/api/` also receive `Cache-Control: no-store`, so browser
 caches do not retain inventory, findings, raw evidence, reports, or DockPacks.
 Static application assets are not forced to `no-store`.
 
+`GET /api/health` is process liveness and performs no dependency work.
+`GET /api/ready` executes one bounded database query and returns a generic `503`
+without connection details when storage is unavailable. The image and Compose
+health checks use readiness, as does the end-to-end smoke test.
+
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from
 another organization, and scopes every read by organization. The table and

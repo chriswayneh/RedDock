@@ -28,5 +28,5 @@ COPY --from=frontend-build /build/frontend/dist /app/static
 RUN chown -R reddock:reddock /app
 USER reddock
 EXPOSE 8080
-HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/health')"
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=5 CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/ready')"
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

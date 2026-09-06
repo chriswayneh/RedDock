@@ -12,7 +12,7 @@ services:
     volumes:
       - reddock-data:/var/lib/reddock
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/health')"]
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/ready')"]
       interval: 15s
       timeout: 3s
       retries: 5

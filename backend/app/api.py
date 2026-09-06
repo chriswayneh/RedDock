@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import lab
@@ -112,6 +113,20 @@ def _evaluation_body(evaluation: Evaluation) -> ScopeEvaluationRead:
 @router.get("/health", response_model=HealthRead)
 def health() -> HealthRead:
     return HealthRead(status="healthy", service="reddock-core")
+
+
+@router.get("/ready", response_model=HealthRead)
+def readiness(session: Session = Depends(get_session)) -> HealthRead:
+    """Report readiness only after the configured database answers a query."""
+    try:
+        if session.scalar(select(1)) != 1:
+            raise SQLAlchemyError("Database readiness query returned an unexpected result")
+    except SQLAlchemyError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is not ready",
+        ) from error
+    return HealthRead(status="ready", service="reddock-core")
 
 
 @router.get("/version", response_model=VersionRead)

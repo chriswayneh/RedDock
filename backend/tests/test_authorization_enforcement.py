@@ -27,6 +27,7 @@ def test_public_health_and_version_do_not_require_an_authenticated_principal(cli
     app.dependency_overrides[current_authorization] = lambda: None
     try:
         assert client.get("/api/health").status_code == 200
+        assert client.get("/api/ready").status_code == 200
         assert client.get("/api/version").status_code == 200
         denied = client.get("/api/dockyards")
         assert denied.status_code == 401

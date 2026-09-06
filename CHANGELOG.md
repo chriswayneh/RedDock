@@ -49,6 +49,8 @@ All notable changes to RedDock are documented here.
 - Centralized response hardening across success and error paths, including
   anti-framing/content-sniffing/browser-capability headers and `Cache-Control:
   no-store` for every API and evidence-download response
+- Separate process-liveness and database-backed readiness endpoints, with
+  Compose, image health checks, and product smoke tests using readiness
 
 ### Security
 

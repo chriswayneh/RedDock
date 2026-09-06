@@ -415,6 +415,13 @@ streamed downloads. Every `/api/` response is additionally `no-store`, keeping
 sensitive engagement records and exported evidence out of browser caches while
 leaving static application asset caching available.
 
+Operational health is split deliberately. `/api/health` says only that the
+FastAPI process can answer; `/api/ready` runs one `SELECT 1` through the active
+SQLAlchemy session and returns a generic 503 when the configured SQLite or
+PostgreSQL database cannot answer. Compose, the production image, and the smoke
+test use readiness so an alive process with unavailable persistence is removed
+from service rather than advertised as healthy.
+
 The dormant server-session primitive generates independent 256-bit browser and
 CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
 the generated URL-safe shape, joins through one membership to its user and

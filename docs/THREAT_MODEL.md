@@ -43,7 +43,7 @@ flowchart LR
 | RedLedger | Bounded artifacts beneath the evidence root | `backend/app/evidence.py:72-75`, `backend/app/evidence.py:169-180` |
 | Intelligence | Optional reviewed packet and bounded provider response | `backend/app/intelligence/runner.py:77-108`, `backend/app/intelligence/providers.py:50-98` |
 | Reporting | Hash-checked database-referenced exports | `backend/app/reporting/runner.py:1199-1217` |
-| Runtime and CI | Unprivileged process, read-only workflow token, pinned actions | `Dockerfile:24-32`, `.github/workflows/ci.yml:7-8`, `.github/workflows/ci.yml:17-18` |
+| Runtime and CI | Unprivileged process, database-backed readiness, read-only workflow token, pinned actions | `Dockerfile`, `compose.yaml`, `backend/app/api.py`, `.github/workflows/ci.yml` |
 
 ### Effective resources and deployment boundaries
 

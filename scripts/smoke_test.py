@@ -71,6 +71,9 @@ def main(base: str) -> None:
     status, health = call(base, "GET", "/api/health")
     check("health endpoint responds", status == 200 and health["status"] == "healthy")
 
+    status, ready = call(base, "GET", "/api/ready")
+    check("database readiness responds", status == 200 and ready["status"] == "ready")
+
     status, dockyard = call(
         base, "POST", "/api/dockyards", {"name": f"Smoke test {int(time.time())}"}
     )

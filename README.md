@@ -131,7 +131,7 @@ cd RedDock
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080). The health endpoint is [http://localhost:8080/api/health](http://localhost:8080/api/health), and interactive API documentation is at [http://localhost:8080/docs](http://localhost:8080/docs).
+Open [http://localhost:8080](http://localhost:8080). Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready), and interactive API documentation is at [http://localhost:8080/docs](http://localhost:8080/docs).
 
 Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
@@ -303,7 +303,7 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.8.0: Phase 8 — Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie/request verification, and centralized response security headers are complete. Shared mode is explicitly rejected and authentication is not enabled yet: integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.8.0: Phase 8 — Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie/request verification, centralized response security headers, and database-backed readiness are complete. Shared mode is explicitly rejected and authentication is not enabled yet: integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 

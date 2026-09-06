@@ -3,7 +3,10 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 
+from app.api import readiness
 from app.config import get_settings
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -13,6 +16,26 @@ def test_health_endpoint(client):
     response = client.get("/api/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy", "service": "reddock-core"}
+
+
+def test_readiness_endpoint_checks_the_database(client):
+    response = client.get("/api/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "service": "reddock-core"}
+
+
+def test_readiness_failure_is_generic_and_does_not_disclose_database_details():
+    class UnavailableDatabase:
+        def scalar(self, _statement):
+            raise SQLAlchemyError("private database location")
+
+    with pytest.raises(HTTPException) as rejected:
+        readiness(UnavailableDatabase())  # type: ignore[arg-type]
+
+    assert rejected.value.status_code == 503
+    assert rejected.value.detail == "Service is not ready"
+    assert "private" not in str(rejected.value.detail)
 
 
 def test_only_documented_loopback_hosts_reach_the_api(client):
