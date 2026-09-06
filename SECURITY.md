@@ -35,6 +35,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Every run has a timeout, stderr is captured and truncated, and a non-zero exit fails the run rather than producing partial results.
 - Only non-invasive profiles exist. Nmap runs without NSE scripts, brute force, credential guessing, exploit scripts, OS detection, UDP scanning, fragmentation, decoys, spoofing, source-port manipulation, or `-A`.
 - The HTTP probe issues one request per origin, follows no redirects, reads no response body, and does not crawl, fuzz, submit forms, or test for vulnerabilities.
+- HTTPS probes require TLS 1.2 or newer for both verified and certificate-observation handshakes. RedDock does not weaken its client policy to enumerate obsolete protocol support.
 
 **Validation**
 

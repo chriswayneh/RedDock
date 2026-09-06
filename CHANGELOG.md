@@ -56,6 +56,8 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- The HTTP probe now sets an explicit TLS 1.2 minimum for both verified and
+  certificate-observation handshakes; it does not negotiate TLS 1.0/1.1
 - The current unauthenticated API remains explicitly loopback-only; the new
   PostgreSQL profile does not claim or enable networked server deployment
 - Partial, empty, oversized, multiline, missing, or symlinked database-secret

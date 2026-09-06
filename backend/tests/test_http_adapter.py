@@ -3,6 +3,7 @@
 No test in this suite contacts a system outside the machine running it.
 """
 
+import ssl
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,6 +72,14 @@ def secure_origin() -> Iterator[str]:
 
 def request(target: str) -> AdapterRequest:
     return AdapterRequest(target=normalize_target(target), profile=HTTP_PROBE)
+
+
+def test_http_probe_tls_policy_has_an_explicit_modern_minimum():
+    from app.discovery.http_probe import _tls_context
+
+    context = _tls_context()
+
+    assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
 
 def test_a_scoped_origin_becomes_a_web_asset_with_one_service(origin: str):

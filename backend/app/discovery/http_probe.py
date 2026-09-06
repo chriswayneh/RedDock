@@ -259,13 +259,13 @@ def _start_tls(
     because an unvalidated peer certificate is returned empty.
     """
     try:
-        secure = ssl.create_default_context().wrap_socket(raw_socket, server_hostname=hostname)
+        secure = _tls_context().wrap_socket(raw_socket, server_hostname=hostname)
         return secure, _tls_details(secure, verified=True)
     except ssl.SSLError as error:
         failure = _verification_failure(error)
         raw_socket.close()
 
-    context = ssl.create_default_context()
+    context = _tls_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
     retry = socket.create_connection(endpoint, timeout=timeout)
@@ -275,6 +275,15 @@ def _start_tls(
         retry.close()
         raise
     return secure, _tls_details(secure, verified=False) | failure
+
+
+def _tls_context() -> ssl.SSLContext:
+    """Create the only client TLS policy used by the HTTP probe."""
+    context = ssl.create_default_context()
+    # The probe records what a current client can negotiate; it does not
+    # enumerate obsolete protocols, so TLS 1.0/1.1 add risk without evidence.
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    return context
 
 
 def _tls_details(secure: ssl.SSLSocket, *, verified: bool) -> dict[str, object]:
