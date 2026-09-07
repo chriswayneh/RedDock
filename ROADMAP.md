@@ -53,25 +53,110 @@ CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8 — Production polish
 
-### Review checkpoint and remaining follow-up
+**Status: in progress—not released.**
 
-The September 7 review fixes mapped-IPv6 exclusion bypass, slow-response HTTP
-worker exhaustion, overlapping validation approvals, interrupted validation
-recovery, discovery/evidence publication atomicity, and PostgreSQL report
-snapshot isolation. Regression tests cover each corrected boundary, including
-real PostgreSQL concurrent writes and loopback-only trickling HTTP responses.
-Existing finding links with missing evidence IDs are repaired on re-detection
-when the original discovery evidence record exists; lost source evidence cannot
-be reconstructed by inventing hashes.
+The goal is to make RedDock more reliable to operate and prepare it for future
+team use. Today it remains a **local, single-operator application**. Working
+sign-in, SSO, and shared-user access are not available yet.
 
-Remaining review items before release:
+### Available now
 
-- Reconcile explicitly closed previously known ports without treating unscanned
-  or absent results as proof of closure.
-- Add list pagination and accurate total counts beyond the default 100 rows.
-- Guard stale Dockyard responses in the remaining UI views and recover the
-  discovery launch button after transport failures.
-- Complete the production requirements below and obtain independent review;
-  passing tests and scans are not a claim that every vulnerability is absent.
+- **A database choice:** keep the simple default setup or use the private
+  [PostgreSQL package](docs/POSTGRESQL.md). A readiness check confirms the app
+  can reach its database, not just that its process is running.
+- **AI is optional:** the normal package needs no model. The optional Ollama
+  bundle supplies a local AI runtime and downloads Qwen3.5 4B separately.
+- **More security checks:** automated code analysis and weekly dependency
+  checks help identify problems. Dependency updates are not merged automatically.
+- **Reliability fixes:** the September 7 checkpoint strengthens target
+  exclusions, limits slow web checks, prevents duplicate validation approvals,
+  and improves interrupted-run recovery and report consistency.
 
-RBAC, optional PostgreSQL, scaling work, release automation, ARM64 support, and production hardening. The persistence checkpoint now includes a validated Alembic baseline, packaged driver, a private pinned [PostgreSQL Compose profile](docs/POSTGRESQL.md), mounted database/provider secrets, real-server migration/CRUD CI, and a database-backed readiness probe distinct from process liveness. The identity checkpoint creates organizations, OIDC-keyed user profiles, memberships, hash-only session storage, non-null organization ownership, least-privilege API enforcement, request-scoped tenancy guards, a dormant high-entropy session lifecycle with expiry, targeted and membership-wide revocation, CSRF-hash checks, a bounded active-session count, retention-cutoff cleanup, and active-membership checks, plus tenant-scoped structured security events with no free-form metadata. The browser boundary now has a dormant exact-HTTPS-origin parser/check, host-bound secure session-cookie policy, and a request verifier that requires both exact Origin and CSRF proof for mutations while rejecting ambiguous duplicate credentials; local mode rejects public-origin configuration. Central response hardening denies framing and browser capabilities, blocks content sniffing and referrer disclosure, and marks every API response `no-store`. Verified, immutable GitHub Action pins now drive the normal CI matrix and `security-extended` CodeQL analysis across workflow, frontend, and backend languages, and grouped weekly Dependabot checks cover Actions, Docker, npm, and pip without auto-merging changes. Unsupported deployment modes are rejected, so none of these primitives enable authentication or shared use yet. The default no-LLM package and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle are explicit. The source-backed [threat model](docs/THREAT_MODEL.md) and [identity/tenancy ADR](docs/adr/0013-production-identity-and-tenancy.md) define the non-negotiable boundary between backward-compatible loopback local mode and a future fail-closed authenticated server mode. Complete when these browser primitives are integrated with OIDC and route authentication, administration, deployment, backup/restore, scaling, and operational requirements are implemented, documented, and validated end to end.
+### Foundations built—not yet enabled for users
+
+Supporting code exists for organizations, user profiles, role-based permissions,
+and secure browser sessions. These pieces still need to be connected into a
+complete, tested sign-in and administration experience.
+
+**This groundwork does not make RedDock a supported multi-user or internet-facing
+service.** Unsupported deployment modes remain blocked.
+
+### Still needed before release
+
+- **Complete result lists:** pagination and accurate counts beyond 100 rows.
+- **More accurate inventory updates:** correctly handle previously open ports
+  reported closed, without assuming an unscanned port is closed.
+- **Smoother navigation:** prevent old workspace results appearing after a
+  switch, and restore the discovery button after connection failures.
+- **Working team access:** integrate sign-in, SSO, permissions, and administration.
+- **Operational readiness:** complete deployment, backup and restore, scaling,
+  release automation, and ARM64 verification across the supported product.
+- **End-to-end and independent review:** test the complete experience and
+  address review findings. Passing automated checks is not a security certification.
+
+### Technical details for reviewers
+
+<details>
+<summary>Expand implementation checkpoints and security boundaries</summary>
+
+#### Database and packaging
+
+- Validated Alembic baseline, packaged PostgreSQL driver, and a private,
+  pinned PostgreSQL Compose profile.
+- Mounted database/provider secrets, real-server migration/CRUD CI, and a
+  database-backed readiness probe separate from process liveness.
+- Explicit no-LLM default and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle;
+  this does not mark all Phase 8 platform work complete.
+
+#### Identity and session groundwork
+
+These primitives are not an enabled authentication system:
+
+- Organizations, OIDC-keyed profiles, memberships, non-null organization
+  ownership, least-privilege API enforcement, and request-scoped tenancy guards.
+- Hash-only session storage, high-entropy session issuance, expiry, targeted
+  and membership-wide revocation, and active-membership checks.
+- CSRF-hash checks, active-session limits, retention-cutoff cleanup, and
+  tenant-scoped structured security events without free-form metadata.
+
+#### Browser boundary
+
+- Dormant exact-HTTPS-origin checks and host-bound secure session-cookie policy.
+- A request verifier requiring both exact Origin and CSRF proof for mutations,
+  with ambiguous duplicate credentials rejected.
+- Local mode rejects public-origin configuration. Central response hardening
+  denies framing and browser capabilities, blocks content sniffing and referrer
+  disclosure, and marks every API response `no-store`.
+
+#### Automated review
+
+- Immutable GitHub Action pins for the CI matrix and `security-extended`
+  CodeQL analysis across workflows, frontend, and backend.
+- Grouped weekly Dependabot checks for Actions, Docker, npm, and pip,
+  without automatic merging.
+
+#### September 7 regression checkpoint
+
+- Mapped-IPv6 exclusion bypass and slow-response HTTP worker exhaustion fixed.
+- Overlapping validation approvals prevented; interrupted validation recovered.
+- Discovery observations and their evidence published atomically.
+- PostgreSQL reports captured with consistent snapshot isolation.
+- Regression coverage includes real PostgreSQL concurrent writes and
+  loopback-only trickling HTTP responses.
+- Re-detection repairs missing evidence IDs only when the original discovery
+  evidence record still exists. Lost evidence cannot be reconstructed by
+  inventing hashes.
+
+#### Release boundary
+
+The [threat model](docs/THREAT_MODEL.md) and
+[identity/tenancy design decision](docs/adr/0013-production-identity-and-tenancy.md)
+separate the current local workflow from a future authenticated server mode
+that refuses requests unless its security requirements are satisfied.
+
+Phase 8 is complete only when identity and browser controls are integrated
+with OIDC and route authentication, and administration, deployment,
+backup/restore, scaling, and operational requirements are documented and
+validated end to end.
+
+</details>
