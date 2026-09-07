@@ -638,6 +638,12 @@ class TestIsolationAndReach:
         run = detect(endpoint)
         assert run.status == "completed"
 
+        # The refusals have proved their point and must not outlive the run.
+        # They are global, and the TestClient fixture tears down after this
+        # test by stopping an event-loop portal that needs a real socket to
+        # wake on Windows; leaving socket.socket refusing deadlocks teardown.
+        monkeypatch.undo()
+
     def test_a_detection_run_asks_dockguard_for_nothing(
         self, endpoint: Recorder, monkeypatch: pytest.MonkeyPatch
     ):
