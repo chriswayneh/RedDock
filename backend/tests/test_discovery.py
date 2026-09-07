@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 
 from app.discovery import registry
 from app.discovery import runner as discovery_runner
@@ -21,6 +22,36 @@ from app.discovery.base import (
     RawArtifact,
 )
 from app.targets import TargetKind
+
+
+@pytest.mark.parametrize("fail_write", [False, True])
+def test_inventory_is_not_visible_until_evidence_is_published(
+    client, dockyard_id, adapter, add_scope, monkeypatch, fail_write
+):
+    from app.database import SessionLocal
+    from app.models import Asset, EvidenceRecord, Observation
+
+    original = discovery_runner._store_evidence
+
+    def inspect_before_write(*args):
+        with SessionLocal() as reader:
+            for model in (Asset, Observation, EvidenceRecord):
+                assert reader.scalar(select(func.count()).select_from(model)) == 0
+        if fail_write:
+            raise OSError("Simulated evidence disk failure")
+        original(*args)
+
+    monkeypatch.setattr(discovery_runner, "_store_evidence", inspect_before_write)
+    add_scope(dockyard_id, "127.0.0.1")
+    accepted = start(client, dockyard_id, "127.0.0.1")
+    run = client.get(
+        f"/api/dockyards/{dockyard_id}/discoveries/{accepted.json()['id']}"
+    ).json()
+    assert run["status"] == ("failed" if fail_write else "completed")
+    with SessionLocal() as reader:
+        for model in (Asset, Observation, EvidenceRecord):
+            count = reader.scalar(select(func.count()).select_from(model))
+            assert count == 0 if fail_write else count > 0
 
 
 class StubAdapter(DiscoveryAdapter):

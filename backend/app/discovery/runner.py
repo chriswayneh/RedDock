@@ -345,7 +345,9 @@ def _persist(
             raw_reference=raw_reference,
         )
 
-    session.commit()
+    # Publish inventory, observations, evidence references and completion in
+    # one transaction, after every evidence write has succeeded.
+    session.flush()
     return len(result.assets), service_count, len(observations)
 
 
@@ -442,7 +444,7 @@ def _store_evidence(
             )
         )
     run.evidence_path = store.relative_run_path(run.dockyard_id, run.id)
-    session.commit()
+    session.flush()
 
 
 def _iso(moment: datetime | None) -> str | None:
@@ -473,6 +475,7 @@ def _asset_document(asset: DiscoveredAsset) -> dict:
 
 
 def _fail(session: Session, run: DiscoveryRun, message: str) -> None:
+    session.rollback()
     run.status = str(RunStatus.FAILED)
     run.error = message[:500]
     run.completed_at = datetime.now(UTC)

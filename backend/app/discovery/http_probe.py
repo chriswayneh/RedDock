@@ -7,12 +7,14 @@ an observation about the endpoint and never a judgement about it.
 """
 
 import http.client
+import io
 import json
 import platform
 import socket
 import ssl
 from dataclasses import dataclass
 from hashlib import sha256
+from time import monotonic
 
 from app.config import get_settings
 from app.discovery.base import (
@@ -110,12 +112,12 @@ class HttpProbeAdapter(DiscoveryAdapter):
         return request.resolved_addresses[0]
 
     def execute(self, target: Target, address: str, timeout_seconds: int) -> ProbeOutcome:
-        timeout = min(timeout_seconds, _CONNECT_TIMEOUT)
-        outcome = _probe(target, address, timeout, "HEAD")
+        deadline = monotonic() + timeout_seconds
+        outcome = _probe(target, address, deadline, "HEAD")
         if outcome.status in (405, 501):
             # A server that refuses HEAD is asked once with GET. The body is
             # still never read, so this stays a bounded, two-request exchange.
-            outcome = _probe(target, address, timeout, "GET")
+            outcome = _probe(target, address, deadline, "GET")
         return outcome
 
     def normalize(
@@ -201,15 +203,60 @@ def _port(target: Target) -> int:
     return target.port or (443 if target.scheme == "https" else 80)
 
 
-def _probe(target: Target, address: str, timeout: int, method: str) -> ProbeOutcome:
+def _remaining_timeout(deadline: float) -> float:
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise TimeoutError("HTTP probe exceeded the run deadline")
+    return min(remaining, _CONNECT_TIMEOUT)
+
+
+class _DeadlineReader(io.RawIOBase):
+    def __init__(self, raw, sock, deadline: float):
+        self._raw = raw
+        self._socket = sock
+        self._deadline = deadline
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer):
+        self._socket.settimeout(_remaining_timeout(self._deadline))
+        return self._raw.readinto(buffer)
+
+    def close(self) -> None:
+        try:
+            self._raw.close()
+        finally:
+            super().close()
+
+
+class _DeadlineSocket:
+    """Recheck the absolute deadline on each buffered HTTP socket read."""
+
+    def __init__(self, sock, deadline: float):
+        self._socket = sock
+        self._deadline = deadline
+
+    def makefile(self, mode="r", buffering=None, *args, **kwargs):
+        if mode != "rb":
+            return self._socket.makefile(mode, buffering, *args, **kwargs)
+        raw = self._socket.makefile(mode, buffering=0, *args, **kwargs)
+        return io.BufferedReader(_DeadlineReader(raw, self._socket, self._deadline))
+
+    def __getattr__(self, name):
+        return getattr(self._socket, name)
+
+
+def _probe(target: Target, address: str, deadline: float, method: str) -> ProbeOutcome:
     endpoint = (address, _port(target))
     connected: socket.socket | None = None
     tls: dict[str, object] | None = None
     try:
-        connected = socket.create_connection(endpoint, timeout=timeout)
+        connected = socket.create_connection(endpoint, timeout=_remaining_timeout(deadline))
         if target.scheme == "https":
-            connected, tls = _start_tls(connected, target.host, endpoint, timeout)
-        status, reason, headers = _request(connected, target, method)
+            connected, tls = _start_tls(connected, target.host, endpoint, deadline)
+        connected.settimeout(_remaining_timeout(deadline))
+        status, reason, headers = _request(_DeadlineSocket(connected, deadline), target, method)
         return ProbeOutcome(status=status, reason=reason, headers=headers, tls=tls)
     except (OSError, http.client.HTTPException) as error:
         return ProbeOutcome(tls=tls, error=_describe_error(error))
@@ -234,20 +281,26 @@ def _request(
             "Connection": "close",
         },
     )
-    response = connection.getresponse()
-    headers = {
-        name: (response.headers.get(name) or "")[:_MAX_HEADER_LENGTH]
-        for name in _RECORDED_HEADERS
-        if response.headers.get(name)
-    }
-    return response.status, response.reason, headers
+    try:
+        response = connection.getresponse()
+        try:
+            headers = {
+                name: (response.headers.get(name) or "")[:_MAX_HEADER_LENGTH]
+                for name in _RECORDED_HEADERS
+                if response.headers.get(name)
+            }
+            return response.status, response.reason, headers
+        finally:
+            response.close()
+    finally:
+        connection.close()
 
 
 def _start_tls(
     raw_socket: socket.socket,
     hostname: str,
     endpoint: tuple[str, int],
-    timeout: int,
+    deadline: float,
 ) -> tuple[socket.socket, dict[str, object]]:
     """Complete a TLS handshake, tolerating lab certificates but reporting them.
 
@@ -259,6 +312,7 @@ def _start_tls(
     because an unvalidated peer certificate is returned empty.
     """
     try:
+        raw_socket.settimeout(_remaining_timeout(deadline))
         secure = _tls_context().wrap_socket(raw_socket, server_hostname=hostname)
         return secure, _tls_details(secure, verified=True)
     except ssl.SSLError as error:
@@ -268,8 +322,9 @@ def _start_tls(
     context = _tls_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
-    retry = socket.create_connection(endpoint, timeout=timeout)
+    retry = socket.create_connection(endpoint, timeout=_remaining_timeout(deadline))
     try:
+        retry.settimeout(_remaining_timeout(deadline))
         secure = context.wrap_socket(retry, server_hostname=hostname)
     except OSError:
         retry.close()

@@ -342,6 +342,21 @@ A DockPack is the Phase 6 portable export. It includes the snapshot, both render
 
 ## Concurrency and restart
 
+Discovery publishes inventory, observations, evidence references, and completed
+status in one transaction after its evidence files have been written. Failure
+rolls back partial inventory. Re-detection can repair legacy missing evidence
+links only when their original retained discovery record is available.
+
+HTTP probes use one monotonic deadline across connect, TLS, buffered header
+reads, and HEAD-to-GET fallback. Mapped IPv6 DNS answers are rejected before
+the adapter receives a destination.
+
+Validation approvals atomically claim a pending run before target contact;
+startup marks interrupted running validations failed and leaves pending
+approvals untouched. PostgreSQL report capture explicitly uses REPEATABLE READ
+so all source queries share one database snapshot, while SQLite uses BEGIN
+IMMEDIATE.
+
 Discovery runs on a `ThreadPoolExecutor` bounded to the concurrent-run limit; there is no Redis, queue, or worker service. If the process stops while a run is in flight, startup marks that run failed with "Interrupted by a RedDock restart" rather than leaving it looking active or pretending it completed.
 
 Detection is synchronous. It reads stored state and contacts nothing, so there is nothing to wait on: the run completes inside the request, the response describes a finished run, and there is no in-flight detection state for a restart to recover. A second detection run on the same Dockyard while one is in flight is refused rather than interleaved.

@@ -190,6 +190,19 @@ def _evaluate_named(
             **base,
         )
 
+    # Mapped IPv6 sockets can connect to IPv4 destinations. Refuse this
+    # alternate representation rather than comparing it in a separate family
+    # and silently bypassing an explicit IPv4 exclusion.
+    for address in addresses:
+        if getattr(ipaddress.ip_address(address), "ipv4_mapped", None) is not None:
+            return Evaluation(
+                decision=Decision.DENIED_POLICY,
+                reason="IPv4-mapped IPv6 DNS answers are not supported",
+                matched_rule=included_by.value,
+                resolved_addresses=addresses,
+                **base,
+            )
+
     # A name is authorized by name only. Resolution exists so that an address
     # the operator deliberately excluded cannot be reached through a name that
     # happens to point at it.

@@ -106,7 +106,7 @@ def attach_evidence(
     observations.
     """
     existing = {
-        row.observation_id
+        row.observation_id: row
         for row in session.scalars(
             select(FindingEvidence).where(FindingEvidence.finding_id == finding.id)
         )
@@ -114,19 +114,25 @@ def attach_evidence(
     added = 0
     for observation_id in observation_ids:
         observation = observations.get(observation_id)
-        if observation is None or observation_id in existing:
+        if observation is None:
             continue
-        session.add(
-            FindingEvidence(
-                finding_id=finding.id,
-                observation_id=observation.id,
-                detection_run_id=detection_run_id,
-                discovery_run_id=observation.discovery_run_id,
-                evidence_record_id=_normalized_record_id(session, observation.discovery_run_id),
-                summary=observation.summary[:500],
-            )
+        if observation_id in existing:
+            link = existing[observation_id]
+            if link.evidence_record_id is None:
+                link.evidence_record_id = _normalized_record_id(
+                    session, observation.discovery_run_id
+                )
+            continue
+        link = FindingEvidence(
+            finding_id=finding.id,
+            observation_id=observation.id,
+            detection_run_id=detection_run_id,
+            discovery_run_id=observation.discovery_run_id,
+            evidence_record_id=_normalized_record_id(session, observation.discovery_run_id),
+            summary=observation.summary[:500],
         )
-        existing.add(observation_id)
+        session.add(link)
+        existing[observation_id] = link
         added += 1
     session.flush()
     return added

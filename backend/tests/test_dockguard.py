@@ -17,6 +17,19 @@ def include(*values: str) -> list[ScopeRule]:
     return [ScopeRule(rule=ScopeRuleType.INCLUDE, value=value) for value in values]
 
 
+@pytest.mark.parametrize("address", ["::ffff:192.168.1.10", "::ffff:c0a8:10a"])
+@pytest.mark.parametrize("blocked", ["192.168.1.10", "192.168.1.0/24"])
+def test_mapped_ipv6_dns_cannot_bypass_ipv4_exclusions(address, blocked):
+    result = evaluate(
+        "http://authorized.example",
+        include("authorized.example") + exclude(blocked),
+        resolver=lambda _: (address,),
+    )
+    assert not result.allowed
+    assert result.decision is Decision.DENIED_POLICY
+    assert "mapped" in result.reason
+
+
 def exclude(*values: str) -> list[ScopeRule]:
     return [ScopeRule(rule=ScopeRuleType.EXCLUDE, value=value) for value in values]
 

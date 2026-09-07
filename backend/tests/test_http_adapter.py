@@ -5,6 +5,7 @@ No test in this suite contacts a system outside the machine running it.
 
 import ssl
 import threading
+import time
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -13,6 +14,48 @@ import pytest
 from app.discovery.base import AdapterRequest, AssetType, Confidence
 from app.discovery.http_probe import HTTP_PROBE, PROJECT_URL, HttpProbeAdapter
 from app.targets import normalize_target
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+def test_trickling_headers_obey_one_total_deadline(fallback):
+    class TrickleHandler(BaseHTTPRequestHandler):
+        def do_HEAD(self):
+            if fallback:
+                self.send_response(405)
+                self.end_headers()
+            else:
+                self.trickle()
+
+        def do_GET(self):
+            self.trickle()
+
+        def trickle(self):
+            try:
+                self.wfile.write(b"HTTP/1.1 200 OK\r\nX-Slow: ")
+                for _ in range(100):
+                    self.wfile.write(b"x")
+                    self.wfile.flush()
+                    time.sleep(0.03)
+            except OSError:
+                pass
+
+        def log_message(self, *_args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), TrickleHandler)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    try:
+        target = normalize_target(f"http://127.0.0.1:{server.server_port}")
+        started = time.monotonic()
+        result = HttpProbeAdapter().execute(target, "127.0.0.1", 0.2)
+        assert time.monotonic() - started < 1.5
+        assert result.status is None
+        assert "Timeout" in result.error
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)
 
 
 class Handler(BaseHTTPRequestHandler):

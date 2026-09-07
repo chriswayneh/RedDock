@@ -27,6 +27,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - URLs are reduced to an origin; embedded credentials are rejected and paths, queries, and fragments are dropped.
 - Hostnames match exactly. There is no wildcard or subdomain expansion, and a hostname is never authorized because it resolves into an authorized network.
 - Resolution is opt-in, records the resolved addresses as evidence, and refuses when a resolved address is explicitly excluded. Adapters contact the recorded address rather than the name.
+- IPv4-mapped IPv6 DNS answers are rejected before execution so alternate address representations cannot bypass IPv4 exclusions.
 
 **Tool execution**
 
@@ -35,6 +36,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Every run has a timeout, stderr is captured and truncated, and a non-zero exit fails the run rather than producing partial results.
 - Only non-invasive profiles exist. Nmap runs without NSE scripts, brute force, credential guessing, exploit scripts, OS detection, UDP scanning, fragmentation, decoys, spoofing, source-port manipulation, or `-A`.
 - The HTTP probe issues one request per origin, follows no redirects, reads no response body, and does not crawl, fuzz, submit forms, or test for vulnerabilities.
+- One absolute HTTP deadline spans connection, TLS, every underlying response read, and HEAD-to-GET fallback; a continuously trickling peer cannot reset the total budget.
 - HTTPS probes require TLS 1.2 or newer for both verified and certificate-observation handshakes. RedDock does not weaken its client policy to enumerate obsolete protocol support.
 
 **Validation**
@@ -42,6 +44,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Phase 3 validation is not a target-entry or tool-selection feature. It can only recheck an eligible, open `http.security_headers` finding at the HTTP origin already recorded on that finding.
 - Requesting validation stores intent and makes no network contact. A separate local operator approval note is required before RedDock makes the recheck, and that approval does not itself prove authorization to assess a system.
 - At approval time RedDock evaluates DockGuard again. If scope was removed or now denies the origin, the denied attempt remains in the audit trail and no connection is attempted.
+- Approval uses an atomic pending-state claim; a concurrent loser cannot probe or replace approval metadata. Startup marks interrupted running validations failed while preserving pending approvals.
 - The validator reuses the fixed HTTP probe: a bodyless `HEAD`, with one standards-required `GET` fallback for `405` or `501`; it accepts no URL, payload, credential, cookie, command, flag, redirect, response body, crawler, or browser automation.
 - A result is `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. It never changes the original finding's severity, confidence, or operator status.
 
@@ -97,6 +100,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Raw artifacts are capped at 2 MiB and marked when truncated.
 - Only a small allowlist of response headers is retained; cookies and other session material are never written to evidence.
 - Every stored artifact is SHA-256 hashed and recorded, for detection, correlation, intelligence, and reporting runs as well as discovery runs. A completed validation also retains raw recheck output, a normalized result, approval/policy metadata, and a hash manifest.
+- Discovery commits inventory, observations, evidence references, and completion together after successful file writes. A write failure rolls back partial inventory, preventing detection from consuming an observation before its evidence reference exists.
 - Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
 **Runtime**

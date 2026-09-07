@@ -45,4 +45,25 @@ CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8 — Production polish
 
+### Review checkpoint and remaining follow-up
+
+The September 7 review fixes mapped-IPv6 exclusion bypass, slow-response HTTP
+worker exhaustion, overlapping validation approvals, interrupted validation
+recovery, discovery/evidence publication atomicity, and PostgreSQL report
+snapshot isolation. Regression tests cover each corrected boundary, including
+real PostgreSQL concurrent writes and loopback-only trickling HTTP responses.
+Existing finding links with missing evidence IDs are repaired on re-detection
+when the original discovery evidence record exists; lost source evidence cannot
+be reconstructed by inventing hashes.
+
+Remaining review items before release:
+
+- Reconcile explicitly closed previously known ports without treating unscanned
+  or absent results as proof of closure.
+- Add list pagination and accurate total counts beyond the default 100 rows.
+- Guard stale Dockyard responses in the remaining UI views and recover the
+  discovery launch button after transport failures.
+- Complete the production requirements below and obtain independent review;
+  passing tests and scans are not a claim that every vulnerability is absent.
+
 RBAC, optional PostgreSQL, scaling work, release automation, ARM64 support, and production hardening. The persistence checkpoint now includes a validated Alembic baseline, packaged driver, a private pinned [PostgreSQL Compose profile](docs/POSTGRESQL.md), mounted database/provider secrets, real-server migration/CRUD CI, and a database-backed readiness probe distinct from process liveness. The identity checkpoint creates organizations, OIDC-keyed user profiles, memberships, hash-only session storage, non-null organization ownership, least-privilege API enforcement, request-scoped tenancy guards, a dormant high-entropy session lifecycle with expiry, targeted and membership-wide revocation, CSRF-hash checks, a bounded active-session count, retention-cutoff cleanup, and active-membership checks, plus tenant-scoped structured security events with no free-form metadata. The browser boundary now has a dormant exact-HTTPS-origin parser/check, host-bound secure session-cookie policy, and a request verifier that requires both exact Origin and CSRF proof for mutations while rejecting ambiguous duplicate credentials; local mode rejects public-origin configuration. Central response hardening denies framing and browser capabilities, blocks content sniffing and referrer disclosure, and marks every API response `no-store`. Verified, immutable GitHub Action pins now drive the normal CI matrix and `security-extended` CodeQL analysis across workflow, frontend, and backend languages, and grouped weekly Dependabot checks cover Actions, Docker, npm, and pip without auto-merging changes. Unsupported deployment modes are rejected, so none of these primitives enable authentication or shared use yet. The default no-LLM package and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle are explicit. The source-backed [threat model](docs/THREAT_MODEL.md) and [identity/tenancy ADR](docs/adr/0013-production-identity-and-tenancy.md) define the non-negotiable boundary between backward-compatible loopback local mode and a future fail-closed authenticated server mode. Complete when these browser primitives are integrated with OIDC and route authentication, administration, deployment, backup/restore, scaling, and operational requirements are implemented, documented, and validated end to end.

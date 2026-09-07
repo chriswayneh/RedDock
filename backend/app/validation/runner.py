@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -131,19 +131,31 @@ def approve_run(
         raise ValidationRejected("Finding for this validation is no longer available")
     target = validation_target(session, finding)
     evaluation = _evaluate(session, dockyard_id, target)
-    run.approval_note = approval_note
-    run.approved_at = datetime.now(UTC)
-    run.decision = str(evaluation.decision)
-    run.decision_reason = evaluation.reason[:500]
-    if not evaluation.allowed:
-        run.status = DENIED
-        run.completed_at = datetime.now(UTC)
-        session.commit()
-        return run
-
-    run.status = RUNNING
-    run.started_at = datetime.now(UTC)
+    claimed_at = datetime.now(UTC)
+    claimed = session.execute(
+        update(ValidationRun)
+        .where(
+            ValidationRun.id == run.id,
+            ValidationRun.dockyard_id == dockyard_id,
+            ValidationRun.status == PENDING_APPROVAL,
+        )
+        .values(
+            approval_note=approval_note,
+            approved_at=claimed_at,
+            decision=str(evaluation.decision),
+            decision_reason=evaluation.reason[:500],
+            status=RUNNING if evaluation.allowed else DENIED,
+            started_at=claimed_at if evaluation.allowed else None,
+            completed_at=None if evaluation.allowed else claimed_at,
+        )
+    )
+    if claimed.rowcount != 1:
+        session.rollback()
+        raise ValidationRejected("Only a pending validation may be approved")
     session.commit()
+    session.refresh(run)
+    if not evaluation.allowed:
+        return run
     try:
         result = _validate(finding, target, evaluation)
         _store_evidence(session, run, finding, evaluation, result)
@@ -159,6 +171,21 @@ def approve_run(
     session.commit()
     session.refresh(run)
     return run
+
+
+def recover_interrupted_runs(session: Session) -> int:
+    """Keep pending approvals, but never leave interrupted probes active."""
+    result = session.execute(
+        update(ValidationRun)
+        .where(ValidationRun.status == RUNNING)
+        .values(
+            status=FAILED,
+            error="Interrupted by a RedDock restart",
+            completed_at=datetime.now(UTC),
+        )
+    )
+    session.commit()
+    return result.rowcount or 0
 
 
 def list_runs(session: Session, dockyard_id: int, limit: int) -> list[ValidationRun]:

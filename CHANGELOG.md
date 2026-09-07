@@ -62,6 +62,21 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- Reject IPv4-mapped IPv6 DNS answers before socket contact, closing an
+  alternate-address path around IPv4 scope exclusions
+- Enforce one absolute HTTP deadline across connection, TLS, header reads, and
+  HEAD-to-GET fallback, including servers that continuously trickle bytes
+- Claim validation approvals atomically so concurrent requests cannot execute
+  the same recheck or overwrite its evidence twice
+- Recover interrupted running validations at startup without consuming pending
+  approvals, allowing reports to resume after a restart
+- Publish discovery inventory, observations, evidence references, and completion
+  in one database transaction; failed evidence writes roll back partial inventory
+- Repair legacy missing finding-evidence links during detection when the
+  original discovery evidence record is available
+- Capture PostgreSQL reports under explicit repeatable-read isolation, with a
+  real-server regression that commits a scope change during report capture
+
 - The HTTP probe now sets an explicit TLS 1.2 minimum for both verified and
   certificate-observation handshakes; it does not negotiate TLS 1.0/1.1
 - The current unauthenticated API remains explicitly loopback-only; the new

@@ -15,6 +15,7 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
     from app.models import Dockyard
 
     monkeypatch.setenv("REDDOCK_DATABASE_URL", url)
+    monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
     for name in (
         "REDDOCK_DATABASE_HOST",
         "REDDOCK_DATABASE_PORT",
@@ -55,6 +56,42 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
             assert stored.organization_id == 1
             session.delete(stored)
             session.commit()
+
+        # Exercise reporting against the real server: another connection
+        # commits a scope change after source capture starts. The report must
+        # retain the earlier snapshot across its subsequent SELECT statements.
+        from app.models import ScopeEntry
+        from app.reporting import runner
+        from tests.phase1 import Recorder
+        from tests.test_reporting import _prepared
+
+        with app.database.SessionLocal() as session:
+            dockyard = Dockyard(name="PostgreSQL reporting isolation")
+            session.add(dockyard)
+            session.commit()
+            report_dockyard_id = dockyard.id
+            _prepared(Recorder(session, dockyard.id), session, dockyard.id, tmp_path)
+
+        original_snapshot = runner._snapshot
+
+        def concurrent_scope_change(session, dockyard_id, manifest):
+            with app.database.SessionLocal() as writer:
+                writer.add(ScopeEntry(
+                    dockyard_id=dockyard_id, rule="exclude", kind="ipv4", value="192.0.2.1"
+                ))
+                writer.commit()
+            snapshot = original_snapshot(session, dockyard_id, manifest)
+            assert snapshot["scope"] == []
+            return snapshot
+
+        monkeypatch.setattr(runner, "_snapshot", concurrent_scope_change)
+        with app.database.SessionLocal() as session:
+            report = runner.start_report(session, report_dockyard_id)
+            assert report.status == "completed", report.error
+        with app.database.SessionLocal() as session:
+            assert session.scalar(select(ScopeEntry).where(
+                ScopeEntry.dockyard_id == report_dockyard_id
+            )).value == "192.0.2.1"
     finally:
         monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'after-postgres.db'}")
         app.config.get_settings.cache_clear()

@@ -308,6 +308,13 @@ docs/          Architecture decisions and project documentation
 
 ## Contributing and Security
 
+The latest Phase 8 review checkpoint adds mapped-address exclusion protection,
+absolute HTTP deadlines, atomic validation approval and discovery evidence
+publication, validation restart recovery, and consistent PostgreSQL report
+snapshots. These controls have regression coverage. Phase 8 remains unreleased;
+the remaining review follow-up and production requirements are tracked in the
+[roadmap](ROADMAP.md).
+
 RedDock is MIT-licensed and owner-directed. Bug reports and design discussion are welcome, but unsolicited external pull requests are not currently accepted so the safety model and phase boundaries remain controlled. See [CONTRIBUTING.md](CONTRIBUTING.md), and report potential vulnerabilities through [SECURITY.md](SECURITY.md) or GitHub Private Vulnerability Reporting.
 
 ## Development Approach

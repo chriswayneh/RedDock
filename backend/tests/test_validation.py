@@ -19,6 +19,83 @@ from app.models import Finding
 from tests.phase1 import Recorder
 
 
+def test_startup_recovers_running_validations_and_preserves_pending(
+    client, dockyard_id, header_finding
+):
+    from app.database import SessionLocal
+    from app.main import app
+    from app.models import ValidationRun
+    from app.reporting.runner import _reject_active_sources
+
+    path = f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+    interrupted = client.post(path).json()["id"]
+    pending = client.post(path).json()["id"]
+    with SessionLocal() as db:
+        db.get(ValidationRun, interrupted).status = "running"
+        db.commit()
+    with TestClient(app, base_url="http://localhost"):
+        with SessionLocal() as db:
+            recovered = db.get(ValidationRun, interrupted)
+            assert recovered.status == "failed"
+            assert recovered.completed_at is not None
+            assert "restart" in recovered.error
+            assert db.get(ValidationRun, pending).status == "pending_approval"
+            _reject_active_sources(db, dockyard_id)
+
+
+def test_stale_approval_loses_atomic_claim_without_probing(
+    client, dockyard_id, header_finding, monkeypatch
+):
+    from sqlalchemy import update
+
+    from app.database import SessionLocal
+    from app.models import ValidationRun
+    from app.validation import runner
+
+    run_id = client.post(
+        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+    ).json()["id"]
+    original = runner._evaluate
+
+    def competing_claim(*args):
+        decision = original(*args)
+        with SessionLocal() as other:
+            other.execute(update(ValidationRun).where(ValidationRun.id == run_id).values(
+                status="running", approval_note="Winning approval"
+            ))
+            other.commit()
+        return decision
+
+    def unexpected_probe(*_args):
+        pytest.fail("A stale approval must never contact the target")
+
+    monkeypatch.setattr(runner, "_evaluate", competing_claim)
+    monkeypatch.setattr(runner, "_validate", unexpected_probe)
+    with SessionLocal() as db:
+        with pytest.raises(runner.ValidationRejected, match="pending"):
+            runner.approve_run(db, dockyard_id, run_id, "Losing approval")
+    with SessionLocal() as db:
+        assert db.get(ValidationRun, run_id).approval_note == "Winning approval"
+
+
+def test_detection_repairs_a_legacy_missing_evidence_link(
+    client, dockyard_id, header_finding, recorder
+):
+    from app.models import FindingEvidence
+
+    db = recorder.session
+    link = db.scalar(select(FindingEvidence).where(
+        FindingEvidence.finding_id == header_finding.id
+    ))
+    expected_record = link.evidence_record_id
+    assert expected_record is not None
+    link.evidence_record_id = None
+    db.commit()
+    detection_runner.start_detection(db, dockyard_id)
+    db.refresh(link)
+    assert link.evidence_record_id == expected_record
+
+
 class ValidationHandler(BaseHTTPRequestHandler):
     """A loopback endpoint that intentionally keeps plaintext HTTP available."""
 

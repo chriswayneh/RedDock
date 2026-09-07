@@ -114,10 +114,15 @@ def _start_report(session: Session, dockyard_id: int) -> ReportRun:
     # sqlite3's legacy transaction mode does not begin a read transaction for
     # SELECT statements. Start one explicitly so every source query observes
     # one immutable database state and concurrent mutations wait until it is
-    # captured. BEGIN IMMEDIATE is intentionally SQLite-specific; other engines
-    # already have a real transaction after session.connection().
+    # captured. PostgreSQL READ COMMITTED instead refreshes its snapshot on
+    # every statement, so explicitly request REPEATABLE READ before any reads.
     session.rollback()
-    connection = session.connection()
+    options = (
+        {"isolation_level": "REPEATABLE READ"}
+        if session.get_bind().dialect.name == "postgresql"
+        else {}
+    )
+    connection = session.connection(execution_options=options)
     if connection.dialect.name == "sqlite":
         connection.exec_driver_sql("BEGIN IMMEDIATE")
     store = EvidenceStore()

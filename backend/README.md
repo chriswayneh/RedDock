@@ -109,3 +109,9 @@ artifacts beneath RedLedger. Every source hash is re-verified before RedDock
 renders technical and executive Markdown, creates the evidence manifest, and
 packages a portable DockPack. Fixed archive metadata makes unchanged retained
 state byte-reproducible; the package hash is checked again before download.
+
+The review checkpoint enforces absolute HTTP deadlines and rejects mapped IPv6
+DNS answers. Discovery publishes inventory and evidence references atomically;
+validation approvals use a conditional claim and interrupted probes recover on
+restart. PostgreSQL report capture uses REPEATABLE READ, tested against a real
+concurrent scope update. See the root roadmap for remaining review work.
