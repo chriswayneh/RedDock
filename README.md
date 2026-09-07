@@ -16,6 +16,8 @@ Turn authorized security checks into findings you can explain—and evidence you
 
 **Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0) — Phase 7 Advanced / Lab
 
+**Created and directed by [Chris Hickman](https://github.com/chriswayneh), with implementation and review assistance from OpenAI Codex and Claude Code.**
+
 **Phase 7 is complete:** separately gated lab controls, data-only detector plugins, and portable policy provenance are published and security-reviewed.
 
 [Start Here](docs/GETTING_STARTED.md) · [What You Get](#what-you-get) · [Screenshots](#screenshots) · [For CISOs & Recruiters](#for-cisos-and-recruiters) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
@@ -363,6 +365,20 @@ RedDock is human-directed and intentionally uses a mixed-AI engineering
 workflow. Claude Code and OpenAI Codex have both contributed implementation and
 review work; repository source, tests, security controls, and owner review—not
 model output—remain the authority for what ships.
+
+### AI assistance and GitHub attribution
+
+Both OpenAI Codex and Claude Code have assisted this project. Some earlier
+Claude-assisted commits contain `Co-Authored-By` trailers; Codex-assisted work
+has also been committed under the owner's Git identity without those trailers.
+GitHub's commit credits and automatic contributor displays therefore are not a
+complete account of the tools used. They should not be read as a measure of
+either tool's contribution or as vendor endorsement.
+
+For new AI-assisted commits, an `AI-assisted-by` message trailer can identify
+the tool actually used without inventing a vendor account or email address.
+This is a transparency note, not a GitHub account-linked co-author field.
+Existing commit authorship, release tags, and history remain unchanged.
 
 ## License
 

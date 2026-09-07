@@ -8,6 +8,15 @@ owner-directed and intentionally closed. Bug reports, design discussion, and
 responsible security disclosures remain welcome; accepted implementation work
 follows the checks and constraints below.
 
+## Attribution
+
+Keep the human author's Git identity. For new AI-assisted work, identify the
+tool actually used in the commit message, for example
+`AI-assisted-by: OpenAI Codex` or `AI-assisted-by: Claude Code` (both if both
+assisted that change). This records assistance without claiming a vendor's
+GitHub identity or endorsement. It does not populate GitHub's co-author UI.
+Do not rewrite existing history merely to normalize these credits.
+
 ## Local checks
 
 ```bash
