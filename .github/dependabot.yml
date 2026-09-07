@@ -25,6 +25,15 @@ updates:
       time: "05:17"
       timezone: "America/Chicago"
     open-pull-requests-limit: 3
+    # Runtime jumps need an explicit compatibility review. Keep receiving
+    # patch releases for the current Python line and non-major image updates.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-minor"
     groups:
       docker-minor-patch:
         patterns:
@@ -41,6 +50,12 @@ updates:
       time: "05:17"
       timezone: "America/Chicago"
     open-pull-requests-limit: 3
+    # Major frontend-tool upgrades can require coordinated source and test
+    # migrations, so they are handled as planned work instead of bot PRs.
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-major"
     groups:
       npm-minor-patch:
         patterns:
