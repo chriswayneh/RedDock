@@ -375,10 +375,13 @@ GitHub's commit credits and automatic contributor displays therefore are not a
 complete account of the tools used. They should not be read as a measure of
 either tool's contribution or as vendor endorsement.
 
-For new AI-assisted commits, an `AI-assisted-by` message trailer can identify
-the tool actually used without inventing a vendor account or email address.
-This is a transparency note, not a GitHub account-linked co-author field.
-Existing commit authorship, release tags, and history remain unchanged.
+New Codex-assisted commits use the verified GitHub co-author attribution
+`Co-authored-by: Codex <codex@openai.com>`, linked to
+[OpenAI's Codex account](https://github.com/codex). An `AI-assisted-by` note
+alone does not create a GitHub co-author credit. See the
+[attribution guidance](CONTRIBUTING.md#attribution). Existing commit authorship,
+release tags, and history remain unchanged; this does not retroactively assign
+credit to older commits.
 
 ## License
 
