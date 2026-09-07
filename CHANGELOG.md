@@ -6,6 +6,9 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A plain-English first-run walkthrough, documentation reading paths, benefit-led
+  product overview, and CISO/recruiter evaluation guide, with explicit local-only
+  limits and a clickable screenshot tour.
 - A source-backed threat model and accepted identity/tenancy architecture that
   preserve the loopback local workflow while requiring a separate fail-closed
   authenticated server mode

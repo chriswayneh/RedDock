@@ -1,5 +1,7 @@
 # Contributing
 
+Trying the app rather than changing its code? Start with the [first-run guide](docs/GETTING_STARTED.md). For a guided view of the repository, use the [documentation index](docs/README.md). The commands below are developer checks, not installation steps for ordinary users.
+
 RedDock is open source under the MIT License, but it does not currently accept
 unsolicited external pull requests. The safety model and phase boundaries are
 owner-directed and intentionally closed. Bug reports, design discussion, and

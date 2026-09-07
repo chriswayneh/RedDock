@@ -1,5 +1,13 @@
 # RedDock roadmap
 
+## The short version
+
+You can already run RedDock locally, define allowed targets, collect observations, review findings, explore their connections, and export reports with evidence. AI advice is optional. [Try it step by step](docs/GETTING_STARTED.md).
+
+The latest release is **v0.8.0 (Phase 7)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
+
+Before that release, the review backlog includes complete lists and counts beyond 100 rows, correct handling of previously open ports reported closed, and more resilient page loading. Production identity, deployment, backup/restore, and operational verification still need end-to-end completion. The detailed checkpoints below distinguish shipped features from that remaining work.
+
 ## Completed — Phase 0: Foundation
 
 Containerized application, React UI shell, FastAPI API, OpenAPI 3.1 schema and Swagger UI explorer, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.

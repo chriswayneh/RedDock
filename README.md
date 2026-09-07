@@ -4,7 +4,7 @@
 
 **Discover. Validate. Prove.**
 
-Container-native security assessment and validation platform with controlled execution and evidence-backed findings.
+Turn authorized security checks into findings you can explain—and evidence you can hand to a reviewer.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -18,7 +18,7 @@ Container-native security assessment and validation platform with controlled exe
 
 **Phase 7 is complete:** separately gated lab controls, data-only detector plugins, and portable policy provenance are published and security-reviewed.
 
-[Quick Start](#quick-start) · [Current Capabilities](#what-you-get) · [Architecture](#architecture) · [Security](#security-by-design) · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md)
+[Start Here](docs/GETTING_STARTED.md) · [What You Get](#what-you-get) · [Screenshots](#screenshots) · [For CISOs & Recruiters](#for-cisos-and-recruiters) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 </div>
 
@@ -26,11 +26,45 @@ Container-native security assessment and validation platform with controlled exe
 
 ## What This Is
 
-RedDock explores how security tooling can become portable, container-native, policy-controlled, reproducible, and evidence-driven instead of a collection of host-specific scripts. It is designed for authorized environments and intentionally grows through small, verified phases.
+RedDock is a local security workbench. Give it a small set of systems you are allowed to assess, run a controlled check, and turn the results into an organized inventory, explainable findings, and downloadable reports with their supporting evidence.
 
-Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. Evidence proves.** An explicit authorized scope and DockGuard control every target, non-invasive discovery produces hashed evidence, deterministic detectors turn observations into traceable findings, and validation is limited to an approval-gated recheck of a narrow class of HTTP finding. Optional intelligence can send one reviewed, evidence-linked packet to an operator-configured model for structured advice; it has no tools and cannot act. Reporting then turns retained state into reproducible technical and executive reports plus a portable, hash-verifiable DockPack. There is no exploitation, credential attack, or payload of any kind.
+The value is not just another list of alerts. It is being able to answer: **What did we check? What did we find? Why do we believe it? What can we give the person reviewing our work?**
+
+It is useful for security practitioners, authorized lab assessments, and people evaluating how security tools are built. You get the application and its source code under the MIT license, not a hosted subscription. The normal package needs no AI account or model. Optional AI gives advice only, after you review what will be sent.
+
+**Current boundary:** RedDock is a single-operator, local-only application. Phase 7 is released; Phase 8 production work is unfinished. It is not yet a shared service with working sign-in, SSO, or role-based user access. Do not expose it to the internet or use it as proof that a system is secure. See the [remaining work](ROADMAP.md#phase-8--production-polish).
 
 ## What You Get
+
+| Your question | What RedDock gives you |
+| --- | --- |
+| What is there? | An inventory of hosts and services observed during controlled discovery. |
+| What deserves a closer look? | Rule-based findings with separate severity and confidence, linked to the observations behind them. |
+| Can I check that again? | An explicitly approved recheck for eligible HTTP security-header findings—not unrestricted attack execution. |
+| How do these results connect? | A clickable RedPath graph explaining the relationships supported by stored evidence. |
+| What can I hand to a manager or reviewer? | Executive and technical reports, plus a DockPack ZIP containing reports and verified supporting files. |
+| Who stays in control? | You define the allowed targets. The server checks that boundary before target contact; AI cannot run tools or change findings. |
+
+**Try it without checking anyone else's systems:** follow the [first-run guide](docs/GETTING_STARTED.md) to assess RedDock's own local web service, then generate a report. No coding or AI setup is needed, but you will need Docker and a few terminal commands.
+
+### For CISOs and recruiters
+
+RedDock is a working example of turning a security requirement into a usable tool with reviewable controls. The repository makes the engineering decisions visible, including its limitations and unfinished work.
+
+| What to evaluate | Where to see the evidence |
+| --- | --- |
+| Turning technical results into a clear handoff | [Reporting and readable evidence screenshots](#screenshots), plus the [DockPack format](docs/DOCKPACK.md). |
+| Enforcing authorization before execution | [Security controls](SECURITY.md), the [threat model](docs/THREAT_MODEL.md), and backend regression tests. |
+| Keeping AI subordinate to human decisions | [The AI data and approval boundary](docs/LOCAL_AI.md). |
+| Designing for review and maintainability | [Architecture decisions](ARCHITECTURE.md), [automated checks](https://github.com/chriswayneh/RedDock/actions), and [release history](CHANGELOG.md). |
+| Being candid about delivery risk | [The roadmap](ROADMAP.md): what ships today, what is under review, and what is still missing. |
+
+This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. Judge it by the running product, source, tests, and documented tradeoffs—not by the tools used to write it. Passing automated checks is not a security certification.
+
+### Technical capability reference
+
+<details>
+<summary>Expand the implementation details</summary>
 
 | Capability | Current implementation |
 | --- | --- |
@@ -58,19 +92,21 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 | Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
 | Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
 
+</details>
+
 ## Screenshots
 
 <div align="center">
 
 <a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings view showing severity, confidence, status, the detector that produced a finding, and the hashed evidence behind it" width="900"></a>
 
-<sub>Findings: severity and confidence stated separately, with the detector, the observation, and the SHA-256 that supports each one.</sub>
+<sub>Understand each issue: what was found, how serious it is, how confident the result is, and the evidence behind it.</sub>
 
 <br><br>
 
 <a href="docs/screenshots/redpath.png"><img src="docs/screenshots/redpath.png" alt="RedDock RedPath view showing an evidence-linked asset and finding graph, relationship details, SHA-256 provenance, and fixed CWE mappings" width="900"></a>
 
-<sub>RedPath: explainable stored-state relationships, selectable edge details, evidence hashes, and fixed CWE classifications—not inferred attack paths.</sub>
+<sub>See how results connect. Click a relationship to inspect its supporting evidence. A connection is not proof of an exploitable attack path.</sub>
 
 <br><br>
 
@@ -94,7 +130,7 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 
 <a href="docs/screenshots/reporting.png"><img src="docs/screenshots/reporting.png" alt="RedDock Reporting workspace showing a completed snapshot, technical and executive report previews, an evidence manifest, and DockPack download" width="900"></a>
 
-<sub>Reporting: one retained snapshot becomes reviewable reports, a complete evidence manifest, and a portable DockPack.</sub>
+<sub>Hand off your work: generate an executive summary, a technical report, and a downloadable package of supporting evidence.</sub>
 
 <br><br>
 
@@ -124,7 +160,9 @@ Its operating model is simple: **AI proposes. Policy authorizes. Tools execute. 
 
 ## Quick Start
 
-Docker Engine or Docker Desktop with Docker Compose is the supported way to run RedDock. Nmap ships inside the image; nothing is installed on your host.
+New to command-line tools? Use the [step-by-step first-run guide](docs/GETTING_STARTED.md), including a local demo, plain-English glossary, and troubleshooting.
+
+You need Git and a running Docker Engine or Docker Desktop with Docker Compose. Docker runs the application in a container; you do not need to install Python, Node.js, or Nmap separately. The first build needs internet access to download dependencies.
 
 ```bash
 git clone https://github.com/chriswayneh/RedDock.git
@@ -272,6 +310,8 @@ docs/          Architecture decisions and project documentation
 
 | Document | Purpose |
 | --- | --- |
+| [Start here](docs/GETTING_STARTED.md) | Install, try a local assessment, understand the results, and stop without losing data |
+| [Documentation guide](docs/README.md) | Choose a reading path for trying, evaluating, operating, or developing RedDock |
 | [Architecture](ARCHITECTURE.md) | Current system boundaries and future design seams |
 | [Security](SECURITY.md) | Authorized-use policy and product safety model |
 | [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |

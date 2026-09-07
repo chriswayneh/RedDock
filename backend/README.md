@@ -1,5 +1,7 @@
 # RedDock backend
 
+**Just want to use RedDock?** You do not need to install this package separately. Follow the [first-run guide](../docs/GETTING_STARTED.md). This page is for developers and reviewers inspecting the server that enforces scope, runs checks, and retains evidence.
+
 This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLAlchemy persistence with SQLite by default and packaged PostgreSQL support. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
 
 ```text
