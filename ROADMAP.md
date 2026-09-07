@@ -68,9 +68,12 @@ sign-in, SSO, and shared-user access are not available yet.
   bundle supplies a local AI runtime and downloads Qwen3.5 4B separately.
 - **More security checks:** automated code analysis and weekly dependency
   checks help identify problems. Dependency updates are not merged automatically.
-- **Reliability fixes:** the September 7 checkpoint strengthens target
-  exclusions, limits slow web checks, prevents duplicate validation approvals,
-  and improves interrupted-run recovery and report consistency.
+- **Reliability and safety fixes:** the September 7 checkpoint strengthens
+  target exclusions, limits slow web checks, prevents duplicate validation
+  approvals, and improves interrupted-run recovery and report consistency. It
+  also stops another website from starting a validation through your browser,
+  tightens what the RedDock page is allowed to load, and removes container
+  privileges the application never uses.
 
 ### Foundations built—not yet enabled for users
 

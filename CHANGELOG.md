@@ -74,13 +74,22 @@ All notable changes to RedDock are documented here.
   same-origin with no `unsafe-inline` of any kind, which the build supports
   because it emits no inline script or style; Swagger and ReDoc keep the
   previous framing and object policy so their CDN bundles still load
-- Drop all capabilities and set `no-new-privileges` on the core Compose service,
-  matching the PostgreSQL and Ollama profiles; the image already runs
-  unprivileged and TCP-connect scanning needs nothing granted back
+- Drop every Linux capability from the RedDock Compose service and set
+  `no-new-privileges` on it, so the application service now matches the
+  `no-new-privileges` the PostgreSQL and Ollama sidecars already set; the image
+  already runs unprivileged and TCP-connect scanning needs nothing granted back.
+  The sidecars keep the capabilities their entry points need to initialize and
+  drop privileges themselves
 - Publish the CI smoke-test container on loopback rather than every interface,
   so a build never exposes the unauthenticated local-mode API on a runner
 - Anchor evidence artifact-name validation with `fullmatch`, so a trailing
   newline cannot satisfy the pattern
+- Repoint every drifted source citation in the threat model, so each claimed
+  control again names the code that implements it; a repository-wide check now
+  confirms all 67 `file:line` references resolve
+- Release the global socket refusal in the detection isolation test before the
+  test client tears down, so the suite runs on Windows as well as Linux without
+  weakening what the test proves
 - Reject IPv4-mapped IPv6 DNS answers before socket contact, closing an
   alternate-address path around IPv4 scope exclusions
 - Enforce one absolute HTTP deadline across connection, TLS, header reads, and
