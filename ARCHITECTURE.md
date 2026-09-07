@@ -45,7 +45,7 @@ The production image builds the React/Vite application and serves it as static c
 
 Every operator-supplied target passes through `normalize_target` before anything else sees it. Normalization produces one canonical form per target and rejects anything ambiguous:
 
-- IPv4 and IPv6 addresses in strict textual form only — integer, packed, and zero-padded forms are refused so `3232235777` can never quietly become `192.168.1.1`.
+- IPv4 and IPv6 addresses in strict textual form only — integer, packed, zero-padded, and hexadecimal forms are refused so neither `3232235777` nor `0xc0a80101` can quietly become `192.168.1.1`. A name whose every label is a numeric component is refused for the same reason, because a C resolver reads `0x7f000001` as `127.0.0.1`.
 - Networks canonicalized to their network address (`192.168.1.37/24` → `192.168.1.0/24`).
 - Hostnames lowercased, stripped of a trailing dot, IDNA-encoded per label, and validated.
 - URLs reduced to an origin: scheme, host, and port. Paths, queries, fragments, and embedded credentials are rejected or dropped, because RedDock probes an origin and not a location.
