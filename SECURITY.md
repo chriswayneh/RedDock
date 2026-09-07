@@ -22,7 +22,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 
 **Target handling**
 
-- Targets are normalized to a single canonical form before comparison or execution. Integer, packed, and zero-padded IP forms are rejected as ambiguous.
+- Targets are normalized to a single canonical form before comparison or execution. Integer, packed, zero-padded, and hexadecimal IP forms are rejected as ambiguous, including a name built only from numeric components such as `0x7f000001`, which a C resolver would read as `127.0.0.1`.
 - A canonical target may contain only `[A-Za-z0-9._:/-]` and can never begin with `-`.
 - URLs are reduced to an origin; embedded credentials are rejected and paths, queries, and fragments are dropped.
 - Hostnames match exactly. There is no wildcard or subdomain expansion, and a hostname is never authorized because it resolves into an authorized network.

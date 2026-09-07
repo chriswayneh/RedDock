@@ -19,6 +19,10 @@ MAX_HOSTNAME_LENGTH = 253
 _IPV4_TEXT = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 _LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 _PREFIX = re.compile(r"^\d{1,3}$")
+#: One component of an address literal as the C resolver would read it, in
+#: decimal, octal or hexadecimal. A name built only from these is an address in
+#: disguise rather than a hostname.
+_ADDRESS_COMPONENT = re.compile(r"^(?:0x[0-9a-f]+|[0-9]+)$")
 # Canonical targets may only contain characters that are meaningless to a shell
 # and can never begin an option, which is what makes argument injection through
 # a target string impossible rather than merely unlikely.
@@ -222,6 +226,13 @@ def _normalize_hostname(text: str) -> str:
         raise TargetError(f"Hostname must be {MAX_HOSTNAME_LENGTH} characters or fewer")
     if normalized[-1].isdigit():
         raise TargetError("Hostname must not end in a numeric label")
+    # A name whose every label is a numeric component is an alternate spelling
+    # of an address: glibc resolves 0x7f000001 and 0x7f.0x0.0x0.0x1 to
+    # 127.0.0.1. Refusing the spelling keeps address space and names separate
+    # universes, the same reason an integer or zero-padded form is refused
+    # above rather than normalized into an address scope never compared.
+    if all(_ADDRESS_COMPONENT.match(label) for label in normalized):
+        raise TargetError("Hostname must not be an alternate numeric address form")
     return result
 
 

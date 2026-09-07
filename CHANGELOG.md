@@ -90,6 +90,10 @@ All notable changes to RedDock are documented here.
 - Release the global socket refusal in the detection isolation test before the
   test client tears down, so the suite runs on Windows as well as Linux without
   weakening what the test proves
+- Refuse a hostname whose every label is a numeric component, such as
+  `0x7f000001` or `0x7f.0x0.0x0.0x1`, which a C resolver reads as `127.0.0.1`;
+  the existing numeric-final-label rule caught the decimal and octal spellings
+  but not the hexadecimal one, which reached DNS as an ordinary name
 - Reject IPv4-mapped IPv6 DNS answers before socket contact, closing an
   alternate-address path around IPv4 scope exclusions
 - Enforce one absolute HTTP deadline across connection, TLS, header reads, and

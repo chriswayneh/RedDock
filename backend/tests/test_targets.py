@@ -47,6 +47,10 @@ def test_international_hostnames_become_idna_labels():
         "192.168.1.999",
         "010.1.1.1",  # leading zeros are ambiguous, not octal
         "3232235777",  # integer form must never become 192.168.1.1
+        "0x7f000001",  # glibc reads the hex form as 127.0.0.1
+        "0xc0a80101",  # and this one as 192.168.1.1
+        "0x7f.0x0.0x0.0x1",  # dotted hex components resolve the same way
+        "http://0x7f000001/",  # the same spelling must not enter through a URL
         "192.168.1.0/33",
         "192.168.1.0/abc",
         "-oN/tmp/output",
