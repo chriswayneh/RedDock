@@ -90,7 +90,10 @@ helpers remain unused until the complete OIDC/session route boundary is ready.
 
 Every current HTTP response, including Host rejections, receives a fixed
 anti-framing, no-sniff, referrer, browser-capability, opener, and resource
-policy. Paths beneath `/api/` also receive `Cache-Control: no-store`, so browser
+policy, plus a `default-src 'self'` content security policy with no
+`unsafe-inline`; the interactive API documentation keeps a narrower framing and
+object policy so its CDN bundles still load. Paths beneath `/api/` also receive
+`Cache-Control: no-store`, so browser
 caches do not retain inventory, findings, raw evidence, reports, or DockPacks.
 Static application assets are not forced to `no-store`.
 

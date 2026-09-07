@@ -426,7 +426,10 @@ with a verified server session remains a separate fail-closed checkpoint.
 `backend/app/response_security.py` wraps the entire HTTP stack, including
 Trusted Host rejection. It adds one fixed anti-framing/content-sniffing,
 referrer, browser-capability, opener, and resource policy without buffering
-streamed downloads. Every `/api/` response is additionally `no-store`, keeping
+streamed downloads, together with a `default-src 'self'` content security policy
+that needs no `unsafe-inline` because the build emits no inline script or style.
+The interactive API documentation keeps the narrower framing and object policy so
+its CDN-hosted bundles still load. Every `/api/` response is additionally `no-store`, keeping
 sensitive engagement records and exported evidence out of browser caches while
 leaving static application asset caching available.
 

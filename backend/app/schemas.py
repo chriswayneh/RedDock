@@ -417,6 +417,19 @@ class FindingEvidenceRead(BaseModel):
     sha256: str | None = None
 
 
+class ValidationRequestCreate(BaseModel):
+    """A validation request selects nothing; the finding already fixes the origin.
+
+    The body carries no field, but requiring it keeps this mutation a JSON
+    request like every other one. A bodyless POST is reachable by a plain
+    cross-origin form submission, which needs no preflight, so a page the
+    operator merely has open could spend this Dockyard's fixed validation
+    budget. Requiring JSON keeps the browser's preflight in front of that.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ValidationApprovalCreate(BaseModel):
     """A local operator's explicit second gate before RedDock rechecks an origin."""
 

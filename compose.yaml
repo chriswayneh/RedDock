@@ -11,6 +11,12 @@ services:
       REDDOCK_EVIDENCE_DIR: /var/lib/reddock/evidence
     volumes:
       - reddock-data:/var/lib/reddock
+    # The image already runs as an unprivileged user, and TCP-connect scanning
+    # needs no capabilities, so nothing has to be granted back here.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/ready')"]
       interval: 15s

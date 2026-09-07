@@ -176,6 +176,8 @@ Open [http://localhost:8080](http://localhost:8080). Process liveness is at [htt
 
 Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
+> **Use Compose, and do not publish port 8080 beyond loopback.** The command above binds `127.0.0.1:8080`. Local mode has no sign-in, so anything that can reach the API can add scope and start discovery runs. Publishing the port yourself — `docker run -p 8080:8080`, a `0.0.0.0` bind, or a proxy forwarding a permitted `Host` — exposes that unauthenticated API to your network and is not a supported deployment.
+
 ### Optional intelligence provider
 
 RedDock ships in two supported Compose shapes:

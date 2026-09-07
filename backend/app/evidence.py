@@ -93,7 +93,7 @@ class EvidenceStore:
         content: bytes,
         scope: str = DISCOVERY_SCOPE,
     ) -> StoredArtifact:
-        if not _ARTIFACT_NAME.match(name):
+        if not _ARTIFACT_NAME.fullmatch(name):
             raise EvidenceError(f"Unsafe evidence artifact name: {name!r}")
         truncated = len(content) > self.max_bytes
         payload = content[: self.max_bytes] if truncated else content
@@ -140,7 +140,7 @@ class EvidenceStore:
         content: bytes,
     ) -> StoredArtifact:
         """Write one complete bounded Phase 6 export without evidence truncation."""
-        if not _ARTIFACT_NAME.match(name):
+        if not _ARTIFACT_NAME.fullmatch(name):
             raise EvidenceError(f"Unsafe evidence artifact name: {name!r}")
         if len(content) > get_settings().max_dockpack_bytes:
             raise EvidenceError("Reporting artifact exceeds the fixed DockPack size limit")

@@ -42,7 +42,7 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 **Validation**
 
 - Phase 3 validation is not a target-entry or tool-selection feature. It can only recheck an eligible, open `http.security_headers` finding at the HTTP origin already recorded on that finding.
-- Requesting validation stores intent and makes no network contact. A separate local operator approval note is required before RedDock makes the recheck, and that approval does not itself prove authorization to assess a system.
+- Requesting validation stores intent and makes no network contact. A separate local operator approval note is required before RedDock makes the recheck, and that approval does not itself prove authorization to assess a system. Like every other state-changing route, the request is JSON, so a page the operator merely has open cannot submit it as a plain cross-origin form and spend this Dockyard's fixed validation budget.
 - At approval time RedDock evaluates DockGuard again. If scope was removed or now denies the origin, the denied attempt remains in the audit trail and no connection is attempted.
 - Approval uses an atomic pending-state claim; a concurrent loser cannot probe or replace approval metadata. Startup marks interrupted running validations failed while preserving pending approvals.
 - The validator reuses the fixed HTTP probe: a bodyless `HEAD`, with one standards-required `GET` fallback for `405` or `501`; it accepts no URL, payload, credential, cookie, command, flag, redirect, response body, crawler, or browser automation.
@@ -105,12 +105,13 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 
 **Runtime**
 
-- The production container runs as an unprivileged `reddock` user, with no `privileged: true`, no added capabilities, and no `network_mode: host`. Nmap therefore runs unprivileged and uses TCP connect scanning; RedDock does not request raw-socket capabilities to enable features it does not need.
+- The production container runs as an unprivileged `reddock` user, with no `privileged: true`, no added capabilities, and no `network_mode: host`. Nmap therefore runs unprivileged and uses TCP connect scanning; RedDock does not request raw-socket capabilities to enable features it does not need. Every Compose service drops all Linux capabilities and sets `no-new-privileges`, so a process inside the container cannot regain privilege it was never given.
 - SQLite data and evidence are held in a named volume by default. The optional PostgreSQL profile uses a separate named volume and a private service with no host port; its password is mounted as a Compose secret. None of this state is baked into the image.
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
 - Requests are accepted only for the documented `localhost` and `127.0.0.1` Host values, preventing an arbitrary Host from using browser DNS rebinding to reach the loopback API.
 - Every response, including a rejected Host, carries centralized anti-framing, no-sniff, referrer, browser-capability, opener, and resource-policy headers. Every `/api/` response is `Cache-Control: no-store` so sensitive JSON and evidence downloads are not retained by browser caches.
+- The content security policy is stated positively: `default-src 'self'` with same-origin script, style, image, font, and connection sources, and no `unsafe-inline` of any kind. The build emits no inline script or style, so an injected reference has nowhere to resolve to. The interactive API documentation keeps the narrower framing and object policy because its bundles load from a CDN.
 - Liveness discloses only that the process can answer. The separate readiness route performs one database query and returns a generic 503 without connection details; container orchestration uses readiness rather than treating a database-blind process check as healthy.
 - The only accepted deployment mode is `local`. `REDDOCK_DEPLOYMENT_MODE=server` and unknown values fail startup until authenticated server mode is implemented; enabling PostgreSQL does not widen the trust boundary.
 - Future server-browser primitives already require one exact HTTPS origin and a host-bound `Secure`, `HttpOnly`, `SameSite=Lax` session cookie. Their request verifier rejects ambiguous duplicate credentials and requires both exact Origin and session-bound CSRF proof for unsafe methods. They are deliberately disconnected from routes, and setting `REDDOCK_PUBLIC_ORIGIN` in local mode fails startup rather than implying authentication that is not present.

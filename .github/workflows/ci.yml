@@ -90,7 +90,7 @@ jobs:
           cp plugins/examples/example-server.json.example "$RUNNER_TEMP/reddock-detectors/example-server.json"
       - name: Start the production image with Phase 7 test gates
         run: |
-          docker run -d --name reddock -p 8080:8080 \
+          docker run -d --name reddock -p 127.0.0.1:8080:8080 \
             -e REDDOCK_LAB_MODE_ENABLED=true \
             -e REDDOCK_DETECTOR_PLUGIN_DIR=/etc/reddock/detectors \
             -v "$RUNNER_TEMP/reddock-detectors:/etc/reddock/detectors:ro" \

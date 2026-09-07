@@ -65,6 +65,7 @@ from app.schemas import (
     ServiceRead,
     ServiceRowRead,
     ValidationApprovalCreate,
+    ValidationRequestCreate,
     ValidationRunRead,
     VersionRead,
 )
@@ -665,7 +666,10 @@ def read_validations(
     status_code=status.HTTP_201_CREATED,
 )
 def request_validation(
-    dockyard_id: int, finding_id: int, session: Session = Depends(get_session)
+    dockyard_id: int,
+    finding_id: int,
+    payload: ValidationRequestCreate,
+    session: Session = Depends(get_session),
 ) -> ValidationRunRead:
     """Request, but do not yet run, a finding's one safe validation profile."""
     require_dockyard(dockyard_id, session)

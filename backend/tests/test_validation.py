@@ -28,8 +28,8 @@ def test_startup_recovers_running_validations_and_preserves_pending(
     from app.reporting.runner import _reject_active_sources
 
     path = f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
-    interrupted = client.post(path).json()["id"]
-    pending = client.post(path).json()["id"]
+    interrupted = client.post(path, json={}).json()["id"]
+    pending = client.post(path, json={}).json()["id"]
     with SessionLocal() as db:
         db.get(ValidationRun, interrupted).status = "running"
         db.commit()
@@ -53,7 +53,8 @@ def test_stale_approval_loses_atomic_claim_without_probing(
     from app.validation import runner
 
     run_id = client.post(
-        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations",
+        json={},
     ).json()["id"]
     original = runner._evaluate
 
@@ -145,7 +146,8 @@ def test_validation_requires_a_separate_approval_step(
     client: TestClient, dockyard_id: int, header_finding: Finding
 ):
     requested = client.post(
-        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations",
+        json={},
     )
 
     assert requested.status_code == 201, requested.text
@@ -167,7 +169,8 @@ def test_approved_validation_confirms_a_persisting_http_finding_and_keeps_a_pack
     client: TestClient, dockyard_id: int, header_finding: Finding, environment: Path
 ):
     run = client.post(
-        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations",
+        json={},
     ).json()
     approved = client.post(
         f"/api/dockyards/{dockyard_id}/validations/{run['id']}/approve",
@@ -199,7 +202,8 @@ def test_scope_is_rechecked_at_approval_and_a_denied_validation_never_writes_evi
     client: TestClient, dockyard_id: int, header_finding: Finding, environment: Path
 ):
     run = client.post(
-        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations"
+        f"/api/dockyards/{dockyard_id}/findings/{header_finding.id}/validations",
+        json={},
     ).json()
     scope = client.get(f"/api/dockyards/{dockyard_id}/scope").json()
     assert client.delete(f"/api/dockyards/{dockyard_id}/scope/{scope[0]['id']}").status_code == 204
@@ -225,7 +229,9 @@ def test_a_non_http_finding_has_no_validation_profile(
     finding = recorder.session.scalar(
         select(Finding).where(Finding.detector == "service.rules")
     )
-    response = client.post(f"/api/dockyards/{dockyard_id}/findings/{finding.id}/validations")
+    response = client.post(
+        f"/api/dockyards/{dockyard_id}/findings/{finding.id}/validations", json={}
+    )
 
     assert response.status_code == 409
     assert "no Phase 3" in response.json()["detail"]

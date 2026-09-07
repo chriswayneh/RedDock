@@ -27,6 +27,8 @@ Leave that terminal open. Once startup finishes, open [RedDock in your browser](
 
 If you already downloaded the repository, use its existing folder instead of cloning a second copy.
 
+> **Start it with Compose, and do not publish port 8080 to every interface.** The supported command above binds RedDock to `127.0.0.1:8080`, so only your own machine can reach it. RedDock in local mode has no sign-in: anything that can reach the API can add scope and start discovery runs. Publishing the port yourself — `docker run -p 8080:8080`, a `0.0.0.0` bind, or a reverse proxy forwarding a permitted `Host` — hands that unauthenticated API to your whole network, and is not a supported deployment.
+
 ## 2. Create a demonstration workspace
 
 1. Open **Dockyards** and create a Dockyard named `My first local demo`. A Dockyard is simply a workspace for one assessment.

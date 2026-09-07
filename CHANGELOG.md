@@ -65,6 +65,22 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- Require a JSON request body to ask for a validation, so the one state-changing
+  route a cross-origin form could submit without a browser preflight can no
+  longer spend a Dockyard's fixed validation budget from a page the operator
+  merely has open
+- State the application content-security policy positively with `default-src
+  'self'`, keeping script, style, image, font, and connection sources
+  same-origin with no `unsafe-inline` of any kind, which the build supports
+  because it emits no inline script or style; Swagger and ReDoc keep the
+  previous framing and object policy so their CDN bundles still load
+- Drop all capabilities and set `no-new-privileges` on the core Compose service,
+  matching the PostgreSQL and Ollama profiles; the image already runs
+  unprivileged and TCP-connect scanning needs nothing granted back
+- Publish the CI smoke-test container on loopback rather than every interface,
+  so a build never exposes the unauthenticated local-mode API on a runner
+- Anchor evidence artifact-name validation with `fullmatch`, so a trailing
+  newline cannot satisfy the pattern
 - Reject IPv4-mapped IPv6 DNS answers before socket contact, closing an
   alternate-address path around IPv4 scope exclusions
 - Enforce one absolute HTTP deadline across connection, TLS, header reads, and
