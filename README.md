@@ -4,7 +4,7 @@
 
 **Discover. Validate. Prove.**
 
-Turn authorized security checks into findings you can explain—and evidence you can hand to a reviewer.
+Turn authorized security checks into findings you can explain, with evidence you can hand to a reviewer.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -14,7 +14,7 @@ Turn authorized security checks into findings you can explain—and evidence you
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/phase-7%20Advanced%20%2F%20Lab-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0) — Phase 7 Advanced / Lab
+**Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0), Phase 7 Advanced / Lab
 
 **Created and directed by [Chris Hickman](https://github.com/chriswayneh), with implementation and review assistance from OpenAI Codex and Claude Code.**
 
@@ -30,7 +30,7 @@ Turn authorized security checks into findings you can explain—and evidence you
 
 RedDock is a local security workbench. Give it a small set of systems you are allowed to assess, run a controlled check, and turn the results into an organized inventory, explainable findings, and downloadable reports with their supporting evidence.
 
-The value is not just another list of alerts. It is being able to answer: **What did we check? What did we find? Why do we believe it? What can we give the person reviewing our work?**
+RedDock gives you more than an alert list. It helps answer four practical questions: **What did we check? What did we find? Why do we believe it? What can we give the person reviewing our work?**
 
 It is useful for security practitioners, authorized lab assessments, and people evaluating how security tools are built. You get the application and its source code under the MIT license, not a hosted subscription. The normal package needs no AI account or model. Optional AI gives advice only, after you review what will be sent.
 
@@ -42,7 +42,7 @@ It is useful for security practitioners, authorized lab assessments, and people 
 | --- | --- |
 | What is there? | An inventory of hosts and services observed during controlled discovery. |
 | What deserves a closer look? | Rule-based findings with separate severity and confidence, linked to the observations behind them. |
-| Can I check that again? | An explicitly approved recheck for eligible HTTP security-header findings—not unrestricted attack execution. |
+| Can I check that again? | An explicitly approved recheck for eligible HTTP security-header findings. This is not unrestricted attack execution. |
 | How do these results connect? | A clickable RedPath graph explaining the relationships supported by stored evidence. |
 | What can I hand to a manager or reviewer? | Executive and technical reports, plus a DockPack ZIP containing reports and verified supporting files. |
 | Who stays in control? | You define the allowed targets. The server checks that boundary before target contact; AI cannot run tools or change findings. |
@@ -51,7 +51,7 @@ It is useful for security practitioners, authorized lab assessments, and people 
 
 ### For CISOs and recruiters
 
-RedDock is a working example of turning a security requirement into a usable tool with reviewable controls. The repository makes the engineering decisions visible, including its limitations and unfinished work.
+RedDock shows how a security requirement can become a usable tool with controls that reviewers can inspect. The repository includes the engineering decisions, current limits, and unfinished work.
 
 | What to evaluate | Where to see the evidence |
 | --- | --- |
@@ -61,7 +61,7 @@ RedDock is a working example of turning a security requirement into a usable too
 | Designing for review and maintainability | [Architecture decisions](ARCHITECTURE.md), [automated checks](https://github.com/chriswayneh/RedDock/actions), and [release history](CHANGELOG.md). |
 | Being candid about delivery risk | [The roadmap](ROADMAP.md): what ships today, what is under review, and what is still missing. |
 
-This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. Judge it by the running product, source, tests, and documented tradeoffs—not by the tools used to write it. Passing automated checks is not a security certification.
+This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. Judge it by the running product, source, tests, and documented tradeoffs, not by the tools used to write it. Passing automated checks is not a security certification.
 
 ### Technical capability reference
 
@@ -76,7 +76,7 @@ This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. J
 | Scope policy | DockGuard evaluates every target deterministically and fails closed |
 | Discovery | Nmap host and TCP service discovery, plus a single-request HTTP origin probe |
 | Inventory | Normalized assets and services that reconcile across repeat discovery |
-| Observations | Dated, adapter-attributed records of what was seen — never findings |
+| Observations | Dated, adapter-attributed records of what was seen. Observations are not findings. |
 | Detection | Deterministic detectors that read stored observations and reach nothing |
 | Findings | Normalized conclusions with separate severity and confidence, deduplicated by fingerprint |
 | Lifecycle | Findings resolve rather than disappear, and operator decisions survive later runs |
@@ -215,7 +215,7 @@ storage, shutdown, and external-orchestrator settings.
 Lab capabilities require both a deployment-owner switch and a short-lived
 per-Dockyard authorization; the API cannot enable the deployment switch. See
 [Lab mode](docs/LAB_MODE.md). Organization-specific detector policy can be
-installed only as bounded, data-only JSON manifests—never executable plugin
+installed only as bounded, data-only JSON manifests, never as executable plugin
 code. See [Detector plugins](plugins/README.md).
 
 ## How It Works
@@ -278,7 +278,7 @@ The production image builds the React application and serves it from the same Fa
 
 > **AI proposes. Policy authorizes. Tools execute. Evidence proves.**
 
-- **Scope is explicit and server-enforced.** DockGuard evaluates every target twice — when the run is requested and again immediately before the tool is invoked. The UI cannot bypass it.
+- **Scope is explicit and server-enforced.** DockGuard evaluates every target twice: when the run is requested and again immediately before the tool is invoked. The UI cannot bypass it.
 - **Denials are specific.** `denied_out_of_scope`, `denied_excluded`, `invalid_target`, and `unresolved` each carry the reason and the matching scope entry.
 - **Fail closed.** Anything DockGuard cannot positively place inside the authorized scope is denied, including a scope it cannot parse.
 - **The local API stays local.** The application accepts only the documented `localhost` and `127.0.0.1` Host values, closing the browser DNS-rebinding path to its unauthenticated loopback API.
@@ -328,25 +328,25 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-**v0.8.0 delivers Phase 7 — Advanced / Lab:** a fixed single-host extended service-discovery profile behind independent deployment and short-lived Dockyard gates, an append-only policy ledger, bounded data-only detector manifests with content-addressed provenance, optional local Qwen3.5 through Ollama, and portable lab history in reports and DockPacks.
+**v0.8.0 delivers Phase 7, Advanced / Lab:** a fixed single-host extended service-discovery profile behind independent deployment and short-lived Dockyard gates, an append-only policy ledger, bounded data-only detector manifests with content-addressed provenance, optional local Qwen3.5 through Ollama, and portable lab history in reports and DockPacks.
 
-**v0.7.0 delivers Phase 6 — Reporting:** deterministic technical and executive reports, a complete SHA-256 evidence manifest, and portable DockPack exports assembled only from verified retained artifacts. Unchanged Dockyard state produces byte-identical output, and reporting contacts neither a target nor a model.
+**v0.7.0 delivers Phase 6, Reporting:** deterministic technical and executive reports, a complete SHA-256 evidence manifest, and portable DockPack exports assembled only from verified retained artifacts. Unchanged Dockyard state produces byte-identical output, and reporting contacts neither a target nor a model.
 
-**v0.6.0 delivered Phase 5 — Intelligence:** opt-in local or cloud OpenAI-compatible advice, exact packet review before disclosure, separate approval, provider and prompt-version binding, strict output validation, and hashed input/output provenance. The model receives no tools and cannot change RedDock state.
+**v0.6.0 delivered Phase 5, Intelligence:** opt-in local or cloud OpenAI-compatible advice, exact packet review before disclosure, separate approval, provider and prompt-version binding, strict output validation, and hashed input/output provenance. The model receives no tools and cannot change RedDock state.
 
-**v0.5.0 delivers Phase 4 — Correlation:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph.
+**v0.5.0 delivers Phase 4, Correlation:** stored-state-only correlation snapshots, exact-address asset relationships, evidence-linked finding correlations, fixed CWE mappings, and the RedPath graph.
 
-**v0.4.0 delivered Phase 3 — Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
+**v0.4.0 delivered Phase 3, Validation:** an approval-gated, scope-rechecked, non-destructive HTTP-origin recheck for eligible open security-header findings, with `confirmed`, `not_reproduced`, or `indeterminate` outcomes, separate confidence, and a hashed raw/normalized/metadata/manifest evidence package.
 
-**v0.3.0 delivered Phase 2 — Detection:** the detector contract and registry, detection runs, normalized findings with separate severity and confidence, deduplication by stable fingerprint, a lifecycle that resolves rather than deletes, evidence links from every finding back to the observations and hashes behind it, and the CVE enrichment boundary.
+**v0.3.0 delivered Phase 2, Detection:** the detector contract and registry, detection runs, normalized findings with separate severity and confidence, deduplication by stable fingerprint, a lifecycle that resolves rather than deletes, evidence links from every finding back to the observations and hashes behind it, and the CVE enrichment boundary.
 
 **v0.2.1 finalized Phase 1** with consistent version metadata across the application, API, and packages.
 
-**v0.2.0 delivered Phase 1 — Discovery:** DockGuard scope enforcement, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation.
+**v0.2.0 delivered Phase 1, Discovery:** DockGuard scope enforcement, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation.
 
-**v0.1.0 delivered Phase 0 — Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
+**v0.1.0 delivered Phase 0, Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.8.0: Phase 8 — Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie/request verification, centralized response security headers, database-backed readiness, CodeQL, dependency-audit gates, and review-only weekly dependency updates are complete. Shared mode is explicitly rejected and authentication is not enabled yet: integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+**Next after v0.8.0: Phase 8, Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie/request verification, centralized response security headers, database-backed readiness, CodeQL, dependency-audit gates, and review-only weekly dependency updates are complete. Shared mode is explicitly rejected and authentication is not enabled yet. Integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
 
 ## Contributing and Security
 
@@ -363,8 +363,8 @@ RedDock is MIT-licensed and owner-directed. Bug reports and design discussion ar
 
 RedDock is human-directed and intentionally uses a mixed-AI engineering
 workflow. Claude Code and OpenAI Codex have both contributed implementation and
-review work; repository source, tests, security controls, and owner review—not
-model output—remain the authority for what ships.
+review work. Repository source, tests, security controls, and owner review, not
+model output, remain the authority for what ships.
 
 ### AI assistance and GitHub attribution
 

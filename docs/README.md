@@ -17,4 +17,4 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 | Explore advanced configuration | [PostgreSQL](POSTGRESQL.md), [lab controls](LAB_MODE.md), and [data-only detector plugins](../plugins/README.md) |
 | Inspect or develop the software | [Architecture](../ARCHITECTURE.md), [backend guide](../backend/README.md), and [contribution checks](../CONTRIBUTING.md) |
 
-The normal package is local-only and works without AI. Advanced configuration does not turn it into a supported shared or internet-facing service. Technical documents intentionally retain precise implementation details for reviewers; the [first-run guide's glossary](GETTING_STARTED.md#the-names-translated) explains the product names.
+The normal package is local-only and works without AI. Advanced configuration does not turn it into a supported shared or internet-facing service. The technical documents include precise details for reviewers. The [first-run guide's glossary](GETTING_STARTED.md#the-names-translated) explains the product names.
