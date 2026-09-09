@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.discovery.base import DiscoveredAsset, DiscoveredObservation, DiscoveredService
 from app.models import Asset, Observation, Service
 
+_OPEN_SERVICE_STATES = frozenset({"open", "open|filtered"})
+
 
 def upsert_asset(
     session: Session, dockyard_id: int, discovered: DiscoveredAsset, seen_at: datetime
@@ -54,7 +56,7 @@ def upsert_asset(
 
 def upsert_service(
     session: Session, asset: Asset, discovered: DiscoveredService, seen_at: datetime
-) -> Service:
+) -> Service | None:
     """Reconcile one discovered service against an asset."""
     service = session.scalar(
         select(Service).where(
@@ -64,6 +66,10 @@ def upsert_service(
         )
     )
     if service is None:
+        # A negative result is still retained as an observation, but it does
+        # not create a permanent row for every closed port in a bounded scan.
+        if discovered.state not in _OPEN_SERVICE_STATES:
+            return None
         service = Service(
             asset_id=asset.id,
             transport=discovered.transport,
@@ -79,8 +85,14 @@ def upsert_service(
         session.flush()
         return service
 
+    was_open = service.state in _OPEN_SERVICE_STATES
     service.last_seen = seen_at
     service.state = discovered.state
+    if not was_open and discovered.state in _OPEN_SERVICE_STATES:
+        # Reopening a port does not prove that the prior process returned.
+        service.service_name = None
+        service.product = None
+        service.version = None
     service.service_name = discovered.service_name or service.service_name
     service.product = discovered.product or service.product
     service.version = discovered.version or service.version

@@ -106,7 +106,7 @@ prepare → execute → parse → normalize → artifacts
 
 ## Domain model
 
-- **Asset** — something observed inside a Dockyard. Identity is deterministic: within one Dockyard an asset is `(asset_type, identity)`, where identity is a normalized IP for a `host` and an origin for a `web` asset. Repeat discovery updates `last_seen` and adds newly learned facts; it never erases what an earlier run established.
+- **Asset** — something observed inside a Dockyard. Identity is deterministic: within one Dockyard an asset is `(asset_type, identity)`, where identity is a normalized IP for a `host` and an origin for a `web` asset. Repeat discovery updates `last_seen` and preserves stable host facts. When a closed service reopens without identification, its prior process details are cleared rather than presented as current.
 - **Service** — a transport endpoint on an asset, unique on `(asset, transport, port)`. `service_name`, `product`, and `version` stay null until an adapter actually identified them. A conventional port number is not evidence: nmap's port-table guess is discarded, so TCP/22 open is recorded as TCP/22 open and nothing more.
 - **Observation** — a dated, adapter-attributed statement of what was seen, with a confidence of `observed` (RedDock saw it) or `reported` (the target said so). Observations accumulate as history and are never reconciled.
 - **DiscoveryRun** — one auditable request: adapter, profile, requested and normalized target, DockGuard decision and reason, status, counts, and evidence path. Denied requests are stored too, because an audit trail that only records successes is not an audit trail.
@@ -346,6 +346,13 @@ Discovery publishes inventory, observations, evidence references, and completed
 status in one transaction after its evidence files have been written. Failure
 rolls back partial inventory. Re-detection can repair legacy missing evidence
 links only when their original retained discovery record is available.
+
+Repeat Nmap discovery updates a known service only when the result identifies
+that exact transport and port. Explicit closed or filtered results change its
+current state, while omitted ports remain unchanged. A compact Nmap count is not
+enough to identify a port; only an exact bounded port list enters normalized
+evidence. Negative results for previously unknown ports remain observations and
+do not create rows for every closed port in a scan.
 
 HTTP probes use one monotonic deadline across connect, TLS, buffered header
 reads, and HEAD-to-GET fallback. Mapped IPv6 DNS answers are rejected before

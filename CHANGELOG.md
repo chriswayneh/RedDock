@@ -118,6 +118,9 @@ All notable changes to RedDock are documented here.
   approvals, allowing reports to resume after a restart
 - Publish discovery inventory, observations, evidence references, and completion
   in one database transaction; failed evidence writes roll back partial inventory
+- Reconcile explicitly closed or filtered Nmap ports against known services,
+  leave unscanned ports unchanged, retain exact compact results in evidence, and
+  keep count-only or newly closed results from becoming guessed service rows
 - Repair legacy missing finding-evidence links during detection when the
   original discovery evidence record is available
 - Capture PostgreSQL reports under explicit repeatable-read isolation, with a

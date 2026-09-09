@@ -75,7 +75,7 @@ This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. J
 | Workspaces | Dockyards that own an explicit authorized scope |
 | Scope policy | DockGuard evaluates every target deterministically and fails closed |
 | Discovery | Nmap host and TCP service discovery, plus a single-request HTTP origin probe |
-| Inventory | Normalized assets and services that reconcile across repeat discovery |
+| Inventory | Normalized assets and services that reconcile explicit state changes without guessing about unscanned ports |
 | Observations | Dated, adapter-attributed records of what was seen. Observations are not findings. |
 | Detection | Deterministic detectors that read stored observations and reach nothing |
 | Findings | Normalized conclusions with separate severity and confidence, deduplicated by fingerprint |

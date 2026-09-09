@@ -33,10 +33,13 @@ HOST_DISCOVERY = "host_discovery"
 SERVICE_DISCOVERY = "service_discovery"
 LAB_EXTENDED_SERVICE_DISCOVERY = "lab_extended_service_discovery"
 
-# States worth persisting as a service. Anything else is recorded as an
-# observation only, so the inventory never fills with ports that answered
-# nothing.
-_SERVICE_STATES = frozenset({"open", "open|filtered"})
+# Nmap's documented port states. Open states may create inventory entries;
+# negative states reconcile an entry only when that exact port was scanned.
+_OPEN_SERVICE_STATES = frozenset({"open", "open|filtered"})
+_PORT_STATES = _OPEN_SERVICE_STATES | frozenset(
+    {"closed", "filtered", "unfiltered", "closed|filtered"}
+)
+_MAX_SUMMARY_PORTS = 1_000
 _MAX_STDERR = 500
 _VERSION_TEXT = re.compile(r"Nmap version ([0-9][0-9A-Za-z.\-]*)")
 
@@ -268,6 +271,7 @@ def _normalize_ports(
     services: list[DiscoveredService] = []
     observations: list[DiscoveredObservation] = []
 
+    seen: set[tuple[str, int]] = set()
     for port in host.findall("./ports/port"):
         state_element = port.find("state")
         if state_element is None:
@@ -277,46 +281,127 @@ def _normalize_ports(
         if port_number is None:
             continue
         state = state_element.get("state", "unknown")
-        if state not in _SERVICE_STATES:
+        if state not in _PORT_STATES:
             continue
 
-        identified = _identified_service(port)
-        services.append(
-            DiscoveredService(
-                transport=transport,
-                port=port_number,
-                state=state,
-                service_name=identified.get("name"),
-                product=identified.get("product"),
-                version=identified.get("version"),
-            )
+        identified = _identified_service(port) if state in _OPEN_SERVICE_STATES else {}
+        _append_port(
+            services,
+            observations,
+            seen,
+            address=address,
+            transport=transport,
+            port=port_number,
+            state=state,
+            reason=state_element.get("reason", ""),
+            identified=identified,
         )
-        observations.append(
-            DiscoveredObservation(
-                observation_type="port_state",
-                summary=f"{transport.upper()}/{port_number} {state} on {address}",
-                confidence=Confidence.OBSERVED,
-                asset_identity=address,
-                service_port=(transport, port_number),
-                detail={"reason": state_element.get("reason", "")},
-            )
-        )
-        if identified:
-            observations.append(
-                DiscoveredObservation(
-                    observation_type="service_identified",
-                    summary=(
-                        f"{transport.upper()}/{port_number} identified as "
-                        f"{_describe(identified)}"
-                    ),
-                    confidence=Confidence.REPORTED,
-                    asset_identity=address,
-                    service_port=(transport, port_number),
-                    detail=identified,
+
+    # Nmap compacts ports with the same state into `extraports`. A count alone
+    # does not identify which ports were scanned, so only an exact `ports` list
+    # from `extrareasons` is safe to apply to existing inventory.
+    for extra in host.findall("./ports/extraports"):
+        state = extra.get("state", "unknown")
+        if state not in _PORT_STATES:
+            continue
+        for reason in extra.findall("extrareasons"):
+            transport = reason.get("proto")
+            raw_ports = reason.get("ports")
+            if transport != "tcp" or raw_ports is None:
+                continue
+            ports = _expand_port_summary(raw_ports)
+            raw_count = reason.get("count")
+            if raw_count is None or not raw_count.isdigit() or int(raw_count) != len(ports):
+                raise AdapterError("Nmap port summary count does not match its exact ports")
+            for port_number in ports:
+                _append_port(
+                    services,
+                    observations,
+                    seen,
+                    address=address,
+                    transport=transport,
+                    port=port_number,
+                    state=state,
+                    reason=reason.get("reason", ""),
+                    identified={},
                 )
-            )
 
     return tuple(services), observations
+
+
+def _append_port(
+    services: list[DiscoveredService],
+    observations: list[DiscoveredObservation],
+    seen: set[tuple[str, int]],
+    *,
+    address: str,
+    transport: str,
+    port: int,
+    state: str,
+    reason: str,
+    identified: dict[str, str],
+) -> None:
+    key = (transport, port)
+    if key in seen:
+        raise AdapterError("Nmap port summary contains a duplicate port")
+    seen.add(key)
+    services.append(
+        DiscoveredService(
+            transport=transport,
+            port=port,
+            state=state,
+            service_name=identified.get("name"),
+            product=identified.get("product"),
+            version=identified.get("version"),
+        )
+    )
+    observations.append(
+        DiscoveredObservation(
+            observation_type="port_state",
+            summary=f"{transport.upper()}/{port} {state} on {address}",
+            confidence=Confidence.OBSERVED,
+            asset_identity=address,
+            service_port=(transport, port),
+            detail={"reason": reason},
+        )
+    )
+    if identified:
+        observations.append(
+            DiscoveredObservation(
+                observation_type="service_identified",
+                summary=f"{transport.upper()}/{port} identified as {_describe(identified)}",
+                confidence=Confidence.REPORTED,
+                asset_identity=address,
+                service_port=(transport, port),
+                detail=identified,
+            )
+        )
+
+
+def _expand_port_summary(raw: str) -> tuple[int, ...]:
+    ports: list[int] = []
+    seen: set[int] = set()
+    for item in raw.split(","):
+        bounds = item.split("-")
+        if len(bounds) == 1:
+            port = _port_number(bounds[0])
+            values = (port,) if port is not None else ()
+        elif len(bounds) == 2:
+            start, end = (_port_number(value) for value in bounds)
+            valid_range = start is not None and end is not None and start <= end
+            values = range(start, end + 1) if valid_range else ()
+        else:
+            values = ()
+        if not values:
+            raise AdapterError("Nmap port summary is invalid")
+        for port in values:
+            if port in seen:
+                raise AdapterError("Nmap port summary contains a duplicate port")
+            seen.add(port)
+            ports.append(port)
+            if len(ports) > _MAX_SUMMARY_PORTS:
+                raise AdapterError("Nmap port summary exceeds the configured scan bound")
+    return tuple(ports)
 
 
 def _identified_service(port: ElementTree.Element) -> dict[str, str]:
