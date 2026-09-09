@@ -6,6 +6,9 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A narrowly scoped development lockfile fix for the high-severity js-yaml
+  merge-budget advisory, updating 4.3.1 to patched 4.3.2 without changing runtime
+  dependencies or lowering the existing audit gate.
 - Bookmarkable page, Dockyard-tab, and finding URLs, browser history navigation,
   and Dockyard context shared by Assets, Findings, and RedLedger.
 - Read-only Settings showing public configuration facts without credentials.

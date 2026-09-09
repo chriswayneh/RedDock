@@ -92,6 +92,10 @@ service.** Unsupported deployment modes remain blocked.
 
 ### Still needed before release
 
+- **Development dependency follow-up:** test a supported Vitest major upgrade
+  for the [mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9).
+  Current jsdom tests do not enable that server plugin; the dependency finding
+  remains open and is not present in the production Python image.
 - **Complete remaining result lists:** extend pagination beyond Findings to
   the other bounded inventories and run histories. Dashboard counts are complete;
   Assets and RedLedger disclose their list limits.

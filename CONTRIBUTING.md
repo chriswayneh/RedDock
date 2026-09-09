@@ -39,6 +39,17 @@ Backend development needs Python 3.13; running RedDock itself needs only Docker.
 docker compose up -d --build && python scripts/smoke_test.py
 ```
 
+### Development dependency follow-up
+
+The September 8 audit still reports the moderate
+[Vitest mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
+against Vitest 3.2.7. Its fix requires a separately tested major upgrade to
+4.1.11 or later. RedDock uses `vitest run` with jsdom, does not register the
+standalone mocker/interceptor plugins, and does not ship Node or test packages
+in the final Python runtime image. Do not expose a test or development server
+to the network. This follow-up is not an accepted-risk waiver or a clean audit;
+the existing high-severity CI gate remains unchanged.
+
 ## Guidelines
 
 - Do not add exploitation, credential attacks, active vulnerability testing, or autonomous execution without an approved phase and DockGuard design.
