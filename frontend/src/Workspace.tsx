@@ -3,6 +3,7 @@ import { api } from "./api";
 import { DataTable, DecisionPanel, EmptyState, StatusPill } from "./components";
 import { DetectionPanel, FindingsPanel, ValidationPanel } from "./Findings";
 import { formatDate, humanize, kindLabel, plural } from "./format";
+import { PageControls } from "./ListNotice";
 import { workspaceTabs as tabs } from "./routes";
 import type { WorkspaceTab } from "./routes";
 export type { WorkspaceTab } from "./routes";
@@ -14,6 +15,7 @@ import type {
   DiscoveryRun,
   Dockyard,
   Finding,
+  ListPage,
   Observation,
   ScopeEntry,
   ScopeEvaluation,
@@ -22,6 +24,13 @@ import type {
 } from "./types";
 
 const ACTIVE = new Set(["pending", "running"]);
+type PagedList = "assets" | "services" | "observations" | "runs" | "detections" | "findings" | "validations";
+const EMPTY_OFFSETS: Record<PagedList, number> = {
+  assets: 0, services: 0, observations: 0, runs: 0, detections: 0, findings: 0, validations: 0,
+};
+const EMPTY_TOTALS: Record<PagedList, number | null> = {
+  assets: null, services: null, observations: null, runs: null, detections: null, findings: null, validations: null,
+};
 
 export function Workspace({
   dockyard,
@@ -53,6 +62,8 @@ export function Workspace({
   const [detections, setDetections] = useState<DetectionRun[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [validations, setValidations] = useState<ValidationRun[]>([]);
+  const [offsets, setOffsets] = useState(EMPTY_OFFSETS);
+  const [totals, setTotals] = useState(EMPTY_TOTALS);
   const generation = useRef(0);
   const fetching = useRef(false);
 
@@ -67,15 +78,25 @@ export function Workspace({
       function load<T>(request: Promise<T>, apply: (value: T) => void) {
         tasks.push(request.then((value) => { if (current === generation.current) apply(value); }));
       }
+      function loadPage<T>(name: PagedList, request: Promise<ListPage<T>>, apply: (value: T[]) => void) {
+        tasks.push(request.then((value) => {
+          if (current !== generation.current) return;
+          apply(value.items);
+          setTotals((previous) => ({ ...previous, [name]: value.total }));
+        }));
+      }
       if (tab === "Scope" || tab === "Discovery") load(api.scope(dockyard.id), setScope);
-      if (tab === "Discovery" || tab === "Runs") load(api.discoveries(dockyard.id), setRuns);
-      if (tab === "Assets") load(api.assets(dockyard.id), setAssets);
-      if (tab === "Services") load(api.services(dockyard.id), setServices);
-      if (tab === "Observations" || tab === "Detection") load(api.observations(dockyard.id), setObservations);
-      if (tab === "Detection") load(api.detections(dockyard.id), setDetections);
+      if (tab === "Discovery" || tab === "Runs") loadPage("runs", api.discoveryPage(dockyard.id, offsets.runs), setRuns);
+      if (tab === "Assets") loadPage("assets", api.assetPage(dockyard.id, offsets.assets), setAssets);
+      if (tab === "Services") loadPage("services", api.servicePage(dockyard.id, offsets.services), setServices);
+      if (tab === "Observations") loadPage("observations", api.observationPage(dockyard.id, offsets.observations), setObservations);
+      if (tab === "Detection") {
+        loadPage("observations", api.observationPage(dockyard.id), setObservations);
+        loadPage("detections", api.detectionPage(dockyard.id, offsets.detections), setDetections);
+      }
       if (tab === "Validation") {
-        load(api.findings(dockyard.id), setFindings);
-        load(api.validations(dockyard.id), setValidations);
+        loadPage("findings", api.findingPage(dockyard.id, {}, offsets.findings), setFindings);
+        loadPage("validations", api.validationPage(dockyard.id, offsets.validations), setValidations);
       }
       const results = await Promise.allSettled(tasks);
       const failed = results.find((result) => result.status === "rejected");
@@ -88,7 +109,19 @@ export function Workspace({
     } finally {
       if (current === generation.current) fetching.current = false;
     }
-  }, [dockyard.id, tab, onError]);
+  }, [dockyard.id, tab, offsets, onError]);
+
+  const changeOffset = useCallback((name: PagedList, offset: number) => {
+    setOffsets((previous) => ({ ...previous, [name]: offset }));
+  }, []);
+
+  const refreshFirstPage = useCallback(async (name: PagedList) => {
+    if (offsets[name] === 0) {
+      await refresh();
+    } else {
+      changeOffset(name, 0);
+    }
+  }, [changeOffset, offsets, refresh]);
 
   useEffect(() => {
     void refresh();
@@ -142,7 +175,7 @@ export function Workspace({
           dockyardId={dockyard.id}
           adapters={adapters}
           scopeCount={scope.length}
-          onStarted={refresh}
+          onStarted={() => refreshFirstPage("runs")}
           onError={onError}
         />
       )}
@@ -151,8 +184,11 @@ export function Workspace({
           dockyardId={dockyard.id}
           detectors={detectors}
           runs={detections}
-          observationCount={observations.length}
-          onRan={refresh}
+          observationCount={totals.observations ?? observations.length}
+          total={totals.detections}
+          offset={offsets.detections}
+          onOffsetChange={(offset) => changeOffset("detections", offset)}
+          onRan={() => refreshFirstPage("detections")}
           onError={onError}
         />
       )}
@@ -164,14 +200,20 @@ export function Workspace({
           dockyardId={dockyard.id}
           findings={findings}
           runs={validations}
-          onChanged={refresh}
+          findingTotal={totals.findings}
+          findingOffset={offsets.findings}
+          onFindingOffsetChange={(offset) => changeOffset("findings", offset)}
+          runTotal={totals.validations}
+          runOffset={offsets.validations}
+          onRunOffsetChange={(offset) => changeOffset("validations", offset)}
+          onChanged={() => refreshFirstPage("validations")}
           onError={onError}
         />
       )}
-      {tab === "Assets" && <AssetTable assets={assets} />}
-      {tab === "Services" && <ServiceTable services={services} />}
-      {tab === "Observations" && <ObservationList observations={observations} />}
-      {tab === "Runs" && <RunTable runs={runs} />}
+      {tab === "Assets" && <><PageControls shown={assets.length} total={totals.assets} offset={offsets.assets} onOffsetChange={(offset) => changeOffset("assets", offset)} label="assets" /><AssetTable assets={assets} /></>}
+      {tab === "Services" && <><PageControls shown={services.length} total={totals.services} offset={offsets.services} onOffsetChange={(offset) => changeOffset("services", offset)} label="services" /><ServiceTable services={services} /></>}
+      {tab === "Observations" && <><PageControls shown={observations.length} total={totals.observations} offset={offsets.observations} onOffsetChange={(offset) => changeOffset("observations", offset)} label="observations" /><ObservationList observations={observations} /></>}
+      {tab === "Runs" && <><PageControls shown={runs.length} total={totals.runs} offset={offsets.runs} onOffsetChange={(offset) => changeOffset("runs", offset)} label="runs" /><RunTable runs={runs} /></>}
     </>
   );
 }

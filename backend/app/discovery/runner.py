@@ -152,11 +152,14 @@ def active_run_count(session: Session) -> int:
     return session.scalar(statement) or 0
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[DiscoveryRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[DiscoveryRun]:
     statement = (
         select(DiscoveryRun)
         .where(DiscoveryRun.dockyard_id == dockyard_id)
         .order_by(DiscoveryRun.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))

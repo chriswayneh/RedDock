@@ -38,11 +38,13 @@ Disabling documentation does not authenticate the API or make network exposure s
 `GET /api/dashboard` returns complete Dockyard, asset, discovery-run, and open-finding
 counts for the current organization, plus at most five recent Dockyards and eight
 recent discovery runs. `GET /api/settings` returns only public configuration facts.
-Assets, discoveries, evidence, and findings lists retain their array bodies and
-100-row default limit. Their documented `X-Total-Count` response header counts
-matching rows before limiting; findings also accepts `offset` for pagination,
-with the same filters applied to the count and list. Counts describe the current
-database state, not an immutable report snapshot.
+Bounded Dockyard collections retain their array bodies and 100-row default
+limit. Assets, services, observations, discoveries, evidence, detections,
+correlations, intelligence, reports, validations, and lab-policy ledgers accept
+a validated `offset`. Their documented `X-Total-Count` response header counts
+matching rows before pagination. Finding filters apply to both the count and
+the page. Counts describe current database state, not an immutable report
+snapshot.
 
 Validation is not a general-purpose testing interface. It can recheck only an
 eligible open HTTP security-header finding at its recorded origin. Requesting

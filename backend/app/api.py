@@ -24,12 +24,20 @@ from app.inventory import get_asset, list_assets, list_observations, list_servic
 from app.lab_capabilities import CAPABILITIES
 from app.models import (
     Asset,
+    CorrelationRun,
+    DetectionRun,
     DiscoveryRun,
     Dockyard,
     EvidenceRecord,
     Finding,
     FindingEvidence,
+    IntelligenceRun,
+    LabAuditEvent,
+    LabAuthorization,
+    Observation,
+    ReportRun,
     Service,
+    ValidationRun,
 )
 from app.reporting import runner as reporting_runner
 from app.schemas import (
@@ -98,11 +106,12 @@ router = APIRouter(
 )
 
 ListLimit = Query(default=100, ge=1, le=500)
+ListOffset = Query(default=0, ge=0, le=1_000_000)
 LIST_RESPONSES = {
     200: {
         "headers": {
             "X-Total-Count": {
-                "description": "Total matching rows before the limit is applied.",
+                "description": "Total matching rows before pagination is applied.",
                 "schema": {"type": "integer", "minimum": 0},
             }
         }
@@ -277,12 +286,18 @@ def read_dockyard(dockyard_id: int, session: Session = Depends(get_session)) -> 
 @router.get(
     "/dockyards/{dockyard_id}/lab/authorizations",
     response_model=list[LabAuthorizationRead],
+    responses=LIST_RESPONSES,
 )
 def read_lab_authorizations(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[LabAuthorizationRead]:
     require_dockyard(dockyard_id, session)
-    return lab.list_authorizations(session, dockyard_id, limit)
+    _list_total(response, session, LabAuthorization, dockyard_id)
+    return lab.list_authorizations(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -332,12 +347,18 @@ def revoke_lab_capability(
 @router.get(
     "/dockyards/{dockyard_id}/lab/audit",
     response_model=list[LabAuditEventRead],
+    responses=LIST_RESPONSES,
 )
 def read_lab_audit(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[LabAuditEventRead]:
     require_dockyard(dockyard_id, session)
-    return lab.list_audit_events(session, dockyard_id, limit)
+    _list_total(response, session, LabAuditEvent, dockyard_id)
+    return lab.list_audit_events(session, dockyard_id, limit, offset)
 
 
 @router.get("/dockyards/{dockyard_id}/scope", response_model=list[ScopeEntryRead])
@@ -397,13 +418,14 @@ def read_assets(
     dockyard_id: int,
     response: Response,
     limit: int = ListLimit,
+    offset: int = ListOffset,
     session: Session = Depends(get_session),
 ) -> list[AssetRead]:
     require_dockyard(dockyard_id, session)
     _list_total(response, session, Asset, dockyard_id)
     return [
         AssetRead.model_validate(asset).model_copy(update={"service_count": count})
-        for asset, count in list_assets(session, dockyard_id, limit)
+        for asset, count in list_assets(session, dockyard_id, limit, offset)
     ]
 
 
@@ -419,26 +441,52 @@ def read_asset(
     return detail.model_copy(update={"service_count": len(asset.services)})
 
 
-@router.get("/dockyards/{dockyard_id}/services", response_model=list[ServiceRowRead])
+@router.get(
+    "/dockyards/{dockyard_id}/services",
+    response_model=list[ServiceRowRead],
+    responses=LIST_RESPONSES,
+)
 def read_services(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[ServiceRowRead]:
     require_dockyard(dockyard_id, session)
+    response.headers["X-Total-Count"] = str(
+        session.scalar(
+            select(func.count())
+            .select_from(Service)
+            .join(Asset, Service.asset_id == Asset.id)
+            .where(Asset.dockyard_id == dockyard_id)
+        )
+        or 0
+    )
     return [
         ServiceRowRead(
             **ServiceRead.model_validate(service).model_dump(),
             asset_label=asset.display_name,
         )
-        for service, asset in list_services(session, dockyard_id, limit)
+        for service, asset in list_services(session, dockyard_id, limit, offset)
     ]
 
 
-@router.get("/dockyards/{dockyard_id}/observations", response_model=list[ObservationRead])
+@router.get(
+    "/dockyards/{dockyard_id}/observations",
+    response_model=list[ObservationRead],
+    responses=LIST_RESPONSES,
+)
 def read_observations(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[ObservationRead]:
     require_dockyard(dockyard_id, session)
-    return list_observations(session, dockyard_id, limit)
+    _list_total(response, session, Observation, dockyard_id)
+    return list_observations(session, dockyard_id, limit, offset)
 
 
 @router.get(
@@ -450,11 +498,12 @@ def read_discoveries(
     dockyard_id: int,
     response: Response,
     limit: int = ListLimit,
+    offset: int = ListOffset,
     session: Session = Depends(get_session),
 ) -> list[DiscoveryRunRead]:
     require_dockyard(dockyard_id, session)
     _list_total(response, session, DiscoveryRun, dockyard_id)
-    return discovery_runner.list_runs(session, dockyard_id, limit)
+    return discovery_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -512,6 +561,7 @@ def read_evidence(
     dockyard_id: int,
     response: Response,
     limit: int = ListLimit,
+    offset: int = ListOffset,
     session: Session = Depends(get_session),
 ) -> list[EvidenceRecordRead]:
     require_dockyard(dockyard_id, session)
@@ -520,17 +570,27 @@ def read_evidence(
         select(EvidenceRecord)
         .where(EvidenceRecord.dockyard_id == dockyard_id)
         .order_by(EvidenceRecord.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))
 
 
-@router.get("/dockyards/{dockyard_id}/detections", response_model=list[DetectionRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/detections",
+    response_model=list[DetectionRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_detections(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[DetectionRunRead]:
     require_dockyard(dockyard_id, session)
-    return detection_runner.list_runs(session, dockyard_id, limit)
+    _list_total(response, session, DetectionRun, dockyard_id)
+    return detection_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -569,12 +629,21 @@ def read_detection(
     return run
 
 
-@router.get("/dockyards/{dockyard_id}/correlations", response_model=list[CorrelationRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/correlations",
+    response_model=list[CorrelationRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_correlations(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[CorrelationRunRead]:
     require_dockyard(dockyard_id, session)
-    return correlation_runner.list_runs(session, dockyard_id, limit)
+    _list_total(response, session, CorrelationRun, dockyard_id)
+    return correlation_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -607,12 +676,21 @@ def read_intelligence_provider() -> IntelligenceProviderRead:
     return IntelligenceProviderRead.model_validate(intelligence_runner.provider_status())
 
 
-@router.get("/dockyards/{dockyard_id}/intelligence", response_model=list[IntelligenceRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/intelligence",
+    response_model=list[IntelligenceRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_intelligence_runs(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[IntelligenceRunRead]:
     require_dockyard(dockyard_id, session)
-    return intelligence_runner.list_runs(session, dockyard_id, limit)
+    _list_total(response, session, IntelligenceRun, dockyard_id)
+    return intelligence_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -657,12 +735,21 @@ def approve_intelligence_run(
         raise HTTPException(status_code=code, detail=message) from error
 
 
-@router.get("/dockyards/{dockyard_id}/reports", response_model=list[ReportRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/reports",
+    response_model=list[ReportRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_reports(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[ReportRunRead]:
     require_dockyard(dockyard_id, session)
-    return reporting_runner.list_runs(session, dockyard_id, limit)
+    _list_total(response, session, ReportRun, dockyard_id)
+    return reporting_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(
@@ -733,12 +820,21 @@ def download_dockpack(dockyard_id: int, run_id: int, session: Session = Depends(
     )
 
 
-@router.get("/dockyards/{dockyard_id}/validations", response_model=list[ValidationRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/validations",
+    response_model=list[ValidationRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_validations(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    offset: int = ListOffset,
+    session: Session = Depends(get_session),
 ) -> list[ValidationRunRead]:
     require_dockyard(dockyard_id, session)
-    return validation_runner.list_runs(session, dockyard_id, limit)
+    _list_total(response, session, ValidationRun, dockyard_id)
+    return validation_runner.list_runs(session, dockyard_id, limit, offset)
 
 
 @router.post(

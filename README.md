@@ -356,16 +356,28 @@ docs/          Architecture decisions and project documentation
 
 **v0.1.0 delivered Phase 0, Foundation:** a containerized React/FastAPI application, local Dockyard persistence, a dashboard, documentation, tests, and CI.
 
-**Next after v0.8.0: Phase 8, Production polish.** The PostgreSQL validation profile, migration CI, backward-compatible identity/tenancy schema, least-privilege API enforcement, cross-tenant guards, bounded hash-only browser-session lifecycle, structured security-audit foundation, exact HTTPS origin policy, hardened session-cookie/request verification, centralized response security headers, database-backed readiness, CodeQL, dependency-audit gates, and review-only weekly dependency updates are complete. Shared mode is explicitly rejected and authentication is not enabled yet. Integrating these browser controls with OIDC, administration, scaling, release automation, full ARM64 validation, backup/restore, and production deployment hardening remain planned. See the [roadmap](ROADMAP.md) for the complete phased plan.
+### Phase 8 progress after v0.8.0
+
+Phase 8 is still in development. Completed checkpoints include:
+
+- private PostgreSQL support and migration testing
+- tenant isolation and least-privilege API enforcement
+- secure session and browser-boundary foundations
+- hardened responses, readiness checks, and dependency scanning
+- complete paginated inventories, evidence lists, and run histories
+
+Authentication is not enabled, and shared mode remains blocked. OIDC,
+administration, scaling, release automation, full ARM64 validation,
+backup/restore, and production deployment hardening are still planned. See the
+[roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security
 
-The latest Phase 8 review checkpoint adds mapped-address exclusion protection,
-absolute HTTP deadlines, atomic validation approval and discovery evidence
-publication, validation restart recovery, and consistent PostgreSQL report
-snapshots. These controls have regression coverage. Phase 8 remains unreleased;
-the remaining review follow-up and production requirements are tracked in the
-[roadmap](ROADMAP.md).
+The latest Phase 8 checkpoints improve target exclusions, HTTP deadlines,
+approval safety, evidence publication, restart recovery, PostgreSQL report
+consistency, and complete-list navigation. These controls have regression
+coverage. Phase 8 remains unreleased; remaining production requirements are in
+the [roadmap](ROADMAP.md).
 
 RedDock is MIT-licensed and owner-directed. Bug reports and design discussion are welcome, but unsolicited external pull requests are not currently accepted so the safety model and phase boundaries remain controlled. See [CONTRIBUTING.md](CONTRIBUTING.md), and report potential vulnerabilities through [SECURITY.md](SECURITY.md) or GitHub Private Vulnerability Reporting.
 

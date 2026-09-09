@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { DataTable, DockyardPicker, EmptyState, StatusPill } from "./components";
 import { formatDate, humanize } from "./format";
+import { PageControls } from "./ListNotice";
 import type { Dockyard, IntelligenceProvider, IntelligenceRun } from "./types";
 
 export function Intelligence({
@@ -14,6 +15,8 @@ export function Intelligence({
   const [selected, setSelected] = useState<number | null>(null);
   const [provider, setProvider] = useState<IntelligenceProvider | null>(null);
   const [runs, setRuns] = useState<IntelligenceRun[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [reviewedPackets, setReviewedPackets] = useState<Record<number, string>>({});
   const [busy, setBusy] = useState<number | "create" | null>(null);
@@ -24,16 +27,21 @@ export function Intelligence({
     const selectedDockyard = selected;
     const [capability, currentRuns] = await Promise.all([
       api.intelligenceProvider(),
-      selectedDockyard === null ? Promise.resolve([]) : api.intelligenceRuns(selectedDockyard),
+      selectedDockyard === null
+        ? Promise.resolve({ items: [], total: 0 })
+        : api.intelligencePage(selectedDockyard, offset),
     ]);
     if (sequence !== refreshSequence.current) return;
     setProvider(capability);
-    setRuns(currentRuns);
-  }, [selected]);
+    setRuns(currentRuns.items);
+    setTotal(currentRuns.total);
+  }, [selected, offset]);
 
   function selectDockyard(dockyardId: number) {
     refreshSequence.current += 1;
     setRuns([]);
+    setTotal(null);
+    setOffset(0);
     setNotes({});
     setReviewedPackets({});
     setSelected(dockyardId);
@@ -55,7 +63,8 @@ export function Intelligence({
     try {
       await api.createIntelligence(selected);
       onError(null);
-      await refresh();
+      if (offset === 0) await refresh();
+      else setOffset(0);
     } catch (problem) {
       onError(problem instanceof Error ? problem.message : "Could not create intelligence packet.");
     } finally {
@@ -143,6 +152,7 @@ export function Intelligence({
       <section className="panel detection-runs">
         <p className="eyebrow">APPROVAL GATE</p>
         <h2>Packets awaiting review</h2>
+        <PageControls shown={runs.length} total={total} offset={offset} onOffsetChange={setOffset} label="intelligence runs" />
         {pending.length ? pending.map((run) => (
           <article className="intelligence-packet" key={run.id}>
             <div className="section-heading">

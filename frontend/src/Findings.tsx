@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { DataTable, EmptyState, StatusPill } from "./components";
 import { formatDate, humanize } from "./format";
-import { ListNotice } from "./ListNotice";
+import { PageControls } from "./ListNotice";
 import type { DetectionRun, Detector, Finding, FindingDetail, ValidationRun } from "./types";
 
 const SEVERITIES = ["critical", "high", "medium", "low", "informational"] as const;
@@ -130,11 +130,13 @@ export function FindingsPanel({
             </select>
           </label>
         </div>
-        <ListNotice shown={findings.length} total={total} offset={offset} />
-        {(offset > 0 || (total !== null && total > 100)) && <div className="button-row">
-          <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Previous findings</button>
-          <button disabled={total === null || offset + findings.length >= total || findings.length === 0} onClick={() => setOffset(offset + 100)}>Next findings</button>
-        </div>}
+        <PageControls
+          shown={findings.length}
+          total={total}
+          offset={offset}
+          onOffsetChange={setOffset}
+          label="findings"
+        />
         {findings.length ? (
           <DataTable
             headers={[
@@ -352,12 +354,24 @@ export function ValidationPanel({
   dockyardId,
   findings,
   runs,
+  findingTotal,
+  findingOffset,
+  onFindingOffsetChange,
+  runTotal,
+  runOffset,
+  onRunOffsetChange,
   onChanged,
   onError,
 }: {
   dockyardId: number;
   findings: Finding[];
   runs: ValidationRun[];
+  findingTotal: number | null;
+  findingOffset: number;
+  onFindingOffsetChange: (offset: number) => void;
+  runTotal: number | null;
+  runOffset: number;
+  onRunOffsetChange: (offset: number) => void;
   onChanged: () => Promise<void>;
   onError: (message: string | null) => void;
 }) {
@@ -413,6 +427,7 @@ export function ValidationPanel({
             Requesting a run makes no network contact. A separate, documented approval is required
             before RedDock re-evaluates DockGuard and sends its fixed safe HTTP probe.
           </p>
+          <PageControls shown={findings.length} total={findingTotal} offset={findingOffset} onOffsetChange={onFindingOffsetChange} label="findings" />
           {eligible.length ? (
             <DataTable headers={["Finding", "Affected origin", "Rule", "Action"]}>
               {eligible.map((finding) => (
@@ -497,6 +512,7 @@ export function ValidationPanel({
       <section className="panel detection-runs">
         <p className="eyebrow">VALIDATION AUDIT TRAIL</p>
         <h2>Validation runs</h2>
+        <PageControls shown={runs.length} total={runTotal} offset={runOffset} onOffsetChange={onRunOffsetChange} label="validation runs" />
         {runs.length ? (
           <DataTable headers={["Run", "Finding", "Status", "Outcome", "DockGuard", "Evidence", "Completed"]}>
             {runs.map((run) => (
@@ -536,6 +552,9 @@ export function DetectionPanel({
   detectors,
   runs,
   observationCount,
+  total,
+  offset,
+  onOffsetChange,
   onRan,
   onError,
 }: {
@@ -543,6 +562,9 @@ export function DetectionPanel({
   detectors: Detector[];
   runs: DetectionRun[];
   observationCount: number;
+  total: number | null;
+  offset: number;
+  onOffsetChange: (offset: number) => void;
   onRan: () => Promise<void>;
   onError: (message: string | null) => void;
 }) {
@@ -618,7 +640,8 @@ export function DetectionPanel({
         <div className="section-heading">
           <div>
             <p className="eyebrow">AUDIT TRAIL</p>
-            <h2>Detection runs</h2>
+        <h2>Detection runs</h2>
+        <PageControls shown={runs.length} total={total} offset={offset} onOffsetChange={onOffsetChange} label="detection runs" />
           </div>
         </div>
         {runs.length ? (

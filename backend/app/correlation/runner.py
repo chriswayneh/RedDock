@@ -52,12 +52,15 @@ def start_correlation(session: Session, dockyard_id: int) -> CorrelationRun:
     return _execute(session, run)
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[CorrelationRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[CorrelationRun]:
     return list(
         session.scalars(
             select(CorrelationRun)
             .where(CorrelationRun.dockyard_id == dockyard_id)
             .order_by(CorrelationRun.id.desc())
+            .offset(offset)
             .limit(limit)
         )
     )

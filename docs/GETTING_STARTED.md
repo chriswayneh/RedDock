@@ -76,11 +76,12 @@ return to it after a refresh. Browser Back and Forward work, and the RedDock log
 returns to the dashboard. Assets, Findings, and RedLedger remember the Dockyard
 in the address, so switching pages keeps the same workspace.
 
-The dashboard counts all matching records, not just the first page. Findings
-shows how many results are visible and offers Previous and Next buttons when
-there are more than 100. Settings is a read-only summary of the version, local
-deployment mode, lab gate, and whether AI is configured. It does not show keys
-or passwords and cannot change those settings.
+The dashboard counts all matching records, not just the first page. Inventory,
+evidence, findings, lab audit, and run-history pages show the visible row range
+and offer Previous and Next buttons when there are more than 100 records.
+Settings is a read-only summary of the version, local deployment mode, lab gate,
+and whether AI is configured. It does not show keys or passwords and cannot
+change those settings.
 
 ## Optional API explorer
 
@@ -136,4 +137,4 @@ For help, collect the error and your Docker version. Review logs and screenshots
 
 ## What comes next?
 
-Try the local demo before adding real, explicitly authorized targets. RedDock is currently best evaluated in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8--production-polish) still has known work around list pagination, UI recovery, and production operations. Working accounts, SSO, and shared-user deployments are not available yet.
+Try the local demo before adding real, explicitly authorized targets. RedDock is currently best evaluated in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8--production-polish) still has known work around UI recovery and production operations. Working accounts, SSO, and shared-user deployments are not available yet.

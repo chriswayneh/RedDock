@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { DataTable, DockyardPicker, EmptyState, Metric, StatusPill } from "./components";
 import { formatBytes, formatDate, humanize } from "./format";
+import { PageControls } from "./ListNotice";
 import type { Dockyard, EvidenceManifest, ReportRun } from "./types";
 
 type Preview = "technical" | "executive" | "manifest";
@@ -23,6 +24,8 @@ export function Reports({
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [runs, setRuns] = useState<ReportRun[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
   const [activeRun, setActiveRun] = useState<number | null>(null);
   const [preview, setPreview] = useState<Preview>("technical");
   const [reportText, setReportText] = useState("");
@@ -35,21 +38,26 @@ export function Reports({
   const refresh = useCallback(async () => {
     const sequence = ++refreshSequence.current;
     const dockyardId = selected;
-    const current = dockyardId === null ? [] : await api.reports(dockyardId);
+    const current = dockyardId === null
+      ? { items: [], total: 0 }
+      : await api.reportPage(dockyardId, offset);
     if (sequence !== refreshSequence.current) return;
-    setRuns(current);
+    setRuns(current.items);
+    setTotal(current.total);
     setActiveRun((value) =>
-      value !== null && current.some((run) => run.id === value)
+      value !== null && current.items.some((run) => run.id === value)
         ? value
-        : (current.find((run) => run.status === "completed")?.id ?? null),
+        : (current.items.find((run) => run.status === "completed")?.id ?? null),
     );
-  }, [selected]);
+  }, [selected, offset]);
 
   function selectDockyard(dockyardId: number) {
     refreshSequence.current += 1;
     previewSequence.current += 1;
     setSelected(dockyardId);
     setRuns([]);
+    setTotal(null);
+    setOffset(0);
     setActiveRun(null);
     setReportText("");
     setManifest(null);
@@ -108,7 +116,8 @@ export function Reports({
       } else {
         onError(null);
       }
-      await refresh();
+      if (offset === 0) await refresh();
+      else setOffset(0);
       if (run.status === "completed" && run.dockyard_id === selected) {
         setActiveRun(run.id);
         setPreview("technical");
@@ -166,6 +175,7 @@ export function Reports({
             <div><p className="eyebrow">IMMUTABLE SNAPSHOTS</p><h2>Report history</h2></div>
             <span className="count-chip">{runs.length}</span>
           </div>
+          <PageControls shown={runs.length} total={total} offset={offset} onOffsetChange={setOffset} label="reports" />
           {runs.length ? (
             <div className="report-run-list">
               {runs.map((run) => (

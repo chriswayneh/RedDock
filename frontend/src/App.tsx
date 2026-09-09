@@ -13,7 +13,7 @@ import { Lab } from "./Lab";
 import { RedPath } from "./RedPath";
 import { Reports } from "./Reports";
 import { SettingsPage } from "./Settings";
-import { ListNotice } from "./ListNotice";
+import { ListNotice, PageControls } from "./ListNotice";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
 import { pagePaths, pageUrl, useRoute, workspaceUrl } from "./routes";
@@ -379,7 +379,7 @@ function DockyardList({
 /** A Dockyard-scoped view reached from the top-level navigation. */
 function useDockyardScoped<T>(
   dockyards: Dockyard[],
-  load: (id: number) => Promise<ListPage<T>>,
+  load: (id: number, offset: number) => Promise<ListPage<T>>,
   onError: (message: string | null) => void,
   initialDockyardId: number | null = null,
   onSelect: (id: number) => void,
@@ -387,23 +387,28 @@ function useDockyardScoped<T>(
   const selected = initialDockyardId;
   const [rows, setRows] = useState<T[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     if (selected === null && dockyards.length) onSelect(dockyards[0].id);
   }, [dockyards, selected, onSelect]);
 
   useEffect(() => {
+    setOffset(0);
+  }, [selected]);
+
+  useEffect(() => {
     if (selected === null) return;
     let active = true;
-    load(selected)
+    load(selected, offset)
       .then((result) => { if (active) { setRows(result.items); setTotal(result.total); } })
       .catch((problem) => {
         if (active) onError(problem instanceof Error ? problem.message : "Could not load this Dockyard.");
       });
     return () => { active = false; };
-  }, [selected, load, onError]);
+  }, [selected, offset, load, onError]);
 
-  return { selected, setSelected: onSelect, rows, total };
+  return { selected, setSelected: onSelect, rows, total, offset, setOffset };
 }
 
 function AssetsPage({
@@ -417,8 +422,8 @@ function AssetsPage({
   onSelect: (id: number) => void;
   onError: (message: string | null) => void;
 }) {
-  const load = useCallback((id: number) => api.assetPage(id), []);
-  const { selected, setSelected, rows, total } = useDockyardScoped<Asset>(dockyards, load, onError, initialDockyardId, onSelect);
+  const load = useCallback((id: number, offset: number) => api.assetPage(id, offset), []);
+  const { selected, setSelected, rows, total, offset, setOffset } = useDockyardScoped<Asset>(dockyards, load, onError, initialDockyardId, onSelect);
 
   if (!dockyards.length) {
     return (
@@ -432,7 +437,7 @@ function AssetsPage({
       <div className="toolbar">
         <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
       </div>
-      <ListNotice shown={rows.length} total={total} />
+      <PageControls shown={rows.length} total={total} offset={offset} onOffsetChange={setOffset} label="assets" />
       <AssetTable assets={rows} />
     </>
   );
@@ -489,8 +494,8 @@ function LedgerPage({
   onSelect: (id: number) => void;
   onError: (message: string | null) => void;
 }) {
-  const load = useCallback((id: number) => api.evidencePage(id), []);
-  const { selected, setSelected, rows, total } = useDockyardScoped<EvidenceRecord>(
+  const load = useCallback((id: number, offset: number) => api.evidencePage(id, offset), []);
+  const { selected, setSelected, rows, total, offset, setOffset } = useDockyardScoped<EvidenceRecord>(
     dockyards,
     load,
     onError,
@@ -511,7 +516,7 @@ function LedgerPage({
         <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
       </div>
       <section className="panel">
-        <ListNotice shown={rows.length} total={total} />
+        <PageControls shown={rows.length} total={total} offset={offset} onOffsetChange={setOffset} label="evidence records" />
         <p className="hint">
           RedDock retains the raw tool output, the normalized result and a metadata record for every
           discovery run, each hashed with SHA-256. A detection run retains its own normalized result

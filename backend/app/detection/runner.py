@@ -106,11 +106,14 @@ def active_run_count(session: Session, dockyard_id: int) -> int:
     return session.scalar(statement) or 0
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[DetectionRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[DetectionRun]:
     statement = (
         select(DetectionRun)
         .where(DetectionRun.dockyard_id == dockyard_id)
         .order_by(DetectionRun.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))
