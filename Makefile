@@ -31,10 +31,10 @@ test: test-backend test-frontend
 
 test-backend:
 	docker build --target runtime -t reddock:local .
-	docker run --rm -v "$(CURDIR)/backend:/workspace" -w /workspace --entrypoint sh reddock:local -c "pip install -e '.[dev]' && pip-audit --progress-spinner off . && python -m ruff check app tests && python -m pytest"
+	docker run --rm -v "$(CURDIR):/workspace" -w /workspace/backend --entrypoint sh reddock:local -c "pip install -e '.[dev]' && pip-audit --progress-spinner off . && python -m ruff check app tests ../scripts/verify_release.py && python -m pytest"
 
 test-frontend:
-	docker run --rm -v "$(CURDIR)/frontend:/workspace" -w /workspace node:22-alpine sh -c "npm ci && npm run check && npm run test && npm run build"
+	docker run --rm -v "$(CURDIR)/frontend:/workspace" -w /workspace node:22-alpine sh -c "npm ci && npm run security:deps && npm audit --audit-level=high && npm run lint && npm run check && npm run test && npm run build"
 
 smoke:
 	docker compose up -d --build

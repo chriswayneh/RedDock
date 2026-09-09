@@ -20,7 +20,7 @@ jobs:
           python-version: "3.13"
       - run: pip install -e ".[dev]"
       - run: pip-audit --progress-spinner off .
-      - run: ruff check app tests
+      - run: ruff check app tests ../scripts/verify_release.py
       - run: pytest
 
   frontend:

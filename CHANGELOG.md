@@ -6,6 +6,10 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- Fail-closed release automation that validates annotated tags against every
+  packaged and public version source, reruns the backend and frontend gates,
+  publishes an attested AMD64/ARM64 image to GitHub Container Registry, and
+  creates the matching GitHub Release only after successful builds.
 - A narrowly scoped development lockfile fix for the high-severity js-yaml
   merge-budget advisory, updating 4.3.1 to patched 4.3.2 without changing runtime
   dependencies or lowering the existing audit gate.
@@ -152,6 +156,9 @@ All notable changes to RedDock are documented here.
 
 ### Testing
 
+- Release-metadata regression tests and a tag-time verification gate covering
+  annotation type, tagged commit, master ancestry, clean checkout, public
+  release notes, and every packaged version field.
 - Migrate all 56 frontend tests from Vitest to Jest with SWC and jsdom, retaining
   lint, type-check, production-build, clean-install, and dependency-audit gates.
 - Configuration tests cover masked secrets, mutually exclusive provider-key
