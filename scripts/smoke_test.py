@@ -74,6 +74,18 @@ def main(base: str) -> None:
     status, ready = call(base, "GET", "/api/ready")
     check("database readiness responds", status == 200 and ready["status"] == "ready")
 
+    status, facts = call(base, "GET", "/api/settings")
+    check("settings stays local and exposes only safe facts", status == 200 and set(facts) == {
+        "name", "version", "phase", "deployment_mode", "intelligence_configured",
+    } and facts["deployment_mode"] == "local")
+    for path in ("/docs", "/openapi.json"):
+        status, _, _ = download(base, path)
+        expected = 200 if os.getenv("REDDOCK_EXPECT_API_DOCS") == "true" else 404
+        check(f"API documentation gate: {path}", status == expected)
+    status, summary = call(base, "GET", "/api/dashboard")
+    check("dashboard has bounded recent lists", status == 200
+          and len(summary["recent_dockyards"]) <= 5 and len(summary["recent_runs"]) <= 8)
+
     status, dockyard = call(
         base, "POST", "/api/dockyards", {"name": f"Smoke test {int(time.time())}"}
     )

@@ -30,6 +30,20 @@ returns value objects, with no session, socket, subprocess or operator input in
 reach. `tests/test_detection_contract.py` reads the detection package and fails
 if that stops being true.
 
+The local API explorer is opt-in: `REDDOCK_API_DOCS_ENABLED=true` enables `/docs`,
+`/redoc`, and `/openapi.json` at process startup. The default, including the
+production image, is off. See the [operator instructions](../docs/GETTING_STARTED.md#optional-api-explorer).
+Disabling documentation does not authenticate the API or make network exposure safe.
+
+`GET /api/dashboard` returns complete Dockyard, asset, discovery-run, and open-finding
+counts for the current organization, plus at most five recent Dockyards and eight
+recent discovery runs. `GET /api/settings` returns only public configuration facts.
+Assets, discoveries, evidence, and findings lists retain their array bodies and
+100-row default limit. Their documented `X-Total-Count` response header counts
+matching rows before limiting; findings also accepts `offset` for pagination,
+with the same filters applied to the count and list. Counts describe the current
+database state, not an immutable report snapshot.
+
 Validation is not a general-purpose testing interface. It can recheck only an
 eligible open HTTP security-header finding at its recorded origin. Requesting
 one records intent without contacting a target; a separate approval note

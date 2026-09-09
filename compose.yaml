@@ -9,6 +9,8 @@ services:
       REDDOCK_DATABASE_URL: sqlite:////var/lib/reddock/reddock.db
       # Discovery evidence lives beside the database in the same named volume.
       REDDOCK_EVIDENCE_DIR: /var/lib/reddock/evidence
+      # Optional local developer surface; does not add authentication.
+      REDDOCK_API_DOCS_ENABLED: ${REDDOCK_API_DOCS_ENABLED:-false}
     volumes:
       - reddock-data:/var/lib/reddock
     # The image already runs as an unprivileged user, and TCP-connect scanning

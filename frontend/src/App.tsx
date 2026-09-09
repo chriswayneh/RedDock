@@ -5,7 +5,6 @@ import {
   DockyardPicker,
   EmptyState,
   Metric,
-  Planned,
   StatusPill,
 } from "./components";
 import { FindingsPanel } from "./Findings";
@@ -13,71 +12,36 @@ import { Intelligence } from "./Intelligence";
 import { Lab } from "./Lab";
 import { RedPath } from "./RedPath";
 import { Reports } from "./Reports";
+import { SettingsPage } from "./Settings";
+import { ListNotice } from "./ListNotice";
 import { formatBytes, formatDate } from "./format";
 import { AssetTable, Workspace } from "./Workspace";
-import type { WorkspaceTab } from "./Workspace";
+import { pagePaths, pageUrl, useRoute, workspaceUrl } from "./routes";
+import type { Page, WorkspaceTab } from "./routes";
 import type {
   Adapter,
   Asset,
   Detector,
-  DiscoveryRun,
+  DashboardSummary,
+  ListPage,
   Dockyard,
   EvidenceRecord,
-  Finding,
   Health,
   Version,
 } from "./types";
 
-type Page =
-  | "Dashboard"
-  | "Dockyards"
-  | "Assets"
-  | "Findings"
-  | "RedPath"
-  | "Intelligence"
-  | "Lab"
-  | "RedLedger"
-  | "Reports"
-  | "Settings";
-
-const pages: Page[] = [
-  "Dashboard",
-  "Dockyards",
-  "Assets",
-  "Findings",
-  "RedPath",
-  "Intelligence",
-  "Lab",
-  "RedLedger",
-  "Reports",
-  "Settings",
-];
-
-// Lab is available only as a policy console; the deployment gate stays outside the API.
-const availablePages = new Set<Page>([
-  "Dashboard",
-  "Dockyards",
-  "Assets",
-  "Findings",
-  "RedPath",
-  "Intelligence",
-  "Lab",
-  "RedLedger",
-  "Reports",
-]);
+const pages = Object.keys(pagePaths) as Page[];
 
 export function App() {
-  const [page, setPage] = useState<Page>("Dashboard");
+  const { route, navigate } = useRoute();
+  const { page, dockyardId: contextDockyardId, findingId: contextFindingId } = route;
   const [dockyards, setDockyards] = useState<Dockyard[]>([]);
   const [adapters, setAdapters] = useState<Adapter[]>([]);
   const [detectors, setDetectors] = useState<Detector[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [version, setVersion] = useState<Version | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Dockyard | null>(null);
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("Scope");
-  const [contextDockyardId, setContextDockyardId] = useState<number | null>(null);
-  const [contextFindingId, setContextFindingId] = useState<number | null>(null);
+  const selected = route.workspace ? dockyards.find((item) => item.id === contextDockyardId) : null;
 
   const refresh = useCallback(async () => {
     try {
@@ -114,7 +78,7 @@ export function App() {
     try {
       const created = await api.createDockyard(name, description);
       setDockyards((current) => [created, ...current]);
-      setSelected(created);
+      openDockyard(created);
       form.reset();
       setError(null);
     } catch {
@@ -123,25 +87,15 @@ export function App() {
   }
 
   function open(item: Page) {
-    setPage(item);
-    setSelected(null);
-    setContextDockyardId(null);
-    setContextFindingId(null);
+    navigate(pageUrl(item, contextDockyardId));
   }
 
   function openDockyard(dockyard: Dockyard, tab: WorkspaceTab = "Scope") {
-    setWorkspaceTab(tab);
-    setSelected(dockyard);
-    setPage("Dockyards");
-    setContextDockyardId(dockyard.id);
-    setContextFindingId(null);
+    navigate(workspaceUrl(dockyard.id, tab));
   }
 
   function openScoped(item: "Assets" | "Findings", dockyardId: number, findingId?: number) {
-    setSelected(null);
-    setContextDockyardId(dockyardId);
-    setContextFindingId(findingId ?? null);
-    setPage(item);
+    navigate(findingId === undefined ? pageUrl(item, dockyardId) : workspaceUrl(dockyardId, "Findings", findingId));
   }
 
   return (
@@ -165,7 +119,6 @@ export function App() {
               onClick={() => open(item)}
             >
               {item}
-              {!availablePages.has(item) && <span className="planned-dot" aria-label="Planned" />}
             </button>
           ))}
         </nav>
@@ -189,6 +142,7 @@ export function App() {
             {error}
           </div>
         )}
+        {route.unknown && <p role="status">That page was not found. The dashboard is shown below.</p>}
         {page === "Dashboard" && (
           <Dashboard
             dockyards={dockyards}
@@ -201,31 +155,35 @@ export function App() {
         {page === "Dockyards" &&
           (selected ? (
             <Workspace
+              key={`${selected.id}/${route.tab}`}
               dockyard={selected}
               adapters={adapters}
               detectors={detectors}
-              initialTab={workspaceTab}
-              onBack={() => setSelected(null)}
+              initialTab={route.tab}
+              initialFindingId={contextFindingId}
+              onTabChange={(tab) => navigate(workspaceUrl(selected.id, tab))}
+              onFindingChange={(id) => navigate(workspaceUrl(selected.id, "Findings", id))}
+              onBack={() => open("Dockyards")}
               onError={setError}
             />
           ) : (
-            <Dockyards
+            route.workspace ? <EmptyState message="This Dockyard is loading or is no longer available." /> : <Dockyards
               dockyards={dockyards}
               setSelected={(dockyard) => {
                 if (dockyard) openDockyard(dockyard);
-                else setSelected(null);
+                else open("Dockyards");
               }}
               onCreate={createDockyard}
             />
           ))}
-        {page === "Assets" && <AssetsPage dockyards={dockyards} initialDockyardId={contextDockyardId} onError={setError} />}
-        {page === "Findings" && <FindingsPage dockyards={dockyards} initialDockyardId={contextDockyardId} initialFindingId={contextFindingId} onError={setError} />}
+        {page === "Assets" && <AssetsPage key={contextDockyardId} dockyards={dockyards} initialDockyardId={contextDockyardId} onSelect={(id) => navigate(pageUrl("Assets", id), contextDockyardId === null)} onError={setError} />}
+        {page === "Findings" && <FindingsPage key={contextDockyardId} dockyards={dockyards} initialDockyardId={contextDockyardId} initialFindingId={contextFindingId} onSelect={(id) => navigate(pageUrl("Findings", id), contextDockyardId === null)} onFindingChange={(id) => contextDockyardId !== null && navigate(workspaceUrl(contextDockyardId, "Findings", id))} onError={setError} />}
         {page === "RedPath" && <RedPath dockyards={dockyards} onOpenAsset={(dockyardId) => openScoped("Assets", dockyardId)} onOpenFinding={(dockyardId, findingId) => openScoped("Findings", dockyardId, findingId)} onError={setError} />}
         {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
         {page === "Lab" && <Lab dockyards={dockyards} onError={setError} />}
-        {page === "RedLedger" && <LedgerPage dockyards={dockyards} onError={setError} />}
+        {page === "RedLedger" && <LedgerPage key={contextDockyardId} dockyards={dockyards} initialDockyardId={contextDockyardId} onSelect={(id) => navigate(pageUrl("RedLedger", id), contextDockyardId === null)} onError={setError} />}
         {page === "Reports" && <Reports dockyards={dockyards} onError={setError} />}
-        {!availablePages.has(page) && <Planned page={page} />}
+        {page === "Settings" && <SettingsPage onError={setError} />}
       </main>
     </div>
   );
@@ -244,22 +202,15 @@ function Dashboard({
   openDockyard: (dockyard: Dockyard, tab?: WorkspaceTab) => void;
   onError: (message: string | null) => void;
 }) {
-  const [runs, setRuns] = useState<DiscoveryRun[]>([]);
-  const [assetCount, setAssetCount] = useState(0);
-  const [findings, setFindings] = useState<Finding[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const runs = summary?.recent_runs ?? [];
 
   useEffect(() => {
-    if (!dockyards.length) return;
-    Promise.all(dockyards.map((dockyard) => api.discoveries(dockyard.id)))
-      .then((results) => setRuns(results.flat().sort((left, right) => right.id - left.id)))
-      .catch(() => onError("Could not load recent discovery activity."));
-    Promise.all(dockyards.map((dockyard) => api.assets(dockyard.id)))
-      .then((results) => setAssetCount(results.flat().length))
-      .catch(() => onError("Could not load the asset inventory."));
-    Promise.all(dockyards.map((dockyard) => api.findings(dockyard.id, { status: "open" })))
-      .then((results) => setFindings(results.flat()))
-      .catch(() => onError("Could not load open findings."));
-  }, [dockyards, onError]);
+    let active = true;
+    api.dashboard().then((result) => { if (active) setSummary(result); })
+      .catch(() => { if (active) onError("Could not load dashboard totals."); });
+    return () => { active = false; };
+  }, [onError]);
 
   return (
     <>
@@ -268,9 +219,7 @@ function Dashboard({
           <p className="eyebrow">AUTHORIZED ASSESSMENT WORKSPACE</p>
           <h2>Scoped discovery, evidence-backed findings, and controlled validation.</h2>
           <p>
-            Every target passes DockGuard before contact. Detection reads only recorded evidence,
-            while validation requires a separately documented approval and rechecks scope just before
-            its fixed, non-destructive HTTP-origin probe.
+            Check authorized targets, review findings, and keep the evidence together.
           </p>
         </div>
         <button className="primary-button" onClick={() => openPage("Dockyards")}>
@@ -283,12 +232,12 @@ function Dashboard({
           value={health?.status === "healthy" ? "Healthy" : "Checking"}
           tone="success"
         />
-        <Metric label="Dockyards" value={String(dockyards.length)} onClick={() => openPage("Dockyards")} />
-        <Metric label="Assets discovered" value={String(assetCount)} onClick={() => openPage("Assets")} />
-        <Metric label="Discovery runs" value={String(runs.length)} onClick={() => openPage("RedLedger")} />
+        <Metric label="Dockyards" value={summary ? String(summary.dockyard_count) : "Loading"} onClick={() => openPage("Dockyards")} />
+        <Metric label="Assets discovered" value={summary ? String(summary.asset_count) : "Loading"} onClick={() => openPage("Assets")} />
+        <Metric label="Discovery runs" value={summary ? String(summary.discovery_run_count) : "Loading"} onClick={() => openPage("RedLedger")} />
         <Metric
           label="Open findings"
-          value={String(findings.length)}
+          value={summary ? String(summary.open_finding_count) : "Loading"}
           note="Produced by a detector, from recorded observations"
           onClick={() => openPage("Findings")}
         />
@@ -303,8 +252,9 @@ function Dashboard({
             View all
           </button>
         </div>
-        {dockyards.length ? (
-          <DockyardList dockyards={dockyards.slice(0, 5)} onSelect={openDockyard} />
+        {summary && <ListNotice shown={summary.recent_dockyards.length} total={summary.dockyard_count} />}
+        {summary?.recent_dockyards.length ? (
+          <DockyardList dockyards={summary.recent_dockyards} onSelect={openDockyard} />
         ) : (
           <EmptyState message="No Dockyards yet. Create an authorized engagement workspace to begin." />
         )}
@@ -317,6 +267,7 @@ function Dashboard({
               <h2>Recent discovery runs</h2>
             </div>
           </div>
+          <ListNotice shown={runs.length} total={summary?.discovery_run_count ?? null} />
           <DataTable headers={["Run", "Target", "Adapter", "Status", "Requested"]}>
             {runs.slice(0, 8).map((run) => (
               <tr
@@ -428,40 +379,46 @@ function DockyardList({
 /** A Dockyard-scoped view reached from the top-level navigation. */
 function useDockyardScoped<T>(
   dockyards: Dockyard[],
-  load: (id: number) => Promise<T[]>,
+  load: (id: number) => Promise<ListPage<T>>,
   onError: (message: string | null) => void,
   initialDockyardId: number | null = null,
+  onSelect: (id: number) => void,
 ) {
-  const [selected, setSelected] = useState<number | null>(initialDockyardId);
+  const selected = initialDockyardId;
   const [rows, setRows] = useState<T[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
 
   useEffect(() => {
-    if (selected === null && dockyards.length) setSelected(dockyards[0].id);
-  }, [dockyards, selected]);
+    if (selected === null && dockyards.length) onSelect(dockyards[0].id);
+  }, [dockyards, selected, onSelect]);
 
   useEffect(() => {
     if (selected === null) return;
+    let active = true;
     load(selected)
-      .then(setRows)
-      .catch((problem) =>
-        onError(problem instanceof Error ? problem.message : "Could not load this Dockyard."),
-      );
+      .then((result) => { if (active) { setRows(result.items); setTotal(result.total); } })
+      .catch((problem) => {
+        if (active) onError(problem instanceof Error ? problem.message : "Could not load this Dockyard.");
+      });
+    return () => { active = false; };
   }, [selected, load, onError]);
 
-  return { selected, setSelected, rows };
+  return { selected, setSelected: onSelect, rows, total };
 }
 
 function AssetsPage({
   dockyards,
   initialDockyardId,
+  onSelect,
   onError,
 }: {
   dockyards: Dockyard[];
   initialDockyardId: number | null;
+  onSelect: (id: number) => void;
   onError: (message: string | null) => void;
 }) {
-  const load = useCallback((id: number) => api.assets(id), []);
-  const { selected, setSelected, rows } = useDockyardScoped<Asset>(dockyards, load, onError, initialDockyardId);
+  const load = useCallback((id: number) => api.assetPage(id), []);
+  const { selected, setSelected, rows, total } = useDockyardScoped<Asset>(dockyards, load, onError, initialDockyardId, onSelect);
 
   if (!dockyards.length) {
     return (
@@ -475,6 +432,7 @@ function AssetsPage({
       <div className="toolbar">
         <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
       </div>
+      <ListNotice shown={rows.length} total={total} />
       <AssetTable assets={rows} />
     </>
   );
@@ -484,18 +442,22 @@ function FindingsPage({
   dockyards,
   initialDockyardId,
   initialFindingId,
+  onSelect,
+  onFindingChange,
   onError,
 }: {
   dockyards: Dockyard[];
   initialDockyardId: number | null;
   initialFindingId: number | null;
+  onSelect: (id: number) => void;
+  onFindingChange: (id: number) => void;
   onError: (message: string | null) => void;
 }) {
-  const [selected, setSelected] = useState<number | null>(initialDockyardId);
+  const selected = initialDockyardId;
 
   useEffect(() => {
-    if (selected === null && dockyards.length) setSelected(dockyards[0].id);
-  }, [dockyards, selected]);
+    if (selected === null && dockyards.length) onSelect(dockyards[0].id);
+  }, [dockyards, selected, onSelect]);
 
   if (!dockyards.length) {
     return (
@@ -507,10 +469,10 @@ function FindingsPage({
   return (
     <>
       <div className="toolbar">
-        <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
+        <DockyardPicker dockyards={dockyards} selected={selected} onSelect={onSelect} />
       </div>
       {selected !== null && (
-        <FindingsPanel dockyardId={selected} refreshKey={selected} initialFindingId={initialFindingId} onError={onError} />
+        <FindingsPanel dockyardId={selected} refreshKey={selected} initialFindingId={initialFindingId} onFindingChange={onFindingChange} showHeading={false} onError={onError} />
       )}
     </>
   );
@@ -518,16 +480,22 @@ function FindingsPage({
 
 function LedgerPage({
   dockyards,
+  initialDockyardId,
+  onSelect,
   onError,
 }: {
   dockyards: Dockyard[];
+  initialDockyardId: number | null;
+  onSelect: (id: number) => void;
   onError: (message: string | null) => void;
 }) {
-  const load = useCallback((id: number) => api.evidence(id), []);
-  const { selected, setSelected, rows } = useDockyardScoped<EvidenceRecord>(
+  const load = useCallback((id: number) => api.evidencePage(id), []);
+  const { selected, setSelected, rows, total } = useDockyardScoped<EvidenceRecord>(
     dockyards,
     load,
     onError,
+    initialDockyardId,
+    onSelect,
   );
 
   if (!dockyards.length) {
@@ -543,6 +511,7 @@ function LedgerPage({
         <DockyardPicker dockyards={dockyards} selected={selected} onSelect={setSelected} />
       </div>
       <section className="panel">
+        <ListNotice shown={rows.length} total={total} />
         <p className="hint">
           RedDock retains the raw tool output, the normalized result and a metadata record for every
           discovery run, each hashed with SHA-256. A detection run retains its own normalized result

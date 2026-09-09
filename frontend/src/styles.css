@@ -96,3 +96,7 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 .hash-copy { background: transparent; border: 0; color: inherit; padding: 0; }
 .hash-copy:hover .hash, .hash-copy:focus-visible .hash { color: #ff9ba5; }
 .hash-copy:focus-visible { border-radius: 4px; outline: 2px solid #d7263d; outline-offset: 3px; }
+/* Keep finding timestamps readable even beside the detail panel. */
+.findings-layout .seen-cell { white-space: normal; min-width: 155px; overflow: visible; text-overflow: clip; }
+.seen-cell > span { display: block; margin-bottom: 6px; color: #8b949e; }
+.seen-cell time { display: block; color: #c9d1d9; overflow-wrap: normal; }

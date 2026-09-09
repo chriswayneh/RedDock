@@ -8,6 +8,7 @@ RUN npm run build
 FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    REDDOCK_API_DOCS_ENABLED=false \
     REDDOCK_DATABASE_URL=sqlite:////var/lib/reddock/reddock.db \
     REDDOCK_EVIDENCE_DIR=/var/lib/reddock/evidence
 WORKDIR /app/backend

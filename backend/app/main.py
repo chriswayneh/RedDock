@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -55,24 +55,47 @@ async def lifespan(_: FastAPI):
     yield
 
 
-settings = get_settings()
-app = FastAPI(title="RedDock Core", version=settings.version, lifespan=lifespan)
-app.add_middleware(
-    TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1"],
-    www_redirect=False,
-)
-# Added after TrustedHost so the security policy also wraps rejected requests.
-app.add_middleware(ResponseSecurityMiddleware)
-app.include_router(router)
-
-if STATIC_DIRECTORY.exists():
-    app.mount("/assets", StaticFiles(directory=STATIC_DIRECTORY / "assets"), name="assets")
-
-
-@app.get("/{path:path}", include_in_schema=False)
 def frontend(path: str):
+    if path.split("/", 1)[0] in {"api", "docs", "redoc", "openapi.json"}:
+        raise HTTPException(status_code=404, detail="Not found")
     index = STATIC_DIRECTORY / "index.html"
     if index.exists():
         return FileResponse(index)
     return {"message": "RedDock API is running. Build the frontend to serve the UI."}
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    application = FastAPI(
+        title="RedDock Core",
+        version=settings.version,
+        lifespan=lifespan,
+        docs_url="/docs" if settings.api_docs_enabled else None,
+        redoc_url="/redoc" if settings.api_docs_enabled else None,
+        openapi_url="/openapi.json" if settings.api_docs_enabled else None,
+    )
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["localhost", "127.0.0.1"],
+        www_redirect=False,
+    )
+    # Wrap even rejected Host requests in the strict application policy.
+    application.add_middleware(ResponseSecurityMiddleware, docs_enabled=settings.api_docs_enabled)
+    application.include_router(router)
+
+    # /assets is also an application page. Register its exact paths before
+    # the bundle mount so refreshing the inventory does not become a static 404.
+    @application.get("/assets", include_in_schema=False)
+    @application.get("/assets/", include_in_schema=False)
+    def asset_page():
+        return frontend("assets")
+
+    if STATIC_DIRECTORY.exists():
+        application.mount(
+            "/assets", StaticFiles(directory=STATIC_DIRECTORY / "assets"), name="assets"
+        )
+    application.add_api_route("/{path:path}", frontend, methods=["GET"], include_in_schema=False)
+    return application
+
+
+app = create_app()

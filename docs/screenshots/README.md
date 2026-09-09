@@ -11,11 +11,13 @@ Click a view to open its full-size screenshot. These are examples, not a claim t
 | [Dashboard](dashboard.png) | See your workspaces and recent checking activity. |
 | [Workspace](workspace.png) | Define what is allowed before running a check. |
 | [Detection](detection.png) | See which rules turn recorded observations into findings. |
-| [Findings](findings.png) | Understand an issue and inspect its supporting evidence. |
+| [Findings](findings.png) | Filter issues and read complete first-seen and last-seen dates. |
+| [Finding detail](finding-detail.png) | Bookmark an issue and inspect its explanation and evidence. |
+| [Settings](settings.png) | Read the current version and deployment gates without exposing secrets. |
 | [RedPath](redpath.png) | Explore the relationships between assets and findings. |
 | [Reporting](reporting.png) | Prepare a management summary and technical handoff. |
 | [Readable manifest](manifest-view.png) | Browse the evidence files without reading raw JSON. |
-| [Swagger API explorer](swagger.png) | Let technical users inspect and interact with the API. |
+| [Swagger API explorer](swagger.png) | Inspect and interact with the API when explicitly enabled locally. |
 | [Lab controls](lab-mode.png) | Inspect separate authorization for limited lab capabilities. |
 | [Detector provenance](plugin-provenance.png) | Identify where an optional custom detection rule came from. |
 
@@ -31,3 +33,10 @@ plugin capture because the default package intentionally loads built-in
 detectors only.
 
 The README intentionally does not present a mockup as a product screenshot.
+
+The September 8 Phase 8 review checkpoint replaces `dashboard.png` and
+`findings.png` and adds `finding-detail.png` and `settings.png`. These captures
+come from the production Docker build on `codex/phase8-review-fixes`, with
+throwaway smoke-test data and no host-directory mounts. Settings shows the
+default disabled lab gate and no configured AI provider. The other gallery
+images retain the earlier provenance above.

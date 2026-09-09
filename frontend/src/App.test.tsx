@@ -1,7 +1,10 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { formatDate } from "./format";
+
+beforeEach(() => window.history.replaceState(null, "", "/"));
 
 const dockyard = {
   id: 1,
@@ -371,8 +374,12 @@ function stubApi({
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://localhost");
       const path = url.pathname;
-      const json = (body: unknown, status = 200) =>
-        Promise.resolve(new Response(JSON.stringify(body), { status }));
+      const json = (body: unknown, status = 200, total?: number) =>
+        Promise.resolve(new Response(JSON.stringify(body), { status, headers: Array.isArray(body) ? { "X-Total-Count": String(total ?? body.length) } : {} }));
+
+      if (path === "/api/dashboard") return json({ dockyard_count: 2, asset_count: assets.length * 2, discovery_run_count: 0, open_finding_count: findings.length * 2, recent_dockyards: [dockyard, { ...dockyard, id: 2, name: "Second workspace" }], recent_runs: [] });
+      if (path === "/api/settings") return json({ name: "RedDock", version: "0.8.0", phase: "Phase 7", deployment_mode: "local", intelligence_configured: (providerResponse as { available: boolean }).available });
+      if (path === "/api/lab/status") return json({ deployment_enabled: false, capabilities: [] });
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
@@ -446,14 +453,14 @@ function stubApi({
       if (path.endsWith("/findings")) {
         const severity = url.searchParams.get("severity");
         const status = url.searchParams.get("status");
-        return json(
-          findings.filter((row) => {
+        const filtered = findings.filter((row) => {
             const item = row as { severity: string; status: string };
             return (
               (!severity || item.severity === severity) && (!status || item.status === status)
             );
-          }),
-        );
+          });
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        return json(filtered.slice(offset, offset + 100), 200, filtered.length);
       }
       if (path.endsWith("/detections")) {
         if (init?.method === "POST") {
@@ -483,12 +490,80 @@ async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("RedDock application", () => {
+  it("restores a finding deep link after remount and follows browser history", async () => {
+    stubApi({ findings: [finding] });
+    window.history.replaceState(null, "", `/dockyards/1/findings/${finding.id}`);
+    const first = render(<App />);
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
+    first.unmount();
+    render(<App />);
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
+    act(() => {
+      window.history.pushState(null, "", "/dockyards/1/scope");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(await screen.findByText("AUTHORIZED SCOPE")).toBeInTheDocument();
+    act(() => window.history.back());
+    expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
+    act(() => window.history.forward());
+    expect(await screen.findByText("AUTHORIZED SCOPE")).toBeInTheDocument();
+  });
+
+  it("keeps the chosen Dockyard across inventory, findings and ledger", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/assets?dockyard=2");
+    render(<App />);
+    expect(await screen.findByLabelText("Dockyard")).toHaveValue("2");
+    for (const page of ["Findings", "RedLedger", "Assets"]) {
+      await user.click(screen.getByRole("button", { name: page }));
+      expect(screen.getByLabelText("Dockyard")).toHaveValue("2");
+      expect(window.location.search).toBe("?dockyard=2");
+    }
+  });
+
+  it("shows safe read-only settings and recovers from an unknown path", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/missing/page");
+    render(<App />);
+    expect(screen.getByText(/That page was not found/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(await screen.findByText("local")).toBeInTheDocument();
+    expect(screen.getByText("Disabled")).toBeInTheDocument();
+    expect(screen.getByText("Not configured")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(window.location.pathname).toBe("/settings");
+  });
+
+  it("pages more than 100 findings with complete totals and retains filters", async () => {
+    stubApi({ findings: Array.from({ length: 105 }, (_, index) => ({ ...finding, id: index + 1 })) });
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/findings?dockyard=1");
+    render(<App />);
+    expect(await screen.findByText(/Showing 100 of 105/)).toHaveTextContent(/limited/);
+    await user.selectOptions(screen.getByLabelText("Severity"), "low");
+    await user.click(screen.getByRole("button", { name: "Next findings" }));
+    expect(await screen.findByText(/Showing 5 of 105/)).toHaveTextContent("101-105");
+    expect(screen.getByLabelText("Severity")).toHaveValue("low");
+    expect(screen.getByRole("button", { name: "Next findings" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Previous findings" }));
+    expect(await screen.findByText(/Showing 100 of 105/)).toBeInTheDocument();
+  });
+
+  it("loads one dashboard summary without per-Dockyard inventory requests", async () => {
+    render(<App />);
+    await screen.findByText("Lab review");
+    const paths = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(paths.filter((path) => path === "/api/dashboard")).toHaveLength(1);
+    expect(paths.some((path) => /\/dockyards\/\d+\//.test(path))).toBe(false);
+  });
+
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
   });
 
   beforeEach(() => {
+    window.history.replaceState(null, "", "/");
     stubApi();
   });
 
@@ -629,7 +704,7 @@ describe("RedDock application", () => {
 
     await user.click(await screen.findByRole("button", { name: `Open finding ${finding.title}` }));
 
-    expect(screen.getByRole("heading", { level: 1, name: "Findings" })).toBeInTheDocument();
+    expect(window.location.pathname).toBe(`/dockyards/1/findings/${finding.id}`);
     expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
   });
 });
@@ -673,7 +748,12 @@ describe("Phase 2 detection", () => {
     expect(within(table).getByText("low")).toBeInTheDocument();
     expect(within(table).getByText("High")).toBeInTheDocument();
     expect(within(table).getByText("Open")).toBeInTheDocument();
-    expect(within(table).getByText(/last seen/)).toBeInTheDocument();
+    expect(within(table).getByText(/Last seen/)).toBeInTheDocument();
+    const times = table.querySelectorAll("time");
+    expect(times[0]).toHaveAttribute("datetime", finding.first_seen);
+    expect(times[0]).toHaveTextContent(formatDate(finding.first_seen));
+    expect(times[1]).toHaveTextContent(formatDate(finding.last_seen));
+    expect(screen.getAllByRole("heading", { name: "Findings" })).toHaveLength(1);
     expect(within(table).getByText("https://127.0.0.1:8443")).toBeInTheDocument();
   });
 
@@ -728,6 +808,7 @@ describe("Phase 2 detection", () => {
     await user.click(await screen.findByRole("button", { name: finding.title }));
     expect(await screen.findByText(findingDetail.description)).toBeInTheDocument();
 
+    await user.click(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("button", { name: "Findings" }));
     await user.selectOptions(screen.getByLabelText("Dockyard"), "2");
     await waitFor(() => expect(screen.queryByText(findingDetail.description)).toBeNull());
   });
@@ -786,7 +867,7 @@ describe("Phase 2 detection", () => {
     await user.click(await screen.findByRole("button", { name: "Observations" }));
 
     expect(
-      await screen.findByText(/It carries no severity and no verdict/),
+      await screen.findByText(/without a severity or verdict/),
     ).toBeInTheDocument();
   });
 });

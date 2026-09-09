@@ -49,8 +49,9 @@ SECURITY_HEADERS = {
 class ResponseSecurityMiddleware:
     """Apply fixed headers without buffering or rewriting streaming responses."""
 
-    def __init__(self, app: SecurityHeaderApp) -> None:
+    def __init__(self, app: SecurityHeaderApp, docs_enabled: bool = False) -> None:
         self.app = app
+        self.docs_enabled = docs_enabled
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -63,7 +64,7 @@ class ResponseSecurityMiddleware:
                 path = scope.get("path", "")
                 for name, value in SECURITY_HEADERS.items():
                     headers[name] = value
-                if path in _DOCUMENTATION_PATHS:
+                if self.docs_enabled and path in _DOCUMENTATION_PATHS and message["status"] == 200:
                     headers["Content-Security-Policy"] = _DOCUMENTATION_CSP
                 if path.startswith("/api/"):
                     headers["Cache-Control"] = "no-store"

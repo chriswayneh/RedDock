@@ -110,6 +110,7 @@ class Settings(BaseModel):
     version: str = "0.8.0"
     phase: str = "Phase 7 — Advanced / Lab"
     deployment_mode: Literal["local"] = "local"
+    api_docs_enabled: bool = False
     database_url: str = Field(default="sqlite:///./data/reddock.db", repr=False)
     database_host: str | None = None
     database_port: int = 5432
@@ -209,6 +210,8 @@ def get_settings() -> Settings:
         Path(database_url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
     return Settings(
         deployment_mode=_deployment_mode(),
+        api_docs_enabled=os.getenv("REDDOCK_API_DOCS_ENABLED", "").strip().lower()
+        in {"1", "true", "yes"},
         database_url=database_url,
         **database_components,
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),
