@@ -82,6 +82,10 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- Remove Vitest and its mocker package after the available major upgrade did
+  not pass RedDock's private boundary regression. The Jest replacement retains
+  the browser-facing test coverage, the audited lockfile has no known
+  vulnerabilities, and CI prevents either retired package from returning.
 - Require a JSON request body to ask for a validation, so the one state-changing
   route a cross-origin form could submit without a browser preflight can no
   longer spend a Dockyard's fixed validation budget from a page the operator
@@ -148,6 +152,8 @@ All notable changes to RedDock are documented here.
 
 ### Testing
 
+- Migrate all 56 frontend tests from Vitest to Jest with SWC and jsdom, retaining
+  lint, type-check, production-build, clean-install, and dependency-audit gates.
 - Configuration tests cover masked secrets, mutually exclusive provider-key
   sources, symlink rejection, and incomplete database settings
 - The complete SQLite regression suite continues to pass alongside an isolated
