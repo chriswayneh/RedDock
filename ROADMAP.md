@@ -78,6 +78,9 @@ sign-in, SSO, and shared-user access are not available yet.
   checks help identify problems. The frontend test suite now uses Jest, and CI
   prevents the retired Vitest packages from returning. Dependency updates are
   not merged automatically.
+- **Safer releases:** an annotated version tag must match the application,
+  packages, README, roadmap, and changelog before automation can publish an
+  attested AMD64/ARM64 container image and GitHub Release.
 - **Reliability and safety fixes:** the September 7 checkpoint strengthens
   target exclusions, limits slow web checks, prevents duplicate validation
   approvals, and improves interrupted-run recovery and report consistency. It
@@ -102,7 +105,7 @@ service.** Unsupported deployment modes remain blocked.
 
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete deployment, backup and restore, scaling,
-  release automation, and ARM64 verification across the supported product.
+  and end-to-end runtime verification on ARM64.
 - **End-to-end and independent review:** test the complete experience and
   address review findings. Passing automated checks is not a security certification.
 
@@ -146,6 +149,8 @@ These primitives are not an enabled authentication system:
   CodeQL analysis across workflows, frontend, and backend.
 - Grouped weekly Dependabot checks for Actions, Docker, npm, and pip,
   without automatic merging.
+- Fail-closed release metadata verification and full-SHA-pinned automation for
+  attested AMD64/ARM64 images and generated GitHub Releases.
 
 #### September 7 regression checkpoint
 
