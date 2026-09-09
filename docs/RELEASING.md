@@ -18,7 +18,9 @@ pass, the workflow:
 
 The workflow grants write access only to its publish job. All referenced actions
 are pinned to full commit hashes. A failed architecture build publishes neither
-the multi-platform manifest nor the GitHub Release.
+the multi-platform manifest nor the GitHub Release. Normal pull-request and
+`master` CI also build and run the complete product smoke path independently on
+native AMD64 and ARM64 hosts.
 
 ## Prepare a release
 
