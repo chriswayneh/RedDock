@@ -6,6 +6,17 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- Bookmarkable page, Dockyard-tab, and finding URLs, browser history navigation,
+  and Dockyard context shared by Assets, Findings, and RedLedger.
+- Read-only Settings showing public configuration facts without credentials.
+- A bounded dashboard summary with complete counts, documented list-total
+  headers, and finding pagination without changing the 100-row default.
+- Full finding dates, a single top-level Findings heading, shorter list hints,
+  and tab-specific fetching with polling only for in-flight work.
+- An explicit `REDDOCK_API_DOCS_ENABLED` switch, off by default, with tests for
+  Swagger, OpenAPI, SPA deep links, bundle paths, and rejected-Host headers.
+  The existing strict application CSP remains in place; its documentation
+  exception applies only to successfully served, explicitly enabled docs.
 - A plain-English first-run walkthrough, documentation reading paths, benefit-led
   product overview, and CISO/recruiter evaluation guide, with explicit local-only
   limits and a clickable screenshot tour.

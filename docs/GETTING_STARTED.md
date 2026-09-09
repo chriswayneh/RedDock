@@ -69,6 +69,37 @@ Your default local database and evidence stay in Docker's named data volume. To 
 
 Do not add `-v` to the shutdown command unless you intend to delete that stored data. Docker volume cleanup can also delete it. Persistent storage is not a backup; do not make this evaluation setup the only copy of important assessment evidence.
 
+## Finding your way around
+
+Each page has its own browser address. Bookmark a Dockyard tab or a finding to
+return to it after a refresh. Browser Back and Forward work, and the RedDock logo
+returns to the dashboard. Assets, Findings, and RedLedger remember the Dockyard
+in the address, so switching pages keeps the same workspace.
+
+The dashboard counts all matching records, not just the first page. Findings
+shows how many results are visible and offers Previous and Next buttons when
+there are more than 100. Settings is a read-only summary of the version, local
+deployment mode, lab gate, and whether AI is configured. It does not show keys
+or passwords and cannot change those settings.
+
+## Optional API explorer
+
+You do not need Swagger to use RedDock. Developers can enable it by adding this
+line to a local, untracked `.env` file beside `compose.yaml`:
+
+```text
+REDDOCK_API_DOCS_ENABLED=true
+```
+
+Run `docker compose up -d --build` again, then open
+[Swagger](http://localhost:8080/docs). The schema is at `/openapi.json` and ReDoc
+is at `/redoc`. To disable them, remove the line or set it to `false`, then run
+the same Compose command again. They return 404 when disabled.
+
+Swagger can call the same actions as the app, including starting authorized
+discovery. This switch is not authentication. Keep the supported Compose
+loopback bind; never publish this local-mode service to your network.
+
 ## Do I need AI?
 
 No. Start with the normal package above. Discovery, findings, validation, RedPath, and reporting work without an LLM (an AI language model).

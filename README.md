@@ -71,7 +71,7 @@ This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. J
 | Capability | Current implementation |
 | --- | --- |
 | Runtime | One Dockerized application that serves the UI and API on the same origin |
-| API explorer | OpenAPI 3.1 schema with interactive Swagger UI at `/docs` |
+| API explorer | Optional OpenAPI schema and Swagger UI, disabled by default |
 | Workspaces | Dockyards that own an explicit authorized scope |
 | Scope policy | DockGuard evaluates every target deterministically and fails closed |
 | Discovery | Nmap host and TCP service discovery, plus a single-request HTTP origin probe |
@@ -100,7 +100,9 @@ This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. J
 
 <div align="center">
 
-<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings view showing severity, confidence, status, the detector that produced a finding, and the hashed evidence behind it" width="900"></a>
+<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings list showing severity and status filters, complete counts, and readable first-seen and last-seen dates" width="900"></a>
+
+[Open a finding's detail view](docs/screenshots/finding-detail.png) to see its explanation and supporting evidence.
 
 <sub>Understand each issue: what was found, how serious it is, how confident the result is, and the evidence behind it.</sub>
 
@@ -142,9 +144,15 @@ This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. J
 
 <br><br>
 
+<a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Read-only RedDock Settings showing the installed version, local deployment mode, disabled lab gate, and optional AI configuration status" width="900"></a>
+
+<sub>Know what is running: inspect your version and deployment gates without exposing credentials.</sub>
+
+<br><br>
+
 <a href="docs/screenshots/swagger.png"><img src="docs/screenshots/swagger.png" alt="RedDock Swagger UI showing the interactive OpenAPI documentation for the reporting endpoints" width="900"></a>
 
-<sub>API explorer: the OpenAPI 3.1 contract is available through the built-in Swagger UI.</sub>
+<sub>API explorer: the built-in Swagger UI is available when the local developer flag is enabled.</sub>
 
 <br><br>
 
@@ -172,7 +180,7 @@ cd RedDock
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080). Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready), and interactive API documentation is at [http://localhost:8080/docs](http://localhost:8080/docs).
+Open [http://localhost:8080](http://localhost:8080). Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), and database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready). Swagger and the OpenAPI download are disabled by default. Developers can [enable the local API explorer](docs/GETTING_STARTED.md#optional-api-explorer).
 
 Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
