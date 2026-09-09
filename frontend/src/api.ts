@@ -1,5 +1,8 @@
 import type {
   Adapter,
+  DashboardSummary,
+  ListPage,
+  Settings,
   Asset,
   CorrelationRun,
   DetectionRun,
@@ -56,6 +59,14 @@ async function requestText(path: string): Promise<string> {
   return response.text();
 }
 
+async function requestPage<T>(path: string): Promise<ListPage<T>> {
+  const response = await fetch(`/api${path}`);
+  if (!response.ok) throw new Error(await detailOf(response));
+  const count = response.headers.get("X-Total-Count");
+  const total = count !== null && /^\d+$/.test(count) && Number.isSafeInteger(Number(count)) ? Number(count) : null;
+  return { items: await response.json() as T[], total };
+}
+
 function post<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
@@ -76,6 +87,12 @@ export type DiscoveryOutcome =
   | { accepted: false; error: string };
 
 export const api = {
+  dashboard: () => request<DashboardSummary>("/dashboard"),
+  settings: () => request<Settings>("/settings"),
+  assetPage: (id: number) => requestPage<Asset>(`/dockyards/${id}/assets`),
+  evidencePage: (id: number) => requestPage<EvidenceRecord>(`/dockyards/${id}/evidence`),
+  findingPage: (id: number, filters: { severity?: string; status?: string } = {}, offset = 0) =>
+    requestPage<Finding>(`/dockyards/${id}/findings${query({ ...filters, offset: String(offset) })}`),
   health: () => request<Health>("/health"),
   version: () => request<Version>("/version"),
   adapters: () => request<Adapter[]>("/adapters"),

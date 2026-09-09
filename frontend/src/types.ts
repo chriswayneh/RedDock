@@ -9,6 +9,12 @@ export type Dockyard = {
 
 export type Health = { status: string; service: string };
 export type Version = { name: string; version: string; phase: string };
+export type Settings = Version & { deployment_mode: "local"; intelligence_configured: boolean };
+export type DashboardSummary = {
+  dockyard_count: number; asset_count: number; discovery_run_count: number;
+  open_finding_count: number; recent_dockyards: Dockyard[]; recent_runs: DiscoveryRun[];
+};
+export type ListPage<T> = { items: T[]; total: number | null };
 
 export type ScopeEntry = {
   id: number;

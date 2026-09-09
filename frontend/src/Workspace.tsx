@@ -1,8 +1,11 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { DataTable, DecisionPanel, EmptyState, StatusPill } from "./components";
 import { DetectionPanel, FindingsPanel, ValidationPanel } from "./Findings";
 import { formatDate, humanize, kindLabel, plural } from "./format";
+import { workspaceTabs as tabs } from "./routes";
+import type { WorkspaceTab } from "./routes";
+export type { WorkspaceTab } from "./routes";
 import type {
   Adapter,
   Asset,
@@ -18,19 +21,6 @@ import type {
   ValidationRun,
 } from "./types";
 
-const tabs = [
-  "Scope",
-  "Discovery",
-  "Assets",
-  "Services",
-  "Observations",
-  "Detection",
-  "Findings",
-  "Validation",
-  "Runs",
-] as const;
-export type WorkspaceTab = (typeof tabs)[number];
-
 const ACTIVE = new Set(["pending", "running"]);
 
 export function Workspace({
@@ -38,6 +28,9 @@ export function Workspace({
   adapters,
   detectors,
   initialTab = "Scope",
+  initialFindingId = null,
+  onTabChange,
+  onFindingChange,
   onBack,
   onError,
 }: {
@@ -45,6 +38,9 @@ export function Workspace({
   adapters: Adapter[];
   detectors: Detector[];
   initialTab?: WorkspaceTab;
+  initialFindingId?: number | null;
+  onTabChange?: (tab: WorkspaceTab) => void;
+  onFindingChange?: (id: number) => void;
   onBack: () => void;
   onError: (message: string | null) => void;
 }) {
@@ -57,56 +53,57 @@ export function Workspace({
   const [detections, setDetections] = useState<DetectionRun[]>([]);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [validations, setValidations] = useState<ValidationRun[]>([]);
-  // Detection completes inside its request, so the findings view reloads on a
-  // counter rather than by polling.
-  const [detected, setDetected] = useState(0);
+  const generation = useRef(0);
+  const fetching = useRef(false);
 
   const refresh = useCallback(async () => {
+    if (fetching.current) return;
+    fetching.current = true;
+    const current = ++generation.current;
     try {
-      const [
-        nextScope,
-        nextAssets,
-        nextServices,
-        nextObservations,
-        nextRuns,
-        nextDetections,
-        nextFindings,
-        nextValidations,
-      ] = await Promise.all([
-        api.scope(dockyard.id),
-        api.assets(dockyard.id),
-        api.services(dockyard.id),
-        api.observations(dockyard.id),
-        api.discoveries(dockyard.id),
-        api.detections(dockyard.id),
-        api.findings(dockyard.id),
-        api.validations(dockyard.id),
-      ]);
-      setScope(nextScope);
-      setAssets(nextAssets);
-      setServices(nextServices);
-      setObservations(nextObservations);
-      setRuns(nextRuns);
-      setDetections(nextDetections);
-      setFindings(nextFindings);
-      setValidations(nextValidations);
-      setDetected((current) => current + 1);
-      onError(null);
+      // Each tab owns only the data it displays or needs for its safety gates.
+      // FindingsPanel fetches its own filtered, paginated list.
+      const tasks: Promise<void>[] = [];
+      function load<T>(request: Promise<T>, apply: (value: T) => void) {
+        tasks.push(request.then((value) => { if (current === generation.current) apply(value); }));
+      }
+      if (tab === "Scope" || tab === "Discovery") load(api.scope(dockyard.id), setScope);
+      if (tab === "Discovery" || tab === "Runs") load(api.discoveries(dockyard.id), setRuns);
+      if (tab === "Assets") load(api.assets(dockyard.id), setAssets);
+      if (tab === "Services") load(api.services(dockyard.id), setServices);
+      if (tab === "Observations" || tab === "Detection") load(api.observations(dockyard.id), setObservations);
+      if (tab === "Detection") load(api.detections(dockyard.id), setDetections);
+      if (tab === "Validation") {
+        load(api.findings(dockyard.id), setFindings);
+        load(api.validations(dockyard.id), setValidations);
+      }
+      const results = await Promise.allSettled(tasks);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      if (current === generation.current) {
+        onError(null);
+      }
     } catch (error) {
-      onError(error instanceof Error ? error.message : "Could not load the Dockyard workspace.");
+      if (current === generation.current) onError(error instanceof Error ? error.message : "Could not load the Dockyard workspace.");
+    } finally {
+      if (current === generation.current) fetching.current = false;
     }
-  }, [dockyard.id, onError]);
+  }, [dockyard.id, tab, onError]);
 
   useEffect(() => {
     void refresh();
+    return () => { generation.current++; fetching.current = false; };
   }, [refresh]);
 
   // A run executes in the background, so poll only while one is in flight.
   useEffect(() => {
-    if (!runs.some((run) => ACTIVE.has(run.status))) return;
+    const discoveryActive = (tab === "Discovery" || tab === "Runs") && runs.some((run) => ACTIVE.has(run.status));
+    // Pending validation awaits a human approval; only running work needs polling.
+    const validationActive = tab === "Validation" && validations.some((run) => run.status === "running");
+    if (!discoveryActive && !validationActive) return;
     const timer = setInterval(() => void refresh(), 2000);
     return () => clearInterval(timer);
-  }, [runs, refresh]);
+  }, [runs, validations, tab, refresh]);
 
   return (
     <>
@@ -118,14 +115,6 @@ export function Workspace({
           <h2>{dockyard.name}</h2>
           <p className="detail-copy">{dockyard.description || "No description provided."}</p>
         </div>
-        <div className="workspace-counts">
-          <span>{plural(scope.length, "scope entry", "scope entries")}</span>
-          <span>{plural(assets.length, "asset")}</span>
-          <span>{plural(services.length, "service")}</span>
-          <span>{plural(runs.length, "discovery run")}</span>
-          <span>{plural(findings.length, "finding")}</span>
-          <span>{plural(validations.length, "validation")}</span>
-        </div>
       </section>
 
       <nav className="tabs" aria-label="Dockyard sections">
@@ -133,7 +122,7 @@ export function Workspace({
           <button
             key={item}
             className={tab === item ? "tab active" : "tab"}
-            onClick={() => setTab(item)}
+            onClick={() => { setTab(item); onTabChange?.(item); }}
           >
             {item}
           </button>
@@ -168,7 +157,7 @@ export function Workspace({
         />
       )}
       {tab === "Findings" && (
-        <FindingsPanel dockyardId={dockyard.id} refreshKey={detected} onError={onError} />
+        <FindingsPanel dockyardId={dockyard.id} refreshKey={0} initialFindingId={initialFindingId} onFindingChange={onFindingChange} onError={onError} />
       )}
       {tab === "Validation" && (
         <ValidationPanel
@@ -380,18 +369,23 @@ function DiscoveryPanel({
   async function launch() {
     if (!ready || !adapter) return;
     setBusy(true);
-    const outcome = await api.startDiscovery(dockyardId, target.trim(), adapter.name, profile);
-    setBusy(false);
-    if ("error" in outcome) {
-      onError(outcome.error);
-      return;
+    try {
+      const outcome = await api.startDiscovery(dockyardId, target.trim(), adapter.name, profile);
+      if ("error" in outcome) {
+        onError(outcome.error);
+        return;
+      }
+      if (!outcome.accepted) {
+        onError(`RedDock denied this run: ${outcome.run.decision_reason}`);
+        return;
+      }
+      onError(null);
+      await onStarted();
+    } catch {
+      onError("Could not confirm the discovery launch. Check Runs before trying again.");
+    } finally {
+      setBusy(false);
     }
-    if (!outcome.accepted) {
-      onError(`RedDock denied this run: ${outcome.run.decision_reason}`);
-      return;
-    }
-    onError(null);
-    await onStarted();
   }
 
   if (scopeCount === 0) {
@@ -551,8 +545,7 @@ function ObservationList({ observations }: { observations: Observation[] }) {
   return (
     <section className="panel">
       <p className="hint">
-        An observation records what an adapter saw. It carries no severity and no verdict: a
-        detector turns observations into findings, and this record stays what it was.
+        Observations record what an adapter saw, without a severity or verdict.
       </p>
       <DataTable headers={["Observed", "Adapter", "Type", "Summary", "Confidence", "Run"]}>
         {observations.map((observation) => (

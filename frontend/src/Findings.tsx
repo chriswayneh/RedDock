@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
 import { DataTable, EmptyState, StatusPill } from "./components";
-import { formatCompact, formatDate, humanize } from "./format";
+import { formatDate, humanize } from "./format";
+import { ListNotice } from "./ListNotice";
 import type { DetectionRun, Detector, Finding, FindingDetail, ValidationRun } from "./types";
 
 const SEVERITIES = ["critical", "high", "medium", "low", "informational"] as const;
@@ -24,42 +25,58 @@ export function FindingsPanel({
   dockyardId,
   refreshKey,
   initialFindingId = null,
+  onFindingChange,
+  showHeading = true,
   onError,
 }: {
   dockyardId: number;
   refreshKey: number;
   initialFindingId?: number | null;
+  onFindingChange?: (id: number) => void;
+  showHeading?: boolean;
   onError: (message: string | null) => void;
 }) {
   const [findings, setFindings] = useState<Finding[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
+  const generation = useRef(0);
   const [severity, setSeverity] = useState("");
   const [status, setStatus] = useState("");
   const [selected, setSelected] = useState<FindingDetail | null>(null);
 
   const load = useCallback(async () => {
+    const current = ++generation.current;
     try {
-      setFindings(await api.findings(dockyardId, { severity, status }));
+      const result = await api.findingPage(dockyardId, { severity, status }, offset);
+      if (current !== generation.current) return;
+      setFindings(result.items);
+      setTotal(result.total);
       onError(null);
     } catch (error) {
+      if (current !== generation.current) return;
       onError(error instanceof Error ? error.message : "Could not load findings.");
     }
-  }, [dockyardId, severity, status, onError]);
+  }, [dockyardId, severity, status, offset, onError]);
 
   useEffect(() => {
     void load();
+    return () => { generation.current++; };
   }, [load, refreshKey]);
 
   useEffect(() => {
     setSelected(null);
     if (initialFindingId === null) return;
+    let active = true;
     api.finding(dockyardId, initialFindingId)
-      .then(setSelected)
-      .catch((error) =>
-        onError(error instanceof Error ? error.message : "Could not load this finding."),
-      );
+      .then((result) => { if (active) setSelected(result); })
+      .catch((error) => {
+        if (active) onError(error instanceof Error ? error.message : "Could not load this finding.");
+      });
+    return () => { active = false; };
   }, [dockyardId, initialFindingId, onError]);
 
   async function open(finding: Finding) {
+    if (onFindingChange) { onFindingChange(finding.id); return; }
     try {
       setSelected(await api.finding(dockyardId, finding.id));
     } catch (error) {
@@ -82,19 +99,17 @@ export function FindingsPanel({
         <div className="section-heading">
           <div>
             <p className="eyebrow">DETECTION RESULTS</p>
-            <h2>Findings</h2>
+            {showHeading && <h2>Findings</h2>}
           </div>
           <span className="count-chip">{findings.length}</span>
         </div>
         <p className="hint">
-          A finding is a normalized conclusion a named detector drew from recorded observations,
-          and it carries the observations that support it. An observation on its own is still only
-          a record of what was seen.
+          Review each finding with the observations and evidence behind it.
         </p>
         <div className="filter-row">
           <label>
             Severity
-            <select value={severity} onChange={(event) => setSeverity(event.target.value)}>
+            <select value={severity} onChange={(event) => { setSeverity(event.target.value); setOffset(0); }}>
               <option value="">All</option>
               {SEVERITIES.map((item) => (
                 <option key={item} value={item}>
@@ -105,7 +120,7 @@ export function FindingsPanel({
           </label>
           <label>
             Status
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+            <select value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}>
               <option value="">All</option>
               {STATUSES.map((item) => (
                 <option key={item} value={item}>
@@ -115,6 +130,11 @@ export function FindingsPanel({
             </select>
           </label>
         </div>
+        <ListNotice shown={findings.length} total={total} offset={offset} />
+        {(offset > 0 || (total !== null && total > 100)) && <div className="button-row">
+          <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 100))}>Previous findings</button>
+          <button disabled={total === null || offset + findings.length >= total || findings.length === 0} onClick={() => setOffset(offset + 100)}>Next findings</button>
+        </div>}
         {findings.length ? (
           <DataTable
             headers={[
@@ -157,8 +177,8 @@ export function FindingsPanel({
                   <code>{finding.detector}</code>
                 </td>
                 <td className="seen-cell">
-                  {formatCompact(finding.first_seen)}
-                  <small>last seen {formatCompact(finding.last_seen)}</small>
+                  <span>First seen <time dateTime={finding.first_seen}>{formatDate(finding.first_seen)}</time></span>
+                  <span>Last seen <time dateTime={finding.last_seen}>{formatDate(finding.last_seen)}</time></span>
                 </td>
               </tr>
             ))}
