@@ -365,11 +365,11 @@ Phase 8 is still in development. Completed checkpoints include:
 - secure session and browser-boundary foundations
 - hardened responses, readiness checks, and dependency scanning
 - complete paginated inventories, evidence lists, and run histories
+- fail-closed release automation and native AMD64/ARM64 product verification
 
 Authentication is not enabled, and shared mode remains blocked. OIDC,
-administration, scaling, release automation, full ARM64 validation,
-backup/restore, and production deployment hardening are still planned. See the
-[roadmap](ROADMAP.md) for the detailed status.
+administration, scaling, backup/restore, and production deployment hardening
+are still planned. See the [roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security
 

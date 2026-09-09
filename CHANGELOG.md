@@ -156,6 +156,8 @@ All notable changes to RedDock are documented here.
 
 ### Testing
 
+- Run the production container and complete discovery-through-reporting smoke
+  path on native AMD64 and ARM64 GitHub runners for every reviewed change.
 - Release-metadata regression tests and a tag-time verification gate covering
   annotation type, tagged commit, master ancestry, clean checkout, public
   release notes, and every packaged version field.

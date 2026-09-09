@@ -81,6 +81,8 @@ sign-in, SSO, and shared-user access are not available yet.
 - **Safer releases:** an annotated version tag must match the application,
   packages, README, roadmap, and changelog before automation can publish an
   attested AMD64/ARM64 container image and GitHub Release.
+- **Native platform checks:** both AMD64 and ARM64 GitHub runners now build the
+  production image and complete the same discovery-through-reporting smoke test.
 - **Reliability and safety fixes:** the September 7 checkpoint strengthens
   target exclusions, limits slow web checks, prevents duplicate validation
   approvals, and improves interrupted-run recovery and report consistency. It
@@ -104,8 +106,7 @@ service.** Unsupported deployment modes remain blocked.
 ### Still needed before release
 
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
-- **Operational readiness:** complete deployment, backup and restore, scaling,
-  and end-to-end runtime verification on ARM64.
+- **Operational readiness:** complete deployment, backup and restore, and scaling.
 - **End-to-end and independent review:** test the complete experience and
   address review findings. Passing automated checks is not a security certification.
 
@@ -151,6 +152,8 @@ These primitives are not an enabled authentication system:
   without automatic merging.
 - Fail-closed release metadata verification and full-SHA-pinned automation for
   attested AMD64/ARM64 images and generated GitHub Releases.
+- Native AMD64 and ARM64 container jobs run the complete production smoke path,
+  including the gated lab profile and packaged detector provenance.
 
 #### September 7 regression checkpoint
 
