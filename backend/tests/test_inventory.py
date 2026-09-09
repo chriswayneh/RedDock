@@ -87,6 +87,20 @@ def test_a_service_state_change_is_recorded(session: Session):
     assert updated.state == "filtered"
 
 
+def test_negative_results_do_not_create_services_or_revive_old_identification(session):
+    asset = upsert_asset(session, make_dockyard(session), host(), FIRST)
+    assert upsert_service(session, asset, DiscoveredService("tcp", 80, "closed"), FIRST) is None
+    service = upsert_service(
+        session, asset, DiscoveredService("tcp", 23, "open", service_name="telnet"), FIRST
+    )
+    original_id = service.id
+    upsert_service(session, asset, DiscoveredService("tcp", 23, "closed"), LATER)
+    reopened = upsert_service(session, asset, DiscoveredService("tcp", 23, "open"), LATER)
+    assert reopened.id == original_id
+    assert reopened.first_seen.replace(tzinfo=UTC) == FIRST
+    assert (reopened.service_name, reopened.product, reopened.version) == (None, None, None)
+
+
 def test_observations_accumulate_as_history(session: Session):
     dockyard_id = make_dockyard(session)
     asset = upsert_asset(session, dockyard_id, host(), FIRST)

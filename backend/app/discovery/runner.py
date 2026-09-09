@@ -321,6 +321,8 @@ def _persist(
         asset_ids[discovered.identity] = asset.id
         for discovered_service in discovered.services:
             service = upsert_service(session, asset, discovered_service, observed_at)
+            if service is None:
+                continue
             service_ids[
                 (discovered.identity, discovered_service.transport, discovered_service.port)
             ] = service.id

@@ -134,3 +134,9 @@ DNS answers. Discovery publishes inventory and evidence references atomically;
 validation approvals use a conditional claim and interrupted probes recover on
 restart. PostgreSQL report capture uses REPEATABLE READ, tested against a real
 concurrent scope update. See the root roadmap for remaining review work.
+
+Nmap repeat discovery reconciles a known service when an exact port result says
+it is closed or filtered. Ports absent from the result remain unchanged. Exact
+bounded compact-port lists are retained, but a count-only summary is never
+expanded into guessed inventory. A negative result for an unknown port remains
+an observation instead of creating a permanent service row.

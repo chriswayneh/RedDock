@@ -6,7 +6,7 @@ You can already run RedDock locally, define allowed targets, collect observation
 
 The latest release is **v0.8.0 (Phase 7)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
 
-Before that release, the review backlog includes complete lists and counts beyond 100 rows, correct handling of previously open ports reported closed, and more resilient page loading. Production identity, deployment, backup/restore, and operational verification still need end-to-end completion. The detailed checkpoints below distinguish shipped features from that remaining work.
+Before that release, the review backlog includes complete lists and counts beyond 100 rows and more resilient page loading. Production identity, deployment, backup/restore, and operational verification still need end-to-end completion. The detailed checkpoints below distinguish shipped features from that remaining work.
 
 ## Completed — Phase 0: Foundation
 
@@ -80,6 +80,10 @@ sign-in, SSO, and shared-user access are not available yet.
   also stops another website from starting a validation through your browser,
   tightens what the RedDock page is allowed to load, and removes container
   privileges the application never uses.
+- **Accurate repeat discovery:** an explicitly closed or filtered Nmap port
+  updates the matching known service while an unscanned port remains unchanged.
+  Exact compact port lists are retained as evidence; count-only summaries never
+  become guessed inventory, and newly closed ports do not fill the service list.
 
 ### Foundations built—not yet enabled for users
 
@@ -99,8 +103,6 @@ service.** Unsupported deployment modes remain blocked.
 - **Complete remaining result lists:** extend pagination beyond Findings to
   the other bounded inventories and run histories. Dashboard counts are complete;
   Assets and RedLedger disclose their list limits.
-- **More accurate inventory updates:** correctly handle previously open ports
-  reported closed, without assuming an unscanned port is closed.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete deployment, backup and restore, scaling,
   release automation, and ARM64 verification across the supported product.

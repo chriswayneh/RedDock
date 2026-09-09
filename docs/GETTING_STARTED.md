@@ -136,4 +136,4 @@ For help, collect the error and your Docker version. Review logs and screenshots
 
 ## What comes next?
 
-Try the local demo before adding real, explicitly authorized targets. RedDock is currently best evaluated in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8--production-polish) still has known work around list pagination, closed-port reconciliation, UI recovery, and production operations. Working accounts, SSO, and shared-user deployments are not available yet.
+Try the local demo before adding real, explicitly authorized targets. RedDock is currently best evaluated in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8--production-polish) still has known work around list pagination, UI recovery, and production operations. Working accounts, SSO, and shared-user deployments are not available yet.

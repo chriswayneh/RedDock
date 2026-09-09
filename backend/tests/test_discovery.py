@@ -122,6 +122,27 @@ def start(client: TestClient, dockyard: int, target: str) -> dict:
     )
 
 
+def inventory_result(
+    services: tuple[DiscoveredService, ...],
+    observations: tuple[DiscoveredObservation, ...],
+) -> AdapterResult:
+    return AdapterResult(
+        assets=(
+            DiscoveredAsset(
+                asset_type=AssetType.HOST,
+                identity="127.0.0.1",
+                display_name="127.0.0.1",
+                ip_address="127.0.0.1",
+                services=services,
+            ),
+        ),
+        observations=observations,
+        artifacts=(RawArtifact("stub.json", "application/json", b'{"ok":true}'),),
+        tool_version="stub 1.0",
+        invocation=("stub", "127.0.0.1"),
+    )
+
+
 def test_out_of_scope_target_is_denied_server_side(
     client: TestClient, dockyard_id: int, adapter: StubAdapter, add_scope
 ):
@@ -219,6 +240,117 @@ def test_repeated_discovery_updates_instead_of_duplicating(
     assert assets[0]["last_seen"] >= first["last_seen"]
     # History is never rewritten: each run keeps its own observations.
     assert len(observations) == 2
+
+
+def test_explicit_negative_states_reconcile_only_the_ports_that_were_scanned(
+    client: TestClient,
+    dockyard_id: int,
+    adapter: StubAdapter,
+    add_scope,
+    monkeypatch: pytest.MonkeyPatch,
+    environment: Path,
+):
+    add_scope(dockyard_id, "127.0.0.1")
+    initial = inventory_result(
+        (
+            DiscoveredService("tcp", 8080, "open", "http", "uvicorn", "1.0"),
+            DiscoveredService("tcp", 9000, "open"),
+        ),
+        (),
+    )
+    changed = inventory_result(
+        (
+            DiscoveredService("tcp", 8080, "closed"),
+            DiscoveredService("tcp", 9090, "closed"),
+        ),
+        (
+            DiscoveredObservation(
+                "port_state", "TCP/8080 closed on 127.0.0.1", Confidence.OBSERVED,
+                asset_identity="127.0.0.1", service_port=("tcp", 8080),
+            ),
+            DiscoveredObservation(
+                "port_state", "TCP/9090 closed on 127.0.0.1", Confidence.OBSERVED,
+                asset_identity="127.0.0.1", service_port=("tcp", 9090),
+            ),
+        ),
+    )
+    results = iter((initial, changed))
+    monkeypatch.setattr(adapter, "run", lambda request: next(results))
+
+    first_accepted = start(client, dockyard_id, "127.0.0.1").json()
+    first_run = client.get(
+        f"/api/dockyards/{dockyard_id}/discoveries/{first_accepted['id']}"
+    ).json()
+    first = {
+        service["port"]: service
+        for service in client.get(f"/api/dockyards/{dockyard_id}/services").json()
+    }
+    second_accepted = start(client, dockyard_id, "127.0.0.1").json()
+    second_run = client.get(
+        f"/api/dockyards/{dockyard_id}/discoveries/{second_accepted['id']}"
+    ).json()
+    current = {
+        service["port"]: service
+        for service in client.get(f"/api/dockyards/{dockyard_id}/services").json()
+    }
+
+    assert first_run["service_count"] == 2
+    assert second_run["service_count"] == 1
+    assert set(current) == {8080, 9000}
+    assert current[8080]["id"] == first[8080]["id"]
+    assert current[8080]["state"] == "closed"
+    assert current[9000]["state"] == "open"
+    assert current[9000]["last_seen"] == first[9000]["last_seen"]
+
+    observations = client.get(f"/api/dockyards/{dockyard_id}/observations").json()
+    closed = {item["summary"]: item for item in observations}
+    assert closed["TCP/8080 closed on 127.0.0.1"]["service_id"] == first[8080]["id"]
+    assert closed["TCP/9090 closed on 127.0.0.1"]["service_id"] is None
+
+    normalized = json.loads(
+        (
+            environment
+            / "evidence"
+            / str(dockyard_id)
+            / str(second_run["id"])
+            / "normalized"
+            / "result.json"
+        )
+        .read_text()
+    )
+    assert [
+        (item["port"], item["state"])
+        for item in normalized["assets"][0]["services"]
+    ] == [(8080, "closed"), (9090, "closed")]
+
+
+def test_failed_evidence_write_rolls_back_a_negative_state_update(
+    client: TestClient,
+    dockyard_id: int,
+    adapter: StubAdapter,
+    add_scope,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    add_scope(dockyard_id, "127.0.0.1")
+    start(client, dockyard_id, "127.0.0.1")
+    monkeypatch.setattr(
+        adapter,
+        "run",
+        lambda request: inventory_result((DiscoveredService("tcp", 8080, "closed"),), ()),
+    )
+    monkeypatch.setattr(
+        discovery_runner,
+        "_store_evidence",
+        lambda *args: (_ for _ in ()).throw(OSError("Simulated evidence disk failure")),
+    )
+
+    failed_accepted = start(client, dockyard_id, "127.0.0.1").json()
+    failed = client.get(
+        f"/api/dockyards/{dockyard_id}/discoveries/{failed_accepted['id']}"
+    ).json()
+    service = client.get(f"/api/dockyards/{dockyard_id}/services").json()[0]
+    assert failed["status"] == "failed"
+    assert service["state"] == "open"
 
 
 def test_a_failing_adapter_marks_the_run_failed(

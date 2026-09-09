@@ -118,8 +118,8 @@ def test_fixture_output_normalizes_into_assets_services_and_observations():
     assert len(assets) == 1
     asset = assets[0]
     assert (asset.identity, asset.ip_address) == ("127.0.0.1", "127.0.0.1")
-    # The filtered port is not persisted as a service; the down host is skipped.
-    assert sorted(service.port for service in asset.services) == [22, 8080]
+    # Negative states reconcile known services; the down host is skipped.
+    assert sorted(service.port for service in asset.services) == [22, 8080, 9000]
 
     ssh = next(service for service in asset.services if service.port == 22)
     http = next(service for service in asset.services if service.port == 8080)
@@ -129,8 +129,38 @@ def test_fixture_output_normalizes_into_assets_services_and_observations():
 
     types = [observation.observation_type for observation in observations]
     assert types.count("host_responded") == 1
-    assert types.count("port_state") == 2
+    assert types.count("port_state") == 3
     assert types.count("service_identified") == 1
+
+
+def test_exact_summary_ports_are_retained_without_guessing_from_counts():
+    adapter = NmapAdapter()
+    document = adapter.parse(b'''<nmaprun><host>
+      <status state="up"/><address addr="127.0.0.1" addrtype="ipv4"/>
+      <ports><extraports state="closed" count="5">
+        <extrareasons reason="conn-refused" count="3" proto="tcp" ports="21-23"/>
+        <extrareasons reason="conn-refused" count="2"/>
+      </extraports><port protocol="tcp" portid="8080">
+        <state state="filtered"/><service name="http" method="probed"/>
+      </port></ports></host></nmaprun>''')
+    assets, observations = adapter.normalize(document, request())
+    assert [(s.port, s.state) for s in assets[0].services] == [
+        (8080, "filtered"), (21, "closed"), (22, "closed"), (23, "closed")
+    ]
+    assert all(s.service_name is None for s in assets[0].services)
+    assert not any(o.observation_type == "service_identified" for o in observations)
+
+
+@pytest.mark.parametrize("ports", ["0", "65536", "23-21", "1-65535", "22,nope", "22,22"])
+def test_invalid_or_unbounded_summary_is_not_partially_applied(ports):
+    adapter = NmapAdapter()
+    document = adapter.parse(f'''<nmaprun><host>
+      <status state="up"/><address addr="127.0.0.1" addrtype="ipv4"/>
+      <ports><extraports state="closed" count="2">
+        <extrareasons reason="conn-refused" count="2" proto="tcp" ports="{ports}"/>
+      </extraports></ports></host></nmaprun>'''.encode())
+    with pytest.raises(AdapterError, match="port summary"):
+        adapter.normalize(document, request())
 
 
 def test_broken_xml_fails_the_run_rather_than_producing_results():
