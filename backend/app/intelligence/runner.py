@@ -271,12 +271,15 @@ def approve_run(session: Session, dockyard_id: int, run_id: int, note: str) -> I
     return run
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[IntelligenceRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[IntelligenceRun]:
     return list(
         session.scalars(
             select(IntelligenceRun)
             .where(IntelligenceRun.dockyard_id == dockyard_id)
             .order_by(IntelligenceRun.id.desc())
+            .offset(offset)
             .limit(limit)
         )
     )

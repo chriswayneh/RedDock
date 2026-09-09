@@ -223,12 +223,15 @@ def _start_report(session: Session, dockyard_id: int) -> ReportRun:
         return failed
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[ReportRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[ReportRun]:
     return list(
         session.scalars(
             select(ReportRun)
             .where(ReportRun.dockyard_id == dockyard_id)
             .order_by(ReportRun.id.desc())
+            .offset(offset)
             .limit(limit)
         )
     )

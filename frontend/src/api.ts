@@ -81,6 +81,10 @@ function query(filters: Record<string, string | undefined>): string {
   return rendered ? `?${rendered}` : "";
 }
 
+function dockyardPage<T>(id: number, resource: string, offset = 0): Promise<ListPage<T>> {
+  return requestPage<T>(`/dockyards/${id}/${resource}${query({ offset: String(offset) })}`);
+}
+
 /** A discovery request that DockGuard denied is a result, not a transport error. */
 export type DiscoveryOutcome =
   | { accepted: boolean; run: DiscoveryRun }
@@ -89,17 +93,25 @@ export type DiscoveryOutcome =
 export const api = {
   dashboard: () => request<DashboardSummary>("/dashboard"),
   settings: () => request<Settings>("/settings"),
-  assetPage: (id: number) => requestPage<Asset>(`/dockyards/${id}/assets`),
-  evidencePage: (id: number) => requestPage<EvidenceRecord>(`/dockyards/${id}/evidence`),
+  assetPage: (id: number, offset = 0) => dockyardPage<Asset>(id, "assets", offset),
+  servicePage: (id: number, offset = 0) => dockyardPage<ServiceRow>(id, "services", offset),
+  observationPage: (id: number, offset = 0) => dockyardPage<Observation>(id, "observations", offset),
+  discoveryPage: (id: number, offset = 0) => dockyardPage<DiscoveryRun>(id, "discoveries", offset),
+  evidencePage: (id: number, offset = 0) => dockyardPage<EvidenceRecord>(id, "evidence", offset),
+  detectionPage: (id: number, offset = 0) => dockyardPage<DetectionRun>(id, "detections", offset),
+  correlationPage: (id: number, offset = 0) => dockyardPage<CorrelationRun>(id, "correlations", offset),
+  intelligencePage: (id: number, offset = 0) => dockyardPage<IntelligenceRun>(id, "intelligence", offset),
+  reportPage: (id: number, offset = 0) => dockyardPage<ReportRun>(id, "reports", offset),
+  validationPage: (id: number, offset = 0) => dockyardPage<ValidationRun>(id, "validations", offset),
+  labAuthorizationPage: (id: number, offset = 0) =>
+    dockyardPage<LabAuthorization>(id, "lab/authorizations", offset),
+  labAuditPage: (id: number, offset = 0) => dockyardPage<LabAuditEvent>(id, "lab/audit", offset),
   findingPage: (id: number, filters: { severity?: string; status?: string } = {}, offset = 0) =>
     requestPage<Finding>(`/dockyards/${id}/findings${query({ ...filters, offset: String(offset) })}`),
   health: () => request<Health>("/health"),
   version: () => request<Version>("/version"),
   adapters: () => request<Adapter[]>("/adapters"),
   labStatus: () => request<LabStatus>("/lab/status"),
-  labAuthorizations: (id: number) =>
-    request<LabAuthorization[]>(`/dockyards/${id}/lab/authorizations`),
-  labAudit: (id: number) => request<LabAuditEvent[]>(`/dockyards/${id}/lab/audit`),
   authorizeLab: (
     id: number,
     capability: string,
@@ -129,31 +141,21 @@ export const api = {
   evaluate: (id: number, target: string, resolve = false) =>
     post<ScopeEvaluation>(`/dockyards/${id}/scope/evaluate`, { target, resolve }),
 
-  assets: (id: number) => request<Asset[]>(`/dockyards/${id}/assets`),
-  services: (id: number) => request<ServiceRow[]>(`/dockyards/${id}/services`),
-  observations: (id: number) => request<Observation[]>(`/dockyards/${id}/observations`),
-  evidence: (id: number) => request<EvidenceRecord[]>(`/dockyards/${id}/evidence`),
-
   detectors: () => request<Detector[]>("/detectors"),
-  detections: (id: number) => request<DetectionRun[]>(`/dockyards/${id}/detections`),
   /** Detection takes no target and no options, so the request carries nothing. */
   startDetection: (id: number) => post<DetectionRun>(`/dockyards/${id}/detections`, {}),
 
-  correlations: (id: number) => request<CorrelationRun[]>(`/dockyards/${id}/correlations`),
   /** Correlation reads stored state only and accepts no selectors or weights. */
   startCorrelation: (id: number) => post<CorrelationRun>(`/dockyards/${id}/correlations`, {}),
   redpath: (id: number) => request<RedPathGraph>(`/dockyards/${id}/redpath`),
 
   intelligenceProvider: () => request<IntelligenceProvider>("/intelligence/provider"),
-  intelligenceRuns: (id: number) =>
-    request<IntelligenceRun[]>(`/dockyards/${id}/intelligence`),
   /** Packet creation contacts nothing and accepts no prompt, target, or provider option. */
   createIntelligence: (id: number) =>
     post<IntelligenceRun>(`/dockyards/${id}/intelligence`, {}),
   approveIntelligence: (id: number, runId: number, note: string) =>
     post<IntelligenceRun>(`/dockyards/${id}/intelligence/${runId}/approve`, { note }),
 
-  reports: (id: number) => request<ReportRun[]>(`/dockyards/${id}/reports`),
   /** Reporting snapshots complete retained state and accepts no path or selector. */
   createReport: (id: number) => post<ReportRun>(`/dockyards/${id}/reports`, {}),
   technicalReport: (id: number, runId: number) =>
@@ -165,8 +167,6 @@ export const api = {
   dockpackUrl: (id: number, runId: number) =>
     `/api/dockyards/${id}/reports/${runId}/dockpack`,
 
-  findings: (id: number, filters: { severity?: string; status?: string } = {}) =>
-    request<Finding[]>(`/dockyards/${id}/findings${query(filters)}`),
   finding: (id: number, findingId: number) =>
     request<FindingDetail>(`/dockyards/${id}/findings/${findingId}`),
   updateFinding: (id: number, findingId: number, status: string, note?: string) =>
@@ -175,14 +175,12 @@ export const api = {
       body: JSON.stringify({ status, note: note ?? null }),
     }),
 
-  validations: (id: number) => request<ValidationRun[]>(`/dockyards/${id}/validations`),
   /** This records a request only; a separate approval makes the bounded recheck. */
   requestValidation: (id: number, findingId: number) =>
     post<ValidationRun>(`/dockyards/${id}/findings/${findingId}/validations`, {}),
   approveValidation: (id: number, runId: number, note: string) =>
     post<ValidationRun>(`/dockyards/${id}/validations/${runId}/approve`, { note }),
 
-  discoveries: (id: number) => request<DiscoveryRun[]>(`/dockyards/${id}/discoveries`),
   discovery: (id: number, runId: number) =>
     request<DiscoveryRun>(`/dockyards/${id}/discoveries/${runId}`),
 

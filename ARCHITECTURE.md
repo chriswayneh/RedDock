@@ -22,6 +22,12 @@ Discovery goes through DockGuard to a target and records what it saw. Detection,
 
 The production image builds the React/Vite application and serves it as static content from the same FastAPI process that exposes `/api`. By default, a named Docker volume holds SQLite at `/var/lib/reddock` and retained evidence at `/var/lib/reddock/evidence`. The optional PostgreSQL profile moves relational state to a pinned, private service while RedLedger remains in `reddock-data`; the optional Ollama profile is private too. There is no reverse proxy, separate frontend service, or queue in these local profiles.
 
+Bounded Dockyard list endpoints use a 100-row default page, allow at most 500
+rows per request, validate offsets, and return `X-Total-Count` for the same
+tenant-scoped query. Stable timestamp-and-ID or ID ordering makes adjacent pages
+deterministic for a fixed database state. The browser exposes Previous and Next
+controls instead of silently hiding older inventory or audit history.
+
 ## Boundaries
 
 - `backend/app/api.py`: HTTP validation and response mapping.

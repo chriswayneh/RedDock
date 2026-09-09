@@ -62,9 +62,11 @@ sign-in, SSO, and shared-user access are not available yet.
 ### Available now
 
 - **A more usable workspace:** bookmarkable page, tab, and finding addresses;
-  browser Back and Forward; full dashboard counts; paginated findings with
-  readable dates; and read-only Settings. Tabs load their own data and poll
-  only while visible discovery or validation work is running.
+  browser Back and Forward; full dashboard counts; complete paginated
+  inventories and run histories; readable dates; and read-only Settings. Every
+  bounded list reports its total and keeps the 100-row page size. Tabs load
+  their own data and poll only while visible discovery or validation work is
+  running.
 - **An opt-in API explorer:** Swagger and the schema are off by default, with
   an explicit local developer switch and the same loopback-only boundary.
 - **A database choice:** keep the simple default setup or use the private
@@ -100,9 +102,6 @@ service.** Unsupported deployment modes remain blocked.
   for the [mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9).
   Current jsdom tests do not enable that server plugin; the dependency finding
   remains open and is not present in the production Python image.
-- **Complete remaining result lists:** extend pagination beyond Findings to
-  the other bounded inventories and run histories. Dashboard counts are complete;
-  Assets and RedLedger disclose their list limits.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete deployment, backup and restore, scaling,
   release automation, and ARM64 verification across the supported product.

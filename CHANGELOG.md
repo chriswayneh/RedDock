@@ -14,6 +14,9 @@ All notable changes to RedDock are documented here.
 - Read-only Settings showing public configuration facts without credentials.
 - A bounded dashboard summary with complete counts, documented list-total
   headers, and finding pagination without changing the 100-row default.
+- Complete API and browser pagination for bounded asset, service, observation,
+  evidence, lab-policy, and run-history lists. Every page remains
+  Dockyard-scoped and reports the full matching count.
 - Full finding dates, a single top-level Findings heading, shorter list hints,
   and tab-specific fetching with polling only for in-flight work.
 - An explicit `REDDOCK_API_DOCS_ENABLED` switch, off by default, with tests for

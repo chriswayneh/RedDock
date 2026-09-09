@@ -169,21 +169,27 @@ def revoke_authorization(
     return authorization
 
 
-def list_authorizations(session: Session, dockyard_id: int, limit: int) -> list[dict]:
+def list_authorizations(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[dict]:
     statement = (
         select(LabAuthorization)
         .where(LabAuthorization.dockyard_id == dockyard_id)
         .order_by(LabAuthorization.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return [_authorization_document(item) for item in session.scalars(statement)]
 
 
-def list_audit_events(session: Session, dockyard_id: int, limit: int) -> list[LabAuditEvent]:
+def list_audit_events(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[LabAuditEvent]:
     statement = (
         select(LabAuditEvent)
         .where(LabAuditEvent.dockyard_id == dockyard_id)
         .order_by(LabAuditEvent.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))

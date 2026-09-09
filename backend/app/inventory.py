@@ -129,7 +129,9 @@ def record_observation(
     return observation
 
 
-def list_assets(session: Session, dockyard_id: int, limit: int) -> list[tuple[Asset, int]]:
+def list_assets(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[tuple[Asset, int]]:
     """Assets with their current service count, most recently seen first."""
     statement = (
         select(Asset, func.count(Service.id))
@@ -137,6 +139,7 @@ def list_assets(session: Session, dockyard_id: int, limit: int) -> list[tuple[As
         .where(Asset.dockyard_id == dockyard_id)
         .group_by(Asset.id)
         .order_by(Asset.last_seen.desc(), Asset.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return [(asset, count) for asset, count in session.execute(statement)]
@@ -148,22 +151,28 @@ def get_asset(session: Session, dockyard_id: int, asset_id: int) -> Asset | None
     )
 
 
-def list_services(session: Session, dockyard_id: int, limit: int) -> list[tuple[Service, Asset]]:
+def list_services(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[tuple[Service, Asset]]:
     statement = (
         select(Service, Asset)
         .join(Asset, Service.asset_id == Asset.id)
         .where(Asset.dockyard_id == dockyard_id)
         .order_by(Service.last_seen.desc(), Service.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return [(service, asset) for service, asset in session.execute(statement)]
 
 
-def list_observations(session: Session, dockyard_id: int, limit: int) -> list[Observation]:
+def list_observations(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[Observation]:
     statement = (
         select(Observation)
         .where(Observation.dockyard_id == dockyard_id)
         .order_by(Observation.observed_at.desc(), Observation.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))

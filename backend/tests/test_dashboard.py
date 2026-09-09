@@ -12,7 +12,15 @@ def seed(session, dockyard_id, count):
     now = datetime(2026, 9, 1, tzinfo=UTC)
     for index in range(count):
         asset = recorder.asset(f"http://127.0.0.1:{10000 + index}")
-        recorder.discovery_run()
+        service = recorder.service(asset, 10000 + index)
+        run = recorder.discovery_run()
+        recorder.observation(
+            run,
+            "service_state",
+            f"TCP/{10000 + index} is open",
+            asset=asset,
+            service=service,
+        )
         session.add(
             Finding(
                 dockyard_id=dockyard_id,
@@ -78,7 +86,7 @@ def test_summary_counts_all_rows_but_bounds_recent_lists(client, session, dockya
     assert all(row["dockyard_id"] == dockyard_id for row in summary["recent_runs"])
     # Six aggregate/recent queries, plus the fixed local identity lookup.
     assert len(queries) <= 10
-    for name in ("assets", "discoveries", "findings", "evidence"):
+    for name in ("assets", "services", "observations", "discoveries", "findings", "evidence"):
         response = client.get(f"/api/dockyards/{dockyard_id}/{name}")
         assert response.status_code == 200
         assert len(response.json()) == 100
@@ -86,6 +94,12 @@ def test_summary_counts_all_rows_but_bounds_recent_lists(client, session, dockya
         limited = client.get(f"/api/dockyards/{dockyard_id}/{name}?limit=2")
         assert len(limited.json()) == 2
         assert limited.headers["X-Total-Count"] == "105"
+        next_page = client.get(f"/api/dockyards/{dockyard_id}/{name}?limit=2&offset=2")
+        assert len(next_page.json()) == 2
+        assert next_page.headers["X-Total-Count"] == "105"
+        assert not {row["id"] for row in limited.json()} & {
+            row["id"] for row in next_page.json()
+        }
         assert client.get(f"/api/dockyards/{hidden_id}/{name}").status_code == 404
     first = client.get(f"/api/dockyards/{dockyard_id}/findings?status=open&limit=50")
     last = client.get(f"/api/dockyards/{dockyard_id}/findings?status=open&offset=50")
@@ -117,9 +131,44 @@ def test_list_count_is_documented_without_changing_array_body(client):
     from app.main import app
 
     schema = app.openapi()
-    for name in ("assets", "discoveries", "findings", "evidence"):
+    for name in (
+        "assets",
+        "services",
+        "observations",
+        "discoveries",
+        "findings",
+        "evidence",
+        "detections",
+        "correlations",
+        "intelligence",
+        "reports",
+        "validations",
+    ):
         response = schema["paths"][f"/api/dockyards/{{dockyard_id}}/{name}"]["get"]["responses"][
             "200"
         ]
         assert "X-Total-Count" in response["headers"]
         assert response["content"]["application/json"]["schema"]["type"] == "array"
+
+
+def test_empty_run_histories_and_lab_ledgers_are_counted_and_pageable(client, dockyard_id):
+    paths = (
+        "detections",
+        "correlations",
+        "intelligence",
+        "reports",
+        "validations",
+        "lab/authorizations",
+        "lab/audit",
+    )
+    for path in paths:
+        response = client.get(f"/api/dockyards/{dockyard_id}/{path}?limit=1&offset=1")
+        assert response.status_code == 200
+        assert response.json() == []
+        assert response.headers["X-Total-Count"] == "0"
+
+    for offset in ("-1", "1000001"):
+        assert (
+            client.get(f"/api/dockyards/{dockyard_id}/services?offset={offset}").status_code
+            == 422
+        )

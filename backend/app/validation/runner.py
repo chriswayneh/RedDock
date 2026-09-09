@@ -188,11 +188,14 @@ def recover_interrupted_runs(session: Session) -> int:
     return result.rowcount or 0
 
 
-def list_runs(session: Session, dockyard_id: int, limit: int) -> list[ValidationRun]:
+def list_runs(
+    session: Session, dockyard_id: int, limit: int, offset: int = 0
+) -> list[ValidationRun]:
     statement = (
         select(ValidationRun)
         .where(ValidationRun.dockyard_id == dockyard_id)
         .order_by(ValidationRun.id.desc())
+        .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement))

@@ -388,7 +388,10 @@ function stubApi({
       if (path.endsWith("/detectors")) return json(detectors);
       if (path.endsWith("/scope/evaluate")) return json(evaluation);
       if (path.endsWith("/scope")) return json(scope);
-      if (path.endsWith("/assets")) return json(assets);
+      if (path.endsWith("/assets")) {
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        return json(assets.slice(offset, offset + 100), 200, assets.length);
+      }
       if (path.endsWith("/services")) return json([]);
       if (path.endsWith("/observations")) return json(observations);
       if (path.endsWith("/evidence")) return json([]);
@@ -539,13 +542,31 @@ describe("RedDock application", () => {
     const user = userEvent.setup();
     window.history.replaceState(null, "", "/findings?dockyard=1");
     render(<App />);
-    expect(await screen.findByText(/Showing 100 of 105/)).toHaveTextContent(/limited/);
+    expect(await screen.findByText(/Showing 100 of 105/)).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText("Severity"), "low");
     await user.click(screen.getByRole("button", { name: "Next findings" }));
-    expect(await screen.findByText(/Showing 5 of 105/)).toHaveTextContent("101-105");
+    expect(await screen.findByText(/Showing rows 101-105 of 105/)).toBeInTheDocument();
     expect(screen.getByLabelText("Severity")).toHaveValue("low");
     expect(screen.getByRole("button", { name: "Next findings" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Previous findings" }));
+    expect(await screen.findByText(/Showing 100 of 105/)).toBeInTheDocument();
+  });
+
+  it("pages the asset inventory without hiding older records", async () => {
+    stubApi({ assets: Array.from({ length: 105 }, (_, index) => ({
+      ...asset,
+      id: index + 1,
+      identity: `192.0.2.${index + 1}`,
+      display_name: `Asset ${index + 1}`,
+    })) });
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/assets?dockyard=1");
+    render(<App />);
+    expect(await screen.findByText(/Showing 100 of 105/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Next assets" }));
+    expect(await screen.findByText(/Showing rows 101-105 of 105/)).toBeInTheDocument();
+    expect(screen.getByText("Asset 105")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous assets" }));
     expect(await screen.findByText(/Showing 100 of 105/)).toBeInTheDocument();
   });
 

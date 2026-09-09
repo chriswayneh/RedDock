@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
 import { DataTable, DockyardPicker, EmptyState, StatusPill } from "./components";
 import { formatDate, humanize } from "./format";
+import { PageControls } from "./ListNotice";
 import type { Dockyard, LabAuditEvent, LabAuthorization, LabStatus } from "./types";
 
 export function Lab({
@@ -15,6 +16,8 @@ export function Lab({
   const [status, setStatus] = useState<LabStatus | null>(null);
   const [authorizations, setAuthorizations] = useState<LabAuthorization[]>([]);
   const [audit, setAudit] = useState<LabAuditEvent[]>([]);
+  const [auditTotal, setAuditTotal] = useState<number | null>(null);
+  const [auditOffset, setAuditOffset] = useState(0);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -34,18 +37,19 @@ export function Lab({
         setAudit([]);
       } else {
         const [nextAuthorizations, nextAudit] = await Promise.all([
-          api.labAuthorizations(selectedId),
-          api.labAudit(selectedId),
+          api.labAuthorizationPage(selectedId),
+          api.labAuditPage(selectedId, auditOffset),
         ]);
         setStatus(nextStatus);
-        setAuthorizations(nextAuthorizations);
-        setAudit(nextAudit);
+        setAuthorizations(nextAuthorizations.items);
+        setAudit(nextAudit.items);
+        setAuditTotal(nextAudit.total);
       }
       onError(null);
     } catch (error) {
       onError(error instanceof Error ? error.message : "Could not load lab policy state.");
     }
-  }, [onError, selectedId]);
+  }, [onError, selectedId, auditOffset]);
 
   useEffect(() => {
     void refresh();
@@ -125,7 +129,10 @@ export function Lab({
             <DockyardPicker
               dockyards={dockyards}
               selected={selectedId}
-              onSelect={setSelectedId}
+              onSelect={(id) => {
+                setAuditOffset(0);
+                setSelectedId(id);
+              }}
             />
           </div>
           <div className="split-layout lab-layout">
@@ -223,6 +230,7 @@ export function Lab({
               </div>
               <span className="count-chip">{audit.length} EVENTS</span>
             </div>
+            <PageControls shown={audit.length} total={auditTotal} offset={auditOffset} onOffsetChange={setAuditOffset} label="audit events" />
             {audit.length === 0 ? (
               <EmptyState message="No lab policy decision has been recorded for this Dockyard." />
             ) : (
