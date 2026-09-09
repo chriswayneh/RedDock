@@ -18,11 +18,19 @@ from app.detection.base import FindingStatus, Severity
 from app.discovery import registry
 from app.discovery import runner as discovery_runner
 from app.dockguard import Evaluation, ScopeRejected, evaluate, system_resolver
-from app.findings import get_finding, list_evidence, list_findings, set_status
+from app.findings import findings_query, get_finding, list_evidence, set_status
 from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
 from app.lab_capabilities import CAPABILITIES
-from app.models import Asset, Dockyard, EvidenceRecord, Finding, FindingEvidence, Service
+from app.models import (
+    Asset,
+    DiscoveryRun,
+    Dockyard,
+    EvidenceRecord,
+    Finding,
+    FindingEvidence,
+    Service,
+)
 from app.reporting import runner as reporting_runner
 from app.schemas import (
     AdapterRead,
@@ -30,6 +38,7 @@ from app.schemas import (
     AssetRead,
     CorrelationCreate,
     CorrelationRunRead,
+    DashboardRead,
     DetectionCreate,
     DetectionRunRead,
     DetectorRead,
@@ -64,6 +73,7 @@ from app.schemas import (
     ScopeEvaluationRead,
     ServiceRead,
     ServiceRowRead,
+    SettingsRead,
     ValidationApprovalCreate,
     ValidationRequestCreate,
     ValidationRunRead,
@@ -88,6 +98,69 @@ router = APIRouter(
 )
 
 ListLimit = Query(default=100, ge=1, le=500)
+LIST_RESPONSES = {
+    200: {
+        "headers": {
+            "X-Total-Count": {
+                "description": "Total matching rows before the limit is applied.",
+                "schema": {"type": "integer", "minimum": 0},
+            }
+        }
+    }
+}
+
+
+def _list_total(response: Response, session: Session, model, dockyard_id: int) -> None:
+    response.headers["X-Total-Count"] = str(
+        session.scalar(
+            select(func.count()).select_from(model).where(model.dockyard_id == dockyard_id)
+        )
+        or 0
+    )
+
+
+@router.get("/settings", response_model=SettingsRead)
+def read_settings() -> SettingsRead:
+    settings = get_settings()
+    return SettingsRead(
+        name=settings.app_name,
+        version=settings.version,
+        phase=settings.phase,
+        deployment_mode=settings.deployment_mode,
+        intelligence_configured=intelligence_runner.provider_status()["available"],
+    )
+
+
+@router.get("/dashboard", response_model=DashboardRead)
+def read_dashboard(session: Session = Depends(get_session)) -> DashboardRead:
+    organization_id = request_authorization().organization_id
+    owned = select(Dockyard.id).where(Dockyard.organization_id == organization_id)
+
+    def count(model, *conditions) -> int:
+        return session.scalar(select(func.count()).select_from(model).where(*conditions)) or 0
+
+    return DashboardRead(
+        dockyard_count=count(Dockyard, Dockyard.organization_id == organization_id),
+        asset_count=count(Asset, Asset.dockyard_id.in_(owned)),
+        discovery_run_count=count(DiscoveryRun, DiscoveryRun.dockyard_id.in_(owned)),
+        open_finding_count=count(Finding, Finding.dockyard_id.in_(owned), Finding.status == "open"),
+        recent_dockyards=list(
+            session.scalars(
+                select(Dockyard)
+                .where(Dockyard.organization_id == organization_id)
+                .order_by(Dockyard.updated_at.desc(), Dockyard.id.desc())
+                .limit(5)
+            )
+        ),
+        recent_runs=list(
+            session.scalars(
+                select(DiscoveryRun)
+                .where(DiscoveryRun.dockyard_id.in_(owned))
+                .order_by(DiscoveryRun.id.desc())
+                .limit(8)
+            )
+        ),
+    )
 
 
 def require_dockyard(dockyard_id: int, session: Session) -> Dockyard:
@@ -233,9 +306,7 @@ def authorize_lab_capability(
             payload.duration_minutes,
         )
     except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(error)
-        ) from error
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     if not decision.allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=decision.reason)
     return LabAuthorizationRead.model_validate(authorization)
@@ -319,11 +390,17 @@ def evaluate_scope(
     return _evaluation_body(evaluation)
 
 
-@router.get("/dockyards/{dockyard_id}/assets", response_model=list[AssetRead])
+@router.get(
+    "/dockyards/{dockyard_id}/assets", response_model=list[AssetRead], responses=LIST_RESPONSES
+)
 def read_assets(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    session: Session = Depends(get_session),
 ) -> list[AssetRead]:
     require_dockyard(dockyard_id, session)
+    _list_total(response, session, Asset, dockyard_id)
     return [
         AssetRead.model_validate(asset).model_copy(update={"service_count": count})
         for asset, count in list_assets(session, dockyard_id, limit)
@@ -364,11 +441,19 @@ def read_observations(
     return list_observations(session, dockyard_id, limit)
 
 
-@router.get("/dockyards/{dockyard_id}/discoveries", response_model=list[DiscoveryRunRead])
+@router.get(
+    "/dockyards/{dockyard_id}/discoveries",
+    response_model=list[DiscoveryRunRead],
+    responses=LIST_RESPONSES,
+)
 def read_discoveries(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    session: Session = Depends(get_session),
 ) -> list[DiscoveryRunRead]:
     require_dockyard(dockyard_id, session)
+    _list_total(response, session, DiscoveryRun, dockyard_id)
     return discovery_runner.list_runs(session, dockyard_id, limit)
 
 
@@ -418,11 +503,19 @@ def read_discovery(
     return run
 
 
-@router.get("/dockyards/{dockyard_id}/evidence", response_model=list[EvidenceRecordRead])
+@router.get(
+    "/dockyards/{dockyard_id}/evidence",
+    response_model=list[EvidenceRecordRead],
+    responses=LIST_RESPONSES,
+)
 def read_evidence(
-    dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
+    dockyard_id: int,
+    response: Response,
+    limit: int = ListLimit,
+    session: Session = Depends(get_session),
 ) -> list[EvidenceRecordRead]:
     require_dockyard(dockyard_id, session)
+    _list_total(response, session, EvidenceRecord, dockyard_id)
     statement = (
         select(EvidenceRecord)
         .where(EvidenceRecord.dockyard_id == dockyard_id)
@@ -503,9 +596,7 @@ def start_correlation(
 
 
 @router.get("/dockyards/{dockyard_id}/redpath", response_model=RedPathGraphRead)
-def read_redpath(
-    dockyard_id: int, session: Session = Depends(get_session)
-) -> RedPathGraphRead:
+def read_redpath(dockyard_id: int, session: Session = Depends(get_session)) -> RedPathGraphRead:
     require_dockyard(dockyard_id, session)
     return RedPathGraphRead.model_validate(correlation_runner.graph(session, dockyard_id))
 
@@ -516,9 +607,7 @@ def read_intelligence_provider() -> IntelligenceProviderRead:
     return IntelligenceProviderRead.model_validate(intelligence_runner.provider_status())
 
 
-@router.get(
-    "/dockyards/{dockyard_id}/intelligence", response_model=list[IntelligenceRunRead]
-)
+@router.get("/dockyards/{dockyard_id}/intelligence", response_model=list[IntelligenceRunRead])
 def read_intelligence_runs(
     dockyard_id: int, limit: int = ListLimit, session: Session = Depends(get_session)
 ) -> list[IntelligenceRunRead]:
@@ -617,33 +706,25 @@ def _report_artifact(dockyard_id: int, run_id: int, artifact: str, session: Sess
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/technical")
-def read_technical_report(
-    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
-):
+def read_technical_report(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
     path = _report_artifact(dockyard_id, run_id, "technical", session)
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/executive")
-def read_executive_report(
-    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
-):
+def read_executive_report(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
     path = _report_artifact(dockyard_id, run_id, "executive", session)
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/manifest")
-def read_report_manifest(
-    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
-):
+def read_report_manifest(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
     path = _report_artifact(dockyard_id, run_id, "manifest", session)
     return FileResponse(path, media_type="application/json")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/dockpack")
-def download_dockpack(
-    dockyard_id: int, run_id: int, session: Session = Depends(get_session)
-):
+def download_dockpack(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
     path = _report_artifact(dockyard_id, run_id, "dockpack", session)
     return FileResponse(
         path,
@@ -682,9 +763,7 @@ def request_validation(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
-@router.get(
-    "/dockyards/{dockyard_id}/validations/{run_id}", response_model=ValidationRunRead
-)
+@router.get("/dockyards/{dockyard_id}/validations/{run_id}", response_model=ValidationRunRead)
 def read_validation(
     dockyard_id: int, run_id: int, session: Session = Depends(get_session)
 ) -> ValidationRunRead:
@@ -722,15 +801,19 @@ def approve_validation(
     return ValidationRunRead.model_validate(run)
 
 
-@router.get("/dockyards/{dockyard_id}/findings", response_model=list[FindingRead])
+@router.get(
+    "/dockyards/{dockyard_id}/findings", response_model=list[FindingRead], responses=LIST_RESPONSES
+)
 def read_findings(
     dockyard_id: int,
+    response: Response,
     finding_status: FindingStatus | None = Query(default=None, alias="status"),
     severity: Severity | None = Query(default=None),
     detector: str | None = Query(default=None, max_length=48),
     asset_id: int | None = Query(default=None, ge=1),
     service_id: int | None = Query(default=None, ge=1),
     limit: int = ListLimit,
+    offset: int = Query(default=0, ge=0, le=1_000_000),
     session: Session = Depends(get_session),
 ) -> list[FindingRead]:
     """Findings for one Dockyard.
@@ -740,16 +823,18 @@ def read_findings(
     workspace.
     """
     require_dockyard(dockyard_id, session)
-    rows = list_findings(
-        session,
+    statement = findings_query(
         dockyard_id,
-        limit,
         status=str(finding_status) if finding_status else None,
         severity=str(severity) if severity else None,
         detector=detector,
         asset_id=asset_id,
         service_id=service_id,
     )
+    response.headers["X-Total-Count"] = str(
+        session.scalar(select(func.count()).select_from(statement.order_by(None).subquery())) or 0
+    )
+    rows = list(session.scalars(statement.offset(offset).limit(limit)))
     labels = _subject_labels(session, rows)
     counts = _evidence_counts(session, rows)
     return [_finding_body(FindingRead, finding, labels, counts) for finding in rows]

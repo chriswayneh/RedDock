@@ -86,6 +86,8 @@ PUBLIC_ROUTES: Final = frozenset(
 )
 ROUTE_PERMISSIONS: Final = MappingProxyType(
     {
+        ("GET", "/api/dashboard"): Permission.DOCKYARD_READ,
+        ("GET", "/api/settings"): Permission.DOCKYARD_READ,
         ("GET", "/api/detectors"): Permission.DOCKYARD_READ,
         ("GET", "/api/adapters"): Permission.DOCKYARD_READ,
         ("GET", "/api/lab/status"): Permission.DOCKYARD_READ,

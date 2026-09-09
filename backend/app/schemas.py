@@ -34,6 +34,14 @@ class DockyardRead(BaseModel):
     updated_at: UtcDatetime
 
 
+class SettingsRead(BaseModel):
+    name: str
+    version: str
+    phase: str
+    deployment_mode: Literal["local"]
+    intelligence_configured: bool
+
+
 class ScopeEntryCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -159,6 +167,15 @@ class DiscoveryRunRead(BaseModel):
     created_at: UtcDatetime
     started_at: UtcDatetime | None
     completed_at: UtcDatetime | None
+
+
+class DashboardRead(BaseModel):
+    dockyard_count: int
+    asset_count: int
+    discovery_run_count: int
+    open_finding_count: int
+    recent_dockyards: list[DockyardRead] = Field(max_length=5)
+    recent_runs: list[DiscoveryRunRead] = Field(max_length=8)
 
 
 class EvidenceRecordRead(BaseModel):
