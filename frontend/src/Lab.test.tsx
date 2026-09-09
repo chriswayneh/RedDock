@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, jest as vi } from "@jest/globals";
 import { Lab } from "./Lab";
 
 const acknowledgement =
@@ -23,16 +23,14 @@ const capability = {
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function stubLabApi(enabled = true) {
   let authorizations: object[] = [];
   let audit: object[] = [];
   const calls: { authorize: unknown[]; revoke: unknown[] } = { authorize: [], revoke: [] };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), "http://localhost").pathname;
       const json = (body: unknown, status = 200) =>
         Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -83,8 +81,7 @@ function stubLabApi(enabled = true) {
       }
       if (path.endsWith("/lab/authorizations")) return json(authorizations);
       return json({ detail: "Unexpected request" }, 500);
-    }),
-  );
+    }) as typeof fetch);
   return calls;
 }
 

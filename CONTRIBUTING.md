@@ -29,7 +29,7 @@ history merely to normalize these credits.
 
 ```bash
 cd backend && pip install -e ".[dev]" && pip-audit --progress-spinner off . && ruff check app tests && pytest
-cd frontend && npm ci && npm run lint && npm run check && npm run test && npm run build
+cd frontend && npm ci && npm run security:deps && npm audit --audit-level=high && npm run lint && npm run check && npm run test && npm run build
 docker compose build
 ```
 
@@ -39,16 +39,10 @@ Backend development needs Python 3.13; running RedDock itself needs only Docker.
 docker compose up -d --build && python scripts/smoke_test.py
 ```
 
-### Development dependency follow-up
-
-The September 8 audit still reports the moderate
-[Vitest mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)
-against Vitest 3.2.7. Its fix requires a separately tested major upgrade to
-4.1.11 or later. RedDock uses `vitest run` with jsdom, does not register the
-standalone mocker/interceptor plugins, and does not ship Node or test packages
-in the final Python runtime image. Do not expose a test or development server
-to the network. This follow-up is not an accepted-risk waiver or a clean audit;
-the existing high-severity CI gate remains unchanged.
+The frontend uses Jest for its browser-facing unit tests. CI separately checks
+that retired test packages do not re-enter the lockfile, audits the complete
+development dependency graph, and keeps Node tooling out of the final Python
+runtime image. Do not expose a development server to the network.
 
 ## Guidelines
 

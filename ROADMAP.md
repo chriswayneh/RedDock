@@ -75,7 +75,9 @@ sign-in, SSO, and shared-user access are not available yet.
 - **AI is optional:** the normal package needs no model. The optional Ollama
   bundle supplies a local AI runtime and downloads Qwen3.5 4B separately.
 - **More security checks:** automated code analysis and weekly dependency
-  checks help identify problems. Dependency updates are not merged automatically.
+  checks help identify problems. The frontend test suite now uses Jest, and CI
+  prevents the retired Vitest packages from returning. Dependency updates are
+  not merged automatically.
 - **Reliability and safety fixes:** the September 7 checkpoint strengthens
   target exclusions, limits slow web checks, prevents duplicate validation
   approvals, and improves interrupted-run recovery and report consistency. It
@@ -98,10 +100,6 @@ service.** Unsupported deployment modes remain blocked.
 
 ### Still needed before release
 
-- **Development dependency follow-up:** test a supported Vitest major upgrade
-  for the [mocker advisory](https://github.com/advisories/GHSA-82fw-gwwq-j7x9).
-  Current jsdom tests do not enable that server plugin; the dependency finding
-  remains open and is not present in the production Python image.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete deployment, backup and restore, scaling,
   release automation, and ARM64 verification across the supported product.

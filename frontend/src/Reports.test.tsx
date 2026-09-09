@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, jest as vi } from "@jest/globals";
 import { Reports } from "./Reports";
 
 const dockyard = {
@@ -65,9 +65,7 @@ const manifest = {
 function stubReports(initial: typeof report[] = [report]) {
   let reports = initial;
   const create = vi.fn();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = new URL(String(input), "http://localhost").pathname;
       const dockyardId = Number(path.match(/\/dockyards\/(\d+)\//)?.[1] ?? 0);
       if (path.endsWith("/reports") && init?.method === "POST") {
@@ -90,15 +88,14 @@ function stubReports(initial: typeof report[] = [report]) {
         return Promise.resolve(new Response(JSON.stringify(manifest), { status: 200 }));
       }
       return Promise.resolve(new Response(JSON.stringify({ detail: "Not found" }), { status: 404 }));
-    }),
-  );
+    }) as typeof fetch);
   return create;
 }
 
 describe("Phase 6 reporting", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("previews both reports, exposes the manifest, and offers the exact DockPack", async () => {

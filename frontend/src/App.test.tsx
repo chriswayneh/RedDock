@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, jest as vi } from "@jest/globals";
 import { App } from "./App";
 import { formatDate } from "./format";
 
@@ -369,9 +369,7 @@ function stubApi({
     intelligenceCreate: vi.fn(),
     intelligenceApproval: vi.fn(),
   };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), "http://localhost");
       const path = url.pathname;
       const json = (body: unknown, status = 200, total?: number) =>
@@ -482,8 +480,7 @@ function stubApi({
       if (path.endsWith("/dockyards") && init?.method === "POST")
         return json({ ...dockyard, id: 2, name: JSON.parse(String(init.body)).name }, 201);
       return json([dockyard, { ...dockyard, id: 2, name: "Second workspace" }]);
-    }),
-  );
+    }) as typeof fetch);
   return calls;
 }
 
@@ -580,7 +577,7 @@ describe("RedDock application", () => {
 
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
@@ -733,7 +730,7 @@ describe("RedDock application", () => {
 describe("Phase 2 detection", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("counts open findings on the dashboard", async () => {
@@ -896,7 +893,7 @@ describe("Phase 2 detection", () => {
 describe("Phase 3 validation", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("requests an eligible finding without approving it", async () => {
@@ -939,7 +936,7 @@ describe("Phase 3 validation", () => {
 describe("Phase 5 intelligence", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("creates a review packet without sending it to the provider", async () => {

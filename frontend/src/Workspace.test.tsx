@@ -1,5 +1,5 @@
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, jest as vi } from "@jest/globals";
 import { api } from "./api";
 import { Workspace } from "./Workspace";
 import type { WorkspaceTab } from "./routes";
