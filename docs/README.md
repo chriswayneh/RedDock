@@ -9,7 +9,7 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 | Understand what I get | [Product benefits and current limits](../README.md#what-you-get) |
 | Install it and try a local example | [First-run guide](GETTING_STARTED.md) |
 | See it before installing | [Screenshot tour](screenshots/README.md) |
-| Evaluate the project for a security tooling role | [CISO and recruiter review path](../README.md#for-cisos-and-recruiters) |
+| Understand why the project exists | [Why I am building it](../README.md#why-i-am-building-it) |
 | Know what is finished and what is not | [Roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) |
 | Add optional AI advice | [Local and configurable AI](LOCAL_AI.md) |
 | Understand downloaded reports | [DockPack format and verification](DOCKPACK.md) |

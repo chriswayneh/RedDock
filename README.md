@@ -4,7 +4,9 @@
 
 **Discover. Validate. Prove.**
 
-Turn authorized security checks into findings you can explain, with evidence you can hand to a reviewer.
+**A local security workbench I build in my spare time.**
+
+I use RedDock to explore controlled security checks, explainable findings, and evidence that stays connected to the result.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -16,11 +18,11 @@ Turn authorized security checks into findings you can explain, with evidence you
 
 **Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0), Phase 7 Advanced / Lab
 
-**Created and directed by [Chris Hickman](https://github.com/chriswayneh), with implementation and review assistance from OpenAI Codex and Claude Code.**
+**A personal open-source project by [Chris Hickman](https://github.com/chriswayneh), built with help from OpenAI Codex and Claude Code.**
 
 **Phase 7 is complete:** separately gated lab controls, data-only detector plugins, and portable policy provenance are published and security-reviewed.
 
-[Start Here](docs/GETTING_STARTED.md) · [What You Get](#what-you-get) · [Screenshots](#screenshots) · [For CISOs & Recruiters](#for-cisos-and-recruiters) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
+[Start Here](docs/GETTING_STARTED.md) · [What It Does](#what-you-get) · [Screenshots](#screenshots) · [Why I Am Building It](#why-i-am-building-it) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 </div>
 
@@ -28,11 +30,11 @@ Turn authorized security checks into findings you can explain, with evidence you
 
 ## What This Is
 
-RedDock is a local security workbench. Give it a small set of systems you are allowed to assess, run a controlled check, and turn the results into an organized inventory, explainable findings, and downloadable reports with their supporting evidence.
+RedDock is a personal project I work on in my downtime. It is a local security workbench for giving a small set of authorized systems a controlled check, then turning the results into an organized inventory, explainable findings, and downloadable reports with supporting evidence.
 
 RedDock gives you more than an alert list. It helps answer four practical questions: **What did we check? What did we find? Why do we believe it? What can we give the person reviewing our work?**
 
-It is useful for security practitioners, authorized lab assessments, and people evaluating how security tools are built. You get the application and its source code under the MIT license, not a hosted subscription. The normal package needs no AI account or model. Optional AI gives advice only, after you review what will be sent.
+I keep it open source under the MIT license so other curious builders and security practitioners can run it, inspect it, and learn from it. It is not a hosted service. The normal package needs no AI account or model. Optional AI gives advice only after you review what will be sent.
 
 **Current boundary:** RedDock is a single-operator, local-only application. Phase 7 is released; Phase 8 production work is unfinished. It is not yet a shared service with working sign-in, SSO, or role-based user access. Do not expose it to the internet or use it as proof that a system is secure. See the [remaining work](ROADMAP.md#phase-8--production-polish).
 
@@ -44,24 +46,21 @@ It is useful for security practitioners, authorized lab assessments, and people 
 | What deserves a closer look? | Rule-based findings with separate severity and confidence, linked to the observations behind them. |
 | Can I check that again? | An explicitly approved recheck for eligible HTTP security-header findings. This is not unrestricted attack execution. |
 | How do these results connect? | A clickable RedPath graph explaining the relationships supported by stored evidence. |
-| What can I hand to a manager or reviewer? | Executive and technical reports, plus a DockPack ZIP containing reports and verified supporting files. |
+| What can I save or share? | Plain-language and technical reports, plus a DockPack ZIP containing reports and verified supporting files. |
 | Who stays in control? | You define the allowed targets. The server checks that boundary before target contact; AI cannot run tools or change findings. |
 
 **Try it without checking anyone else's systems:** follow the [first-run guide](docs/GETTING_STARTED.md) to assess RedDock's own local web service, then generate a report. No coding or AI setup is needed, but you will need Docker and a few terminal commands.
 
-### For CISOs and recruiters
+### Why I am building it
 
-RedDock shows how a security requirement can become a usable tool with controls that reviewers can inspect. The repository includes the engineering decisions, current limits, and unfinished work.
+RedDock is my hands-on place to learn, experiment, and turn security ideas into a tool I can actually run. I am especially interested in a few questions:
 
-| What to evaluate | Where to see the evidence |
-| --- | --- |
-| Turning technical results into a clear handoff | [Reporting and readable evidence screenshots](#screenshots), plus the [DockPack format](docs/DOCKPACK.md). |
-| Enforcing authorization before execution | [Security controls](SECURITY.md), the [threat model](docs/THREAT_MODEL.md), and backend regression tests. |
-| Keeping AI subordinate to human decisions | [The AI data and approval boundary](docs/LOCAL_AI.md). |
-| Designing for review and maintainability | [Architecture decisions](ARCHITECTURE.md), [automated checks](https://github.com/chriswayneh/RedDock/actions), and [release history](CHANGELOG.md). |
-| Being candid about delivery risk | [The roadmap](ROADMAP.md): what ships today, what is under review, and what is still missing. |
+- Can active checks stay narrow, explicit, and easy to audit?
+- Can a finding keep a clear trail back to the evidence behind it?
+- Can optional AI help explain results without receiving tools or control?
+- Can the project be honest about unfinished work instead of hiding it?
 
-This is a human-directed, mixed-AI project using Claude Code and OpenAI Codex. Judge it by the running product, source, tests, and documented tradeoffs, not by the tools used to write it. Passing automated checks is not a security certification.
+I direct the project and use both Claude Code and OpenAI Codex as development and review tools. The source, tests, architecture notes, and tradeoffs remain visible so anyone interested can see how it evolves. Passing automated checks is useful evidence, not a security certification.
 
 #### Zero trust and least privilege, without the marketing gloss
 
