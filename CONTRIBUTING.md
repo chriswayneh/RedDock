@@ -2,11 +2,11 @@
 
 Trying the app rather than changing its code? Start with the [first-run guide](docs/GETTING_STARTED.md). For a guided view of the repository, use the [documentation index](docs/README.md). The commands below are developer checks, not installation steps for ordinary users.
 
-RedDock is open source under the MIT License, but it does not currently accept
-unsolicited external pull requests. The safety model and phase boundaries are
-owner-directed and intentionally closed. Bug reports, design discussion, and
-responsible security disclosures remain welcome; accepted implementation work
-follows the checks and constraints below.
+RedDock is open source under the MIT License. Bug reports and design discussion
+are welcome, but please ask before starting implementation work because the
+safety model and phase boundaries are owner-directed. Report suspected
+vulnerabilities through the private process in [SECURITY.md](SECURITY.md), not
+in a public issue.
 
 ## Attribution
 
@@ -27,9 +27,36 @@ history merely to normalize these credits.
 
 ## Local checks
 
+Run each group from the repository root.
+
+Backend checks:
+
 ```bash
-cd backend && pip install -e ".[dev]" && pip-audit --progress-spinner off . && ruff check app tests ../scripts/verify_release.py && pytest
-cd frontend && npm ci && npm run security:deps && npm audit --audit-level=high && npm run lint && npm run check && npm run test && npm run build
+cd backend
+python -m pip install -e ".[dev]"
+pip-audit --progress-spinner off .
+ruff check app tests ../scripts/verify_release.py
+pytest
+cd ..
+```
+
+Frontend checks:
+
+```bash
+cd frontend
+npm ci
+npm run security:deps
+npm audit --audit-level=high
+npm run lint
+npm run check
+npm run test
+npm run build
+cd ..
+```
+
+Production image:
+
+```bash
 docker compose build
 ```
 
@@ -48,7 +75,8 @@ runtime image. Do not expose a development server to the network.
 
 - Do not add exploitation, credential attacks, active vulnerability testing, or autonomous execution without an approved phase and DockGuard design.
 - Every target must reach a tool through DockGuard. Never pass operator-supplied values to a subprocess as flags, and never build a command string.
-- An adapter records what was observed. A detector says what it means, from stored observations only: it may not open a socket, start a process or reach the database, and a finding it produces must cite the observations behind it.
+- An adapter records what was observed. A detector explains what stored observations mean.
+- Detectors may not open a socket, start a process, or reach the database. Every finding must cite the observations behind it.
 - A report reads retained state only. Do not add a target, arbitrary source selector, output path, network request, dynamic template, or executable archive member; every included source artifact must be database-referenced and hash-verified.
 - Do not inflate a rating. A missing hardening header is not a high, a version banner is not a vulnerability, and a CVE association is not a test result.
 - Preserve the API/domain/persistence/UI boundaries.

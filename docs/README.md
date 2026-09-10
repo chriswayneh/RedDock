@@ -6,7 +6,7 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 
 | I want to… | Start with… |
 | --- | --- |
-| Understand what I get | [Product benefits and current limits](../README.md#what-you-get) |
+| See what RedDock does | [Capabilities and current limits](../README.md#what-it-does) |
 | Install it and try a local example | [First-run guide](GETTING_STARTED.md) |
 | See it before installing | [Screenshot tour](screenshots/README.md) |
 | Understand why the project exists | [Why I am building it](../README.md#why-i-am-building-it) |
@@ -19,4 +19,4 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 | Prepare an official release | [Release process](RELEASING.md) |
 | Inspect or develop the software | [Architecture](../ARCHITECTURE.md), [backend guide](../backend/README.md), and [contribution checks](../CONTRIBUTING.md) |
 
-The normal package is local-only and works without AI. Advanced configuration does not turn it into a supported shared or internet-facing service. The technical documents include precise details for reviewers. The [first-run guide's glossary](GETTING_STARTED.md#the-names-translated) explains the product names.
+The normal package is local-only and works without AI. Advanced configuration does not turn it into a supported shared or internet-facing service. The technical documents record the precise boundaries. The [first-run guide's glossary](GETTING_STARTED.md#the-names-translated) explains the project names.

@@ -38,6 +38,19 @@ host port, so only services on that Compose network can reach it. Later starts
 reuse the volume. The pinned Ollama image supports AMD64 and ARM64; model speed
 and memory requirements still depend on the host.
 
+### Try the local model
+
+1. Run the local-AI command from the RedDock folder and leave the terminal open.
+2. Allow the first model download to finish. Later starts reuse the downloaded files.
+3. Open [RedDock](http://localhost:8080) and complete discovery, detection, and correlation for a Dockyard.
+4. Open **Intelligence** and create an advice request.
+5. Review the displayed evidence packet and destination. Add an approval note only if you want to send that packet to the local model.
+6. Read the returned advice alongside the findings and evidence it cites.
+
+If model setup fails, RedDock's other features still work. Check the terminal
+for the Ollama download or startup error and leave Intelligence disabled until
+the local model is ready.
+
 To remove the containers while retaining RedDock data and model weights:
 
 ```bash

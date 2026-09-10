@@ -1,10 +1,10 @@
 # RedDock backend
 
-**Just want to use RedDock?** You do not need to install this package separately. Follow the [first-run guide](../docs/GETTING_STARTED.md). This page is for developers and reviewers inspecting the server that enforces scope, runs checks, and retains evidence.
+**Just want to use RedDock?** You do not need to install this package separately. Follow the [first-run guide](../docs/GETTING_STARTED.md). This page is for developers inspecting the server that enforces scope, runs checks, and retains evidence.
 
 This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLAlchemy persistence with SQLite by default and packaged PostgreSQL support. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
 
-## Security posture for operators and reviewers
+## Security posture
 
 | Mode or boundary | Status | Practical meaning |
 | --- | --- | --- |
@@ -21,6 +21,8 @@ handle. Zero trust means browser input, provider documents, target output,
 model output, and stored artifacts are validated at their boundaries. It does
 not mean the unfinished server mode is production-ready.
 
+## Component map
+
 ```text
 app/targets.py      target parsing and normalization
 app/dockguard.py    scope evaluation and decisions
@@ -34,13 +36,18 @@ app/correlation/    stored-state relationships, fixed CWE mappings, and RedPath 
 app/intelligence/   approval-gated, provider-neutral advice over reviewed evidence packets
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/authorization.py reviewed role/permission contract for the future authenticated mode
+app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
+app/oidc.py         dormant OIDC protocol and identity-resolution boundary
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
 app/browser_security.py exact HTTPS origin and secure session-cookie contract
 app/response_security.py uniform response headers and API no-store policy
 app/security_audit.py bounded, tenant-scoped security-event writer and reader
 app/evidence.py     hashed evidence storage
 app/backup.py       offline SQLite backup, verification, restore, and recovery
+app/orm.py          configuration-free SQLAlchemy metadata base
 ```
+
+## API and passive workflows
 
 A discovery adapter may contact a target after DockGuard allows it. A detector
 may not contact anything: it is handed a frozen snapshot of one Dockyard and
@@ -76,6 +83,8 @@ stored records with exact identifiers and retained evidence hashes. RedPath
 renders those relationships and their explanations; it does not infer an attack
 path, exploitability, causation, or aggregate risk.
 
+## Optional AI and PostgreSQL
+
 Intelligence is optional and advice-only. Creating a run stores the exact
 evidence-linked packet without contacting a provider. A separate approval note
 sends that reviewed packet to the process-configured OpenAI-compatible endpoint;
@@ -93,6 +102,8 @@ head and CRUD behavior against a real server. This remains a loopback-only
 validation profile, not the future authenticated server mode. See
 [Optional PostgreSQL](../docs/POSTGRESQL.md).
 
+## Backup and recovery
+
 The default SQLite package has a separate offline maintenance path. It packages
 the database and retained evidence together, verifies archive hashes, SQLite
 integrity and migration state, and database-backed evidence references, then
@@ -102,6 +113,8 @@ are separate paths, so this is not described as one crash-atomic filesystem
 transaction. POSIX file and directory flushes order the recovery state; native
 Windows host operation does not promise sudden-power-loss ordering. See
 [SQLite backup and restore](../docs/BACKUP_RESTORE.md).
+
+## Future authenticated mode
 
 Phase 8 also defines the deny-by-default owner, admin, operator, auditor, and
 viewer permission sets. Every API method/path is classified as public or bound
@@ -156,6 +169,8 @@ fixed transaction-scoped advisory lock before checking or creating the single
 server organization, so concurrent bootstrap commands cannot both pass the
 first-owner invariant. Expected configuration, connection, migration, and
 identity conflicts fail with bounded operator messages rather than tracebacks.
+
+## Runtime and evidence protections
 
 Every current HTTP response, including Host rejections, receives a fixed
 anti-framing, no-sniff, referrer, browser-capability, opener, and resource
