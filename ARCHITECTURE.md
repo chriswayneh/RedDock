@@ -51,7 +51,7 @@ controls instead of silently hiding older inventory or audit history.
 
 Every operator-supplied target passes through `normalize_target` before anything else sees it. Normalization produces one canonical form per target and rejects anything ambiguous:
 
-- IPv4 and IPv6 addresses in strict textual form only — integer, packed, zero-padded, and hexadecimal forms are refused so neither `3232235777` nor `0xc0a80101` can quietly become `192.168.1.1`. A name whose every label is a numeric component is refused for the same reason, because a C resolver reads `0x7f000001` as `127.0.0.1`.
+- IPv4 and IPv6 addresses in strict textual form only. Integer, packed, zero-padded, and hexadecimal forms are refused so neither `3232235777` nor `0xc0a80101` can quietly become `192.168.1.1`. A name whose every label is a numeric component is refused for the same reason, because a C resolver reads `0x7f000001` as `127.0.0.1`.
 - Networks canonicalized to their network address (`192.168.1.37/24` → `192.168.1.0/24`).
 - Hostnames lowercased, stripped of a trailing dot, IDNA-encoded per label, and validated.
 - URLs reduced to an origin: scheme, host, and port. Paths, queries, fragments, and embedded credentials are rejected or dropped, because RedDock probes an origin and not a location.
@@ -60,7 +60,7 @@ A canonical target may contain only `[A-Za-z0-9._:/-]` and can never begin with 
 
 ## DockGuard
 
-DockGuard answers one question: may this Dockyard act on this target? It is evaluated on the server, twice — when a run is requested, and again immediately before the adapter is invoked, because scope can change in between.
+DockGuard answers one question: may this Dockyard act on this target? It is evaluated on the server twice: when a run is requested, and again immediately before the adapter is invoked, because scope can change in between.
 
 ```text
 requested target → normalization → exclusions → inclusions → resolution → decision
@@ -97,7 +97,7 @@ A default route such as `0.0.0.0/0` is rejected outright, as are multicast and u
 
 ## Discovery adapter boundary
 
-An adapter is the only component allowed to talk to a target, and it is reached only after DockGuard allows the request. The contract is intentionally small — `supports(target)` and `run(request)` — and every adapter follows the same internal stages:
+An adapter is the only component allowed to talk to a target, and it is reached only after DockGuard allows the request. The contract is intentionally small, with `supports(target)` and `run(request)`, and every adapter follows the same internal stages:
 
 ```text
 prepare → execute → parse → normalize → artifacts
@@ -112,21 +112,21 @@ prepare → execute → parse → normalize → artifacts
 
 ## Domain model
 
-- **Asset** — something observed inside a Dockyard. Identity is deterministic: within one Dockyard an asset is `(asset_type, identity)`, where identity is a normalized IP for a `host` and an origin for a `web` asset. Repeat discovery updates `last_seen` and preserves stable host facts. When a closed service reopens without identification, its prior process details are cleared rather than presented as current.
-- **Service** — a transport endpoint on an asset, unique on `(asset, transport, port)`. `service_name`, `product`, and `version` stay null until an adapter actually identified them. A conventional port number is not evidence: nmap's port-table guess is discarded, so TCP/22 open is recorded as TCP/22 open and nothing more.
-- **Observation** — a dated, adapter-attributed statement of what was seen, with a confidence of `observed` (RedDock saw it) or `reported` (the target said so). Observations accumulate as history and are never reconciled.
-- **DiscoveryRun** — one auditable request: adapter, profile, requested and normalized target, DockGuard decision and reason, status, counts, and evidence path. Denied requests are stored too, because an audit trail that only records successes is not an audit trail.
-- **DetectionRun** — one auditable detection: which detectors ran, what each of them did or failed to do, how much state was read, how many findings were produced, created and resolved, which enrichment source was in effect, and the hashes of the two documents it retained. It has no target and no DockGuard decision, because it contacts nothing.
-- **Finding** — a normalized security-relevant conclusion one named detector drew. Identity is a SHA-256 `fingerprint` over the detector, the rule, and the asset and service concerned, unique within a Dockyard, so repeated detection updates one row instead of accumulating duplicates. Severity and confidence are separate fields: how much this would matter, and how sure RedDock is that it is true, are different questions and blending them loses both.
-- **FindingEvidence** — one row per observation that supported a finding, carrying the discovery run and the hashed `EvidenceRecord` that observation came from.
-- **ValidationRun** — one request to recheck one eligible finding. It records target, validator version, both the request-time and approval-time policy outcome, the approval note, a bounded result, and hashes for its evidence package. Denied requests are complete audit records because no target was contacted.
-- **CorrelationRun** — one immutable stored-state snapshot with input/relationship/mapping counts and hashes for its normalized result and metadata. It has no target or policy decision because it contacts nothing.
-- **AssetRelationship** — an exact-address link from a web asset to a host asset, citing the observation, discovery run, evidence record, explanation, confidence, and SHA-256 that support it.
-- **FindingCorrelation** — a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
-- **FrameworkMapping** — a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
-- **IntelligenceRun** — one immutable reviewed packet and, after separate approval, one structured advice result. It binds provider identity, prompt version, approval note, timestamps, packet and result hashes, and failure state to the latest completed correlation snapshot.
-- **ReportRun** — one immutable, bounded snapshot of completed retained state, including lab authorization and policy history. It records source counts and the SHA-256 values of the technical JSON, technical Markdown, executive Markdown, evidence manifest, and DockPack, plus failure and restart state.
-- **EvidenceRecord** — a hashed pointer to one retained discovery artifact.
+- **Asset:** something observed inside a Dockyard. Identity is deterministic: within one Dockyard an asset is `(asset_type, identity)`, where identity is a normalized IP for a `host` and an origin for a `web` asset. Repeat discovery updates `last_seen` and preserves stable host facts. When a closed service reopens without identification, its prior process details are cleared rather than presented as current.
+- **Service:** a transport endpoint on an asset, unique on `(asset, transport, port)`. `service_name`, `product`, and `version` stay null until an adapter actually identified them. A conventional port number is not evidence: nmap's port-table guess is discarded, so TCP/22 open is recorded as TCP/22 open and nothing more.
+- **Observation:** a dated, adapter-attributed statement of what was seen, with a confidence of `observed` (RedDock saw it) or `reported` (the target said so). Observations accumulate as history and are never reconciled.
+- **DiscoveryRun:** one auditable request: adapter, profile, requested and normalized target, DockGuard decision and reason, status, counts, and evidence path. Denied requests are stored too, because an audit trail that only records successes is not an audit trail.
+- **DetectionRun:** one auditable detection: which detectors ran, what each of them did or failed to do, how much state was read, how many findings were produced, created and resolved, which enrichment source was in effect, and the hashes of the two documents it retained. It has no target and no DockGuard decision, because it contacts nothing.
+- **Finding:** a normalized security-relevant conclusion one named detector drew. Identity is a SHA-256 `fingerprint` over the detector, the rule, and the asset and service concerned, unique within a Dockyard, so repeated detection updates one row instead of accumulating duplicates. Severity and confidence are separate fields: how much this would matter, and how sure RedDock is that it is true, are different questions and blending them loses both.
+- **FindingEvidence:** one row per observation that supported a finding, carrying the discovery run and the hashed `EvidenceRecord` that observation came from.
+- **ValidationRun:** one request to recheck one eligible finding. It records target, validator version, both the request-time and approval-time policy outcome, the approval note, a bounded result, and hashes for its evidence package. Denied requests are complete audit records because no target was contacted.
+- **CorrelationRun:** one immutable stored-state snapshot with input/relationship/mapping counts and hashes for its normalized result and metadata. It has no target or policy decision because it contacts nothing.
+- **AssetRelationship:** an exact-address link from a web asset to a host asset, citing the observation, discovery run, evidence record, explanation, confidence, and SHA-256 that support it.
+- **FindingCorrelation:** a symmetric same-asset or related-asset link whose explanation carries both findings' supporting hashes.
+- **FrameworkMapping:** a fixed, versioned detector-rule classification under CWE. It is linked to a finding and its evidence hash but never changes that finding.
+- **IntelligenceRun:** one immutable reviewed packet and, after separate approval, one structured advice result. It binds provider identity, prompt version, approval note, timestamps, packet and result hashes, and failure state to the latest completed correlation snapshot.
+- **ReportRun:** one immutable, bounded snapshot of completed retained state, including lab authorization and policy history. It records source counts and the SHA-256 values of the technical JSON, technical Markdown, executive Markdown, evidence manifest, and DockPack, plus failure and restart state.
+- **EvidenceRecord:** a hashed pointer to one retained discovery artifact.
 
 **Observation ≠ Finding.** An observation says what happened; a finding says what it means. They remain separate rows, separate lifecycles and separate concepts: discovery alone never produces a finding, detection never edits an observation, and a finding that cites no observation is refused rather than stored. What Phase 2 adds is the arrow between them, not a merge.
 
@@ -143,19 +143,19 @@ prepare → execute → parse → normalize → artifacts
         operator decides ──────┴──────► suppressed / accepted
 ```
 
-Four states, and only three of them are an operator's to set. `resolved` is RedDock's answer to a question about the data — is this still reproduced? — so the API refuses to let an operator declare it, and nothing here ever deletes a finding: an issue that stopped being reproduced is more useful recorded as resolved than erased. `suppressed` and `accepted` are decisions a person took responsibility for, so a later run leaves them alone even when it sees the issue again.
+Four states, and only three of them are an operator's to set. `resolved` is RedDock's answer to one question about the data: is this still reproduced? The API refuses to let an operator declare it, and nothing here ever deletes a finding. An issue that stopped being reproduced is more useful recorded as resolved than erased. `suppressed` and `accepted` are decisions a person took responsibility for, so a later run leaves them alone even when it sees the issue again.
 
 Resolution is scoped to the detector that just ran successfully. A detector that raised, or that returned output RedDock refused, resolves nothing, because not running is not evidence that an issue went away.
 
 ## Detection boundary
 
-A detector is deliberately weaker than a discovery adapter. An adapter may contact a target; a detector may not contact anything. It receives an immutable snapshot of one Dockyard's assets, services and observations and returns value objects — no session, no socket, no subprocess, no target string, no operator-supplied option. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could reach outside the process or touch the database, so the boundary is checked rather than asserted.
+A detector is deliberately weaker than a discovery adapter. An adapter may contact a target; a detector may not contact anything. It receives an immutable snapshot of one Dockyard's assets, services and observations and returns value objects. No session, socket, subprocess, target string, or operator-supplied option is in reach. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could reach outside the process or touch the database, so the boundary is checked rather than asserted.
 
 ```text
 snapshot → detect → validate → normalize → findings
 ```
 
-Everything except `detect` belongs to the runner. It builds the snapshot, validates what came back, computes identity, reconciles against what is known, resolves what is absent and writes evidence. A detector that returns something malformed — an unknown severity, a rule id that is not a rule id, a finding about another Dockyard's asset, a finding citing no observation — is failed as a whole and its results are discarded, and the other detectors still run.
+Everything except `detect` belongs to the runner. It builds the snapshot, validates what came back, computes identity, reconciles against what is known, resolves what is absent and writes evidence. A detector that returns something malformed, such as an unknown severity, invalid rule ID, foreign-Dockyard asset, or finding with no cited observation, is failed as a whole and its results are discarded. The other detectors still run.
 
 | Detector | Reads | Reports |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ a template, choose a target, or perform I/O. Its full SHA-256 appears in the
 detector catalogue, while detection evidence records the content-addressed
 detector version. See [ADR 0012](docs/adr/0012-detector-plugins-are-data-not-code.md).
 
-The scope is also narrower than it could look. RedDock does not enumerate supported TLS versions or cipher suites — the HTTP probe negotiates with a default client, so it can only ever record a version a current client accepted — and a rule about obsolete protocol versions would therefore never be able to fire from RedDock's own data. It is left out rather than shipped as decoration.
+The scope is also narrower than it could look. RedDock does not enumerate supported TLS versions or cipher suites. The HTTP probe negotiates with a default client, so it can only ever record a version a current client accepted. A rule about obsolete protocol versions would therefore never be able to fire from RedDock's own data, so it is left out rather than shipped as decoration.
 
 ## Validation boundary
 
@@ -325,6 +325,30 @@ Detection, validation, correlation, intelligence, and reporting artifact hashes 
 
 A DockPack is the Phase 6 portable export. It includes the snapshot, both rendered reports, the evidence manifest, and exactly the verified artifacts referenced by the database. The validation package remains one source inside it rather than a competing export format.
 
+## Zero trust and least privilege as architecture
+
+RedDock does not use network location, UI state, model output, or stored text as
+proof of authority. Each transition has a server-side policy check, a bounded
+data contract, or both. Components receive the smallest capability needed for
+their current role.
+
+| Component | Authority granted | Authority withheld |
+| --- | --- | --- |
+| Browser UI | Submit bounded API data to the loopback service | No direct database, filesystem, tool, or policy authority |
+| Protected API route | One declared permission and one organization-scoped context | No implicit access from a URL or object ID alone |
+| Discovery adapter | Contact one normalized target after DockGuard approval | No shell and no operator-supplied flags |
+| Detector and correlation runner | Read one bounded immutable snapshot | No target, network, subprocess, or write handle |
+| Intelligence provider | Receive one reviewed, approved evidence packet | No tools, credentials, target selection, or state-changing channel |
+| Reporting runner | Read retained state and verified referenced files | No target, model, arbitrary path, or upload destination |
+| Application container | Bind an unprivileged port and use its private data paths | No root user, Linux capabilities, privilege escalation, or host networking |
+
+The current identity boundary is intentionally incomplete. Local requests map
+to one explicit reserved owner because local mode is account-free and
+loopback-only. The dormant OIDC and session primitives do not change that
+fact. Server mode continues to fail startup until authenticated context
+selection, route integration, session lifecycle, proxy trust, administration,
+cross-worker controls, and end-to-end tenant tests are complete.
+
 ## Trust boundaries
 
 | Boundary | Treatment |
@@ -404,7 +428,25 @@ interrupted report failed and removes its partial reporting directory.
 
 ## Persistence evolution
 
-Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0 schema contract and versioned Alembic baseline before ownership changed. Migration `0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and hash-only browser-session storage; assigns every existing Dockyard to the reserved local organization; and makes that ownership non-null. Migration `0003_security_audit` adds structured, tenant-bound security-event storage without a free-form detail field. Neither migration enables authentication or networked server mode. A legacy database is completed additively, validated table by table and column by column, and only then stamped; an unknown shape fails startup without being stamped. Fresh installs create the current tables, stamp the baseline, and still run every data migration rather than skipping seed invariants. `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and `tests/test_postgres.py` verify old data survival, idempotency, local ownership, and both SQLite and PostgreSQL paths.
+Runtime database setup remains in `backend/app/database.py`, while configuration-free
+SQLAlchemy metadata lives in `backend/app/orm.py` so reviewed offline maintenance
+tools can migrate a dedicated engine without initializing the application runtime.
+Each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0
+schema contract and versioned Alembic baseline before ownership changed. Migration
+`0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and
+hash-only browser-session storage; assigns every existing Dockyard to the reserved
+local organization; and makes that ownership non-null. Migration
+`0003_security_audit` adds structured, tenant-bound security-event storage without
+a free-form detail field. Migration `0004_oidc_attempts` adds only short-lived,
+one-use, browser-bound OIDC transaction state for the dormant authentication
+boundary. None of these migrations enables authentication or networked server
+mode. A legacy database is completed additively, validated table by table and
+column by column, and only then stamped; an unknown shape fails startup without
+being stamped. Fresh installs create the current tables, stamp the baseline, and
+still run every data migration rather than skipping seed invariants.
+`tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and
+`tests/test_postgres.py` verify old data survival, idempotency, local ownership,
+and both SQLite and PostgreSQL paths.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
@@ -466,9 +508,10 @@ Minor and patch changes are grouped per ecosystem to limit review noise, while
 major changes stay isolated and every proposed update must pass the same CI and
 CodeQL controls before a human merges it.
 
-The dormant server-session primitive generates independent 256-bit browser and
-CSRF tokens and persists only their SHA-256 digests. Resolution accepts exactly
-the generated URL-safe shape, joins through one membership to its user and
+The dormant server-session primitive generates a 256-bit browser token and
+derives a separate browser-readable CSRF proof with domain-separated SHA-256.
+It persists only their SHA-256 digests. Resolution accepts exactly the
+generated URL-safe shapes, joins through one membership to its user and
 organization, and returns no context for an unknown, expired, revoked, disabled,
 or unrecognized-role record. The returned token container masks both bearer
 values from `repr`. Lifecycle operations revoke a single hashed token

@@ -4,6 +4,23 @@
 
 This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLAlchemy persistence with SQLite by default and packaged PostgreSQL support. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
 
+## Security posture for operators and reviewers
+
+| Mode or boundary | Status | Practical meaning |
+| --- | --- | --- |
+| Default local mode | Supported | Loopback-only, account-free operation with Host restrictions. Anyone who can reach the API has local-owner authority, so do not expose it to a network. |
+| Optional PostgreSQL | Supported for local use | Private persistence and real-server migration coverage. It does not add authentication or make shared deployment safe. |
+| Tenant and role enforcement | Enforced in the API | Routes are permission-classified and data loaders require an organization context. Today that context is always the reserved local owner. |
+| OIDC and browser sessions | Dormant | Protocol, cookie, CSRF, session, audit, and first-owner primitives are testable but not registered on any route. |
+| Authenticated server mode | Blocked | Startup refuses `REDDOCK_DEPLOYMENT_MODE=server` until the remaining identity, proxy, lifecycle, administration, scaling, and end-to-end gates are complete. |
+
+Least privilege is applied where the current package can enforce it. The
+application container is non-root, drops all Linux capabilities, accepts no
+operator-created shell command, and gives detectors no network or process
+handle. Zero trust means browser input, provider documents, target output,
+model output, and stored artifacts are validated at their boundaries. It does
+not mean the unfinished server mode is production-ready.
+
 ```text
 app/targets.py      target parsing and normalization
 app/dockguard.py    scope evaluation and decisions
@@ -96,8 +113,9 @@ runtime mode remains the account-free loopback `local` mode, and requesting
 `server` mode fails startup until OIDC sessions and tenant-scoped context
 resolution are complete.
 
-The dormant session primitive issues independent 256-bit browser and CSRF
-tokens, masks them from object representations, stores only their hashes, and
+The dormant session primitive issues a 256-bit browser token and derives a
+separate browser-readable CSRF proof using domain-separated SHA-256. It
+masks both from object representations, stores only their hashes, and
 resolves a context only while the session, membership, user, and role remain
 valid. It also supports idempotent single-session logout, membership-wide
 revocation after access changes, an eight-session per-membership cap that evicts
@@ -114,6 +132,30 @@ request verifier extracts exactly one unquoted bearer cookie and, for every
 unsafe method, exactly one Origin and CSRF header; both proofs must match the
 same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`; these
 helpers remain unused until the complete OIDC/session route boundary is ready.
+
+The next dormant layer validates an all-or-none future server identity
+configuration without permitting `server` mode. It requires PostgreSQL,
+canonical HTTPS public and issuer URLs, a mounted confidential-client secret,
+and an explicit deployment-owned allowlist for every discovery-returned
+endpoint origin. The isolated OIDC client uses authorization code plus PKCE,
+bounded no-redirect HTTP, one-use browser-bound database transactions, and
+asymmetric ID-token validation. It requests only `openid`, retains no provider
+profile claims or tokens, and resolves only an exact pre-provisioned
+issuer/subject membership. No auth router is registered and the current request
+authorization still always selects the reserved local owner.
+
+Before server mode can be enabled, the provider/cache must be application
+scoped, pending-login and request rate limits must be database-enforced across
+workers, and browser sessions need a reviewed idle-expiry/touch/rotation policy.
+TLS proxy trust, callback/error routes, administration, and end-to-end
+PostgreSQL concurrency tests remain release blockers.
+
+The dormant first-owner bootstrap requires RedDock to be stopped and an
+explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one
+fixed transaction-scoped advisory lock before checking or creating the single
+server organization, so concurrent bootstrap commands cannot both pass the
+first-owner invariant. Expected configuration, connection, migration, and
+identity conflicts fail with bounded operator messages rather than tracebacks.
 
 Every current HTTP response, including Host rejections, receives a fixed
 anti-framing, no-sniff, referrer, browser-capability, opener, and resource

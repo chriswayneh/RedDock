@@ -3,12 +3,25 @@ import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field, SecretStr
+
+from app.targets import TargetKind, normalize_target
 
 _MAX_SECRET_BYTES = 16 * 1024
 _DATABASE_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,62}")
 _DATABASE_HOST = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?")
+_ORGANIZATION_SLUG = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+_ISSUER_PATH = re.compile(r"(?:/[A-Za-z0-9._~!$&'()*+,;=:@-]+)*/?")
+_SERVER_IDENTITY_VARIABLES = (
+    "REDDOCK_PUBLIC_ORIGIN",
+    "REDDOCK_OIDC_ISSUER",
+    "REDDOCK_OIDC_CLIENT_ID",
+    "REDDOCK_OIDC_CLIENT_SECRET_FILE",
+    "REDDOCK_OIDC_ENDPOINT_ORIGINS",
+    "REDDOCK_SERVER_ORGANIZATION_SLUG",
+)
 
 
 class ConfigurationError(RuntimeError):
@@ -87,18 +100,160 @@ def _database_components() -> dict[str, object]:
     }
 
 
+def _canonical_https_url(raw: str, *, field: str, origin_only: bool) -> str:
+    if not raw or raw != raw.strip() or len(raw) > 500:
+        raise ConfigurationError(f"{field} must be bounded canonical HTTPS text")
+    if "\\" in raw or any(character.isspace() or ord(character) < 0x20 for character in raw):
+        raise ConfigurationError(f"{field} contains unsafe characters")
+    parts = urlsplit(raw)
+    if parts.scheme != "https" or not parts.hostname or parts.username or parts.password:
+        raise ConfigurationError(f"{field} must be an exact HTTPS URL without credentials")
+    if parts.query or parts.fragment:
+        raise ConfigurationError(f"{field} must not contain a query or fragment")
+    try:
+        port = parts.port
+    except ValueError as error:
+        raise ConfigurationError(f"{field} contains an invalid port") from error
+    hostname = parts.hostname
+    if not hostname or not hostname.isascii() or hostname != hostname.lower():
+        raise ConfigurationError(f"{field} host must use canonical lowercase ASCII")
+    try:
+        normalized_host = normalize_target(hostname)
+    except ValueError as error:
+        raise ConfigurationError(f"{field} contains an invalid host") from error
+    if normalized_host.kind is not TargetKind.HOSTNAME or normalized_host.value != hostname:
+        raise ConfigurationError(f"{field} must use a canonical DNS host name")
+    if parts.netloc.endswith(":") or (port == 443 and ":443" in parts.netloc):
+        raise ConfigurationError(f"{field} must omit the default HTTPS port")
+    if origin_only:
+        if parts.path:
+            raise ConfigurationError(f"{field} must be an origin without a path")
+    elif not _ISSUER_PATH.fullmatch(parts.path):
+        raise ConfigurationError(f"{field} contains a non-canonical issuer path")
+    elif parts.path:
+        segments = parts.path.split("/")[1:]
+        if segments and segments[-1] == "":
+            segments.pop()
+        if any(segment in {"", ".", ".."} for segment in segments):
+            raise ConfigurationError(f"{field} contains a non-canonical issuer path")
+    rendered_host = f"[{hostname}]" if ":" in hostname else hostname
+    netloc = f"{rendered_host}:{port}" if port is not None else rendered_host
+    canonical = urlunsplit(("https", netloc, parts.path, "", ""))
+    if canonical != raw:
+        raise ConfigurationError(f"{field} must use its exact canonical spelling")
+    return canonical
+
+
+def canonical_oidc_issuer(raw: str) -> str:
+    """Validate the exact issuer form shared by config and offline bootstrap."""
+    return _canonical_https_url(raw, field="OIDC issuer", origin_only=False)
+
+
+class DormantServerIdentityConfig(BaseModel):
+    """Validated server identity input that cannot yet enable server mode."""
+
+    public_origin: str
+    oidc_issuer: str
+    oidc_client_id: str
+    oidc_client_secret: SecretStr
+    oidc_endpoint_origins: tuple[str, ...]
+    organization_slug: str
+    database_host: str
+    database_port: int
+    database_name: str
+    database_user: str
+    database_password: SecretStr
+
+
+def dormant_server_identity_config() -> DormantServerIdentityConfig:
+    """Parse the complete future server contract without enabling it."""
+    configured = {name: os.getenv(name) for name in _SERVER_IDENTITY_VARIABLES}
+    missing = [name for name, value in configured.items() if not value]
+    if missing:
+        raise ConfigurationError(
+            "Server identity configuration is incomplete; missing " + ", ".join(missing)
+        )
+    database = _database_components()
+    required_database = {
+        "database_host",
+        "database_port",
+        "database_name",
+        "database_user",
+        "database_password",
+    }
+    if set(database) != required_database or os.getenv("REDDOCK_DATABASE_URL"):
+        raise ConfigurationError(
+            "Dormant server identity configuration requires PostgreSQL secret-file components "
+            "and forbids REDDOCK_DATABASE_URL"
+        )
+    client_id = str(configured["REDDOCK_OIDC_CLIENT_ID"])
+    if not 1 <= len(client_id) <= 255 or client_id != client_id.strip() or any(
+        ord(character) < 0x20 for character in client_id
+    ):
+        raise ConfigurationError("REDDOCK_OIDC_CLIENT_ID must be bounded non-control text")
+    organization_slug = str(configured["REDDOCK_SERVER_ORGANIZATION_SLUG"])
+    if organization_slug == "local" or not _ORGANIZATION_SLUG.fullmatch(organization_slug):
+        raise ConfigurationError(
+            "REDDOCK_SERVER_ORGANIZATION_SLUG must be a non-reserved lowercase slug"
+        )
+    client_secret = _read_secret_file("REDDOCK_OIDC_CLIENT_SECRET_FILE")
+    if client_secret is None:
+        raise ConfigurationError("REDDOCK_OIDC_CLIENT_SECRET_FILE is required")
+    origin_values = str(configured["REDDOCK_OIDC_ENDPOINT_ORIGINS"]).split(",")
+    if not 1 <= len(origin_values) <= 4 or any(not item for item in origin_values):
+        raise ConfigurationError("REDDOCK_OIDC_ENDPOINT_ORIGINS must contain 1 to 4 origins")
+    endpoint_origins = tuple(
+        _canonical_https_url(
+            item,
+            field="REDDOCK_OIDC_ENDPOINT_ORIGINS",
+            origin_only=True,
+        )
+        for item in origin_values
+    )
+    if len(set(endpoint_origins)) != len(endpoint_origins):
+        raise ConfigurationError("REDDOCK_OIDC_ENDPOINT_ORIGINS must not contain duplicates")
+    issuer = canonical_oidc_issuer(str(configured["REDDOCK_OIDC_ISSUER"]))
+    issuer_parts = urlsplit(issuer)
+    issuer_origin = urlunsplit(("https", issuer_parts.netloc, "", "", ""))
+    if issuer_origin not in endpoint_origins:
+        raise ConfigurationError(
+            "REDDOCK_OIDC_ENDPOINT_ORIGINS must include the configured issuer origin"
+        )
+    return DormantServerIdentityConfig(
+        public_origin=_canonical_https_url(
+            str(configured["REDDOCK_PUBLIC_ORIGIN"]),
+            field="REDDOCK_PUBLIC_ORIGIN",
+            origin_only=True,
+        ),
+        oidc_issuer=issuer,
+        oidc_client_id=client_id,
+        oidc_client_secret=SecretStr(client_secret),
+        oidc_endpoint_origins=endpoint_origins,
+        organization_slug=organization_slug,
+        **database,
+    )
+
+
 def _deployment_mode() -> Literal["local"]:
     mode = os.getenv("REDDOCK_DEPLOYMENT_MODE", "local").strip().lower()
     if mode == "server":
+        try:
+            dormant_server_identity_config()
+        except ConfigurationError as error:
+            raise ConfigurationError(
+                f"REDDOCK_DEPLOYMENT_MODE=server configuration is invalid: {error}"
+            ) from error
         raise ConfigurationError(
             "REDDOCK_DEPLOYMENT_MODE=server is not available until OIDC, sessions, "
             "route authorization, exact origins, and trusted proxy settings are implemented"
         )
     if mode != "local":
         raise ConfigurationError("REDDOCK_DEPLOYMENT_MODE must be 'local'")
-    if os.getenv("REDDOCK_PUBLIC_ORIGIN"):
+    configured_server_values = [name for name in _SERVER_IDENTITY_VARIABLES if os.getenv(name)]
+    if configured_server_values:
         raise ConfigurationError(
-            "REDDOCK_PUBLIC_ORIGIN requires the not-yet-available authenticated server mode"
+            "Server-only identity configuration requires the not-yet-available authenticated "
+            "server mode: " + ", ".join(configured_server_values)
         )
     return mode
 

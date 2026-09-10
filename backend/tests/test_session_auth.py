@@ -9,6 +9,7 @@ from app.session_auth import (
     MAX_ACTIVE_SESSIONS_PER_MEMBERSHIP,
     SESSION_LIFETIME,
     SessionRejected,
+    csrf_token_for_session,
     csrf_token_matches,
     issue_browser_session,
     purge_inactive_browser_sessions,
@@ -32,6 +33,8 @@ def test_issued_session_stores_hashes_and_resolves_the_membership(session: Sessi
     assert len(stored.token_hash) == len(stored.csrf_token_hash) == 64
     assert issued.expires_at == NOW + SESSION_LIFETIME
     assert csrf_token_matches(issued.csrf_token, stored.csrf_token_hash)
+    assert csrf_token_for_session(issued.token) == issued.csrf_token
+    assert csrf_token_for_session("short") is None
 
     context = resolve_browser_session(session, issued.token, now=NOW)
     assert context is not None
@@ -54,6 +57,17 @@ def test_malformed_unknown_expired_and_revoked_tokens_are_rejected(session: Sess
     stored.revoked_at = NOW
     session.commit()
     assert resolve_browser_session(session, issued.token, now=NOW) is None
+
+
+def test_resolution_does_not_yet_touch_idle_time(session: Session):
+    """Idle expiry/touch remains a documented server-enable blocker."""
+    issued = issue_browser_session(session, 1, now=NOW)
+    stored = session.get(BrowserSession, issued.session_id)
+    assert stored is not None
+
+    assert resolve_browser_session(session, issued.token, now=NOW + timedelta(minutes=5))
+    session.refresh(stored)
+    assert stored.last_seen_at.replace(tzinfo=UTC) == NOW
 
 
 @pytest.mark.parametrize("record_type", ["membership", "user"])

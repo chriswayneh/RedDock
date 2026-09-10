@@ -1,6 +1,7 @@
 from alembic import context
 
-from app.database import Base
+from app import models  # noqa: F401
+from app.orm import Base
 
 config = context.config
 target_metadata = Base.metadata

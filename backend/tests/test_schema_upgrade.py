@@ -78,7 +78,7 @@ def test_every_phase_1_table_is_created(phase_0_database: Path):
     } <= tables
     with sqlite3.connect(phase_0_database) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0003_security_audit",
+            "0004_oidc_attempts",
         )
         assert connection.execute(
             "SELECT organization_id FROM dockyards WHERE name = 'Existing engagement'"

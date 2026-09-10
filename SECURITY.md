@@ -10,6 +10,26 @@ RedDock can contact a network target. Scoping a target in RedDock is a statement
 
 Every target action passes DockGuard before a tool runs, and DockGuard fails closed: anything it cannot positively place inside the Dockyard's authorized scope is denied. Optional intelligence receives no tool access at all and cannot expand target scope or change RedDock state. Reporting has no active capability and packages only retained artifacts whose hashes it has re-verified.
 
+## Zero trust and least privilege status
+
+RedDock treats every boundary crossing as untrusted and gives each component
+only the authority needed for its current job. These terms describe concrete
+controls, not a certification or a claim that server mode is ready.
+
+| Boundary | Implemented control | Current limit or pending gate |
+| --- | --- | --- |
+| Network ingress | The supported package binds to loopback, accepts only documented Host values, keeps sidecars private, and exposes no CORS trust expansion. | Local mode has no sign-in. Do not publish it to a LAN, proxy, or the internet. |
+| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, session rotation, proxy trust, and administration remain release gates. |
+| Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current requests intentionally use the reserved local owner. Authenticated user context selection is not enabled. |
+| Target and model access | DockGuard authorizes target contact. Detectors and reports have no network capability. Model advice receives only a separately approved packet and no tools. | RedDock enforces declared scope but cannot establish the operator's legal or contractual authority. |
+| Process and secrets | The application runs non-root with all Linux capabilities dropped and `no-new-privileges`. Database credentials use mounted secret files. | PostgreSQL support does not enable authenticated shared use. Sidecars retain only the capabilities required by their upstream startup paths. |
+| Retained data | Tenant keys, path confinement, bounded reads, SHA-256 evidence checks, and private backup modes protect application workflows. | Operators still control host access, backup custody, secret rotation, and disaster-recovery policy. |
+
+For operators, the safe rule is simple: use the default loopback Compose
+deployment, keep assessment scope authorized and narrow, and treat exported
+evidence as sensitive. A green CI run is supporting evidence, not proof that a
+deployment is secure.
+
 ## Safety controls
 
 **Scope enforcement**
@@ -115,6 +135,13 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Liveness discloses only that the process can answer. The separate readiness route performs one database query and returns a generic 503 without connection details; container orchestration uses readiness rather than treating a database-blind process check as healthy.
 - The only accepted deployment mode is `local`. `REDDOCK_DEPLOYMENT_MODE=server` and unknown values fail startup until authenticated server mode is implemented; enabling PostgreSQL does not widen the trust boundary.
 - Future server-browser primitives already require one exact HTTPS origin and a host-bound `Secure`, `HttpOnly`, `SameSite=Lax` session cookie. Their request verifier rejects ambiguous duplicate credentials and requires both exact Origin and session-bound CSRF proof for unsafe methods. They are deliberately disconnected from routes, and setting `REDDOCK_PUBLIC_ORIGIN` in local mode fails startup rather than implying authentication that is not present.
+- Dormant OIDC primitives accept provider endpoints only from deployment-owned
+  HTTPS origins, reject redirects and oversized responses, use authorization
+  code with PKCE, bind one-use state to a host-only transaction cookie, and
+  validate asymmetric ID-token signatures plus issuer, audience, time, and
+  nonce claims. They retain no provider token or profile claim and resolve only
+  a pre-provisioned issuer/subject identity. No authentication route is
+  registered, and server mode still fails startup.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.
@@ -134,14 +161,14 @@ Do not open a public issue for a suspected security flaw. Use [GitHub Private Vu
 
 | Version | Supported |
 | --- | --- |
-| 0.8.x | Yes — current published release |
-| 0.7.x | No — superseded by 0.8.0 |
-| 0.6.x | No — superseded by 0.7.0 |
-| 0.5.x | No — superseded by 0.6.0 |
-| 0.4.x | No — superseded by 0.5.0 |
-| 0.3.x | No — superseded by 0.4.0 |
-| 0.2.x | No — superseded by 0.3.0 |
-| 0.1.x | No — superseded by 0.2.0 |
+| 0.8.x | Yes, current published release |
+| 0.7.x | No, superseded by 0.8.0 |
+| 0.6.x | No, superseded by 0.7.0 |
+| 0.5.x | No, superseded by 0.6.0 |
+| 0.4.x | No, superseded by 0.5.0 |
+| 0.3.x | No, superseded by 0.4.0 |
+| 0.2.x | No, superseded by 0.3.0 |
+| 0.1.x | No, superseded by 0.2.0 |
 
 Security fixes are evaluated for the latest published release. RedDock is a local, single-operator application in this phase; do not expose it to untrusted networks.
 

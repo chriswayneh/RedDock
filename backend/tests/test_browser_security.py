@@ -7,14 +7,19 @@ from starlette.responses import Response
 
 from app.browser_security import (
     CSRF_HEADER_NAME,
+    OIDC_TRANSACTION_COOKIE_MAX_AGE,
+    OIDC_TRANSACTION_COOKIE_NAME,
     SESSION_COOKIE_MAX_AGE,
     SESSION_COOKIE_NAME,
     BrowserSecurityError,
     authenticate_browser_request,
     clear_browser_session_cookie,
+    clear_oidc_transaction_cookie,
+    oidc_transaction_cookie,
     origin_matches,
     parse_public_origin,
     set_browser_session_cookie,
+    set_oidc_transaction_cookie,
 )
 from app.session_auth import issue_browser_session
 
@@ -206,3 +211,39 @@ def test_browser_request_rejects_duplicate_or_quoted_session_cookie(session: Ses
 
     assert authenticate_browser_request(session, duplicate, expected) is None
     assert authenticate_browser_request(session, quoted, expected) is None
+
+
+def test_oidc_transaction_cookie_is_short_lived_host_only_and_duplicate_rejecting():
+    token = "T" * 43
+    response = Response()
+    set_oidc_transaction_cookie(response, token)
+    header = response.headers["set-cookie"]
+    parsed = SimpleCookie()
+    parsed.load(header)
+    morsel = parsed[OIDC_TRANSACTION_COOKIE_NAME]
+    assert morsel.value == token
+    assert morsel["max-age"] == str(OIDC_TRANSACTION_COOKIE_MAX_AGE)
+    assert morsel["path"] == "/"
+    assert morsel["secure"] and morsel["httponly"]
+    assert morsel["samesite"].lower() == "lax"
+    assert not morsel["domain"]
+
+    assert oidc_transaction_cookie(
+        _request("GET", [("Cookie", f"{OIDC_TRANSACTION_COOKIE_NAME}={token}")])
+    ) == token
+    assert oidc_transaction_cookie(
+        _request(
+            "GET",
+            [
+                ("Cookie", f"{OIDC_TRANSACTION_COOKIE_NAME}={token}"),
+                ("Cookie", f"{OIDC_TRANSACTION_COOKIE_NAME}={token}"),
+            ],
+        )
+    ) is None
+    assert oidc_transaction_cookie(
+        _request("GET", [("Cookie", f'{OIDC_TRANSACTION_COOKIE_NAME}="{token}"')])
+    ) is None
+
+    cleared = Response()
+    clear_oidc_transaction_cookie(cleared)
+    assert cleared.headers["set-cookie"].startswith(f'{OIDC_TRANSACTION_COOKIE_NAME}=""')
