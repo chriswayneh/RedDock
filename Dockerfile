@@ -19,7 +19,8 @@ WORKDIR /app/backend
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nmap \
     && rm -rf /var/lib/apt/lists/*
-RUN groupadd --system reddock && useradd --system --gid reddock --home-dir /app reddock \
+RUN groupadd --system --gid 999 reddock \
+    && useradd --system --uid 999 --gid 999 --home-dir /app reddock \
     && mkdir -p /var/lib/reddock/evidence /app/static \
     && chown -R reddock:reddock /var/lib/reddock /app
 COPY backend/pyproject.toml backend/README.md ./

@@ -96,6 +96,120 @@ jobs:
           assert "REDDOCK_POSTGRES_PASSWORD" not in str(postgres_document["services"])
           PY
       - run: docker build -t reddock:ci .
+      - name: Verify the stable unprivileged image identity
+        run: >-
+          docker run --rm --entrypoint sh reddock:ci -c
+          'test "$(id -u reddock)" = 999 && test "$(id -g reddock)" = 999'
+      - name: Validate offline SQLite maintenance and recovery
+        if: matrix.architecture == 'AMD64'
+        env:
+          REDDOCK_MAINTENANCE_IMAGE: reddock:ci
+          REDDOCK_BACKUP_DIR: ${{ runner.temp }}/reddock-backups
+        run: |
+          set -euo pipefail
+          export REDDOCK_MAINTENANCE_UID="$(id -u)"
+          project=reddock-maintenance-ci
+          ready_container="${project}-ready"
+          compose=(docker compose -p "$project" --profile maintenance -f compose.yaml -f compose.maintenance.yaml)
+          mkdir -m 700 -p "$REDDOCK_BACKUP_DIR"
+
+          "${compose[@]}" config --format json > "$RUNNER_TEMP/compose-maintenance.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          document = json.loads(
+              Path(os.environ["RUNNER_TEMP"], "compose-maintenance.json").read_text()
+          )
+          services = document["services"]
+          names = ("reddock-backup", "reddock-verify", "reddock-restore", "reddock-recover")
+          for name in names:
+              service = services[name]
+              assert service["network_mode"] == "none"
+              assert service["read_only"] is True
+              assert service["cap_drop"] == ["ALL"]
+              assert "no-new-privileges:true" in service["security_opt"]
+              assert service["pids_limit"] == 32
+              assert service["restart"] == "no"
+              assert "ports" not in service
+              assert any(
+                  "mode=1777" in item and "size=8589934592" in item
+                  for item in service["tmpfs"]
+              )
+          assert services["reddock-backup"]["user"] == f"{os.getuid()}:999"
+          assert services["reddock-verify"]["user"] == f"{os.getuid()}:999"
+          assert services["reddock-restore"]["user"] == "999:999"
+          assert services["reddock-recover"]["user"] == "999:999"
+
+          def mount(service, target):
+              return next(item for item in service["volumes"] if item["target"] == target)
+
+          assert mount(services["reddock-backup"], "/var/lib/reddock")["read_only"]
+          assert not mount(services["reddock-backup"], "/backups").get("read_only", False)
+          assert mount(services["reddock-verify"], "/backups")["read_only"]
+          assert mount(services["reddock-restore"], "/backups")["read_only"]
+          assert not mount(services["reddock-restore"], "/var/lib/reddock").get(
+              "read_only", False
+          )
+          PY
+
+          cleanup() {
+            docker logs "$ready_container" 2>/dev/null || true
+            docker rm -f "$ready_container" 2>/dev/null || true
+            "${compose[@]}" down -v --remove-orphans || true
+          }
+          trap cleanup EXIT
+
+          "${compose[@]}" run --rm --no-deps --entrypoint python reddock-recover \
+            -c "from app.database import initialize_database; initialize_database()"
+          "${compose[@]}" run --rm --no-deps --entrypoint sh reddock-backup \
+            -c 'test -w /tmp && test "$(stat -c %a /tmp)" = 1777'
+          "${compose[@]}" run --rm --no-deps reddock-backup create \
+            --data-dir /var/lib/reddock --output /backups/ci.rdbackup --confirm-offline
+          test "$(stat -c %a "$REDDOCK_BACKUP_DIR/ci.rdbackup")" = 600
+          test "$(stat -c %u "$REDDOCK_BACKUP_DIR/ci.rdbackup")" = "$(id -u)"
+          "${compose[@]}" run -T --rm --no-deps reddock-verify verify --archive - \
+            < "$REDDOCK_BACKUP_DIR/ci.rdbackup"
+          "${compose[@]}" run -T --rm --no-deps reddock-restore restore \
+            --data-dir /var/lib/reddock --archive - --confirm-offline --confirm-replace \
+            < "$REDDOCK_BACKUP_DIR/ci.rdbackup"
+          "${compose[@]}" run --rm --no-deps --entrypoint sh reddock-recover -c \
+            'test "$(stat -c %a /var/lib/reddock/reddock.db)" = 640 && test "$(stat -c %a /var/lib/reddock/evidence)" = 750'
+
+          "${compose[@]}" run --rm --no-deps --entrypoint python reddock-recover -c '
+          from pathlib import Path
+          import shutil
+          from app.backup import RESTORE_MARKER, _write_restore_marker
+          data = Path("/var/lib/reddock")
+          token = "1" * 32
+          shutil.copy2(data / "reddock.db", data / f".reddock.db.rollback-{token}")
+          shutil.copytree(data / "evidence", data / f".evidence.rollback-{token}")
+          (data / f".restore-{token}").mkdir()
+          _write_restore_marker(data / RESTORE_MARKER, {
+              "schema": "reddock.restore/1", "token": token, "state": "committed",
+              "had_database": True, "had_evidence": True,
+          }, create=True)
+          '
+          if "${compose[@]}" run --rm --no-deps --entrypoint python reddock-recover \
+            -c "from app.database import initialize_database; initialize_database()"; then
+            echo "application startup unexpectedly accepted an incomplete restore" >&2
+            exit 1
+          fi
+          "${compose[@]}" run --rm --no-deps reddock-recover recover \
+            --data-dir /var/lib/reddock --confirm-offline --confirm-rollback
+
+          docker run -d --name "$ready_container" --network none \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -v "${project}_reddock-data:/var/lib/reddock" reddock:ci
+          for attempt in {1..20}; do
+            if docker exec "$ready_container" python -c \
+              "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/api/ready')"; then
+              break
+            fi
+            if [ "$attempt" = 20 ]; then exit 1; fi
+            sleep 2
+          done
       - name: Prepare reviewed data-only detector manifest
         run: |
           mkdir -p "$RUNNER_TEMP/reddock-detectors"

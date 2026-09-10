@@ -6,6 +6,26 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- An offline SQLite maintenance tool and locked-down Compose overlay for
+  creating, verifying, restoring, and recovering backups of both the database
+  and retained RedLedger evidence, with cross-platform operator instructions.
+- A strict versioned backup manifest with portable canonical paths, fixed
+  private archive modes, per-file SHA-256 hashes, bounded archive/file counts
+  and sizes, preflight ZIP directory limits, archived SQLite integrity and
+  revision-specific semantic schema and local-identity checks, and
+  reconciliation of database-backed and nested validation-manifest evidence
+  references.
+- Staged SQLite restore with explicit offline/replacement confirmation,
+  ordered POSIX durability flushes, rollback on ordinary failure, and a
+  prepared/committed recovery marker. An interrupted restore blocks application
+  startup until explicit offline recovery validates the complete installed pair
+  before either rollback copy can be removed.
+- AMD64 CI assertions for the merged maintenance Compose security contract and
+  an isolated create, verify, restore, startup-refusal, recovery, and readiness
+  drill on a disposable named volume.
+- Bounded private standard-input spooling lets Linux verification and restore
+  consume a host-owned `0600` archive without loosening it for the container;
+  the image UID/GID 999 contract is pinned and tested.
 - Fail-closed release automation that validates annotated tags against every
   packaged and public version source, reruns the backend and frontend gates,
   publishes an attested AMD64/ARM64 image to GitHub Container Registry, and
@@ -86,6 +106,19 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- SQLite maintenance runs without a network, ports, capabilities, or a writable
+  container root. Backup creation mounts application data read-only; verification
+  and restore mount archive input read-only; output replacement requires an
+  explicit confirmation and published archives use mode `0600`.
+- Reject backup links and junctions, unsafe or platform-aliased member names,
+  duplicate/undeclared/special/encrypted members, unsupported compression,
+  unknown schemas, corrupt databases, SQLite sidecars, and missing or changed
+  evidence referenced by the database.
+- Restore is documented as a two-path, rollback-safe operation rather than one
+  crash-atomic filesystem transaction. A recovery marker prevents a partially
+  replaced database/evidence pair from being opened after interruption; POSIX
+  directory flushes order it, while native Windows power-loss ordering is not
+  promised.
 - Remove Vitest and its mocker package after the available major upgrade did
   not pass RedDock's private boundary regression. The Jest replacement retains
   the browser-facing test coverage, the audited lockfile has no known
@@ -156,6 +189,10 @@ All notable changes to RedDock are documented here.
 
 ### Testing
 
+- Backup regressions cover round trips, database and evidence tampering,
+  manifest/path/mode/limit enforcement, offline and destructive confirmations,
+  SQLite semantic checks, evidence-reference reconciliation, failed replacement
+  rollback, prepared/committed recovery boundaries, and startup refusal.
 - Run the production container and complete discovery-through-reporting smoke
   path on native AMD64 and ARM64 GitHub runners for every reviewed change.
 - Release-metadata regression tests and a tag-time verification gate covering

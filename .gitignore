@@ -20,6 +20,8 @@ data/
 runtime/
 logs/
 reports/
+backups/
+*.rdbackup
 *.db
 *.sqlite
 *.sqlite3
