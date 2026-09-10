@@ -48,7 +48,7 @@ def _write_database(path: Path, value: str) -> None:
         engine.dispose()
     with closing(sqlite3.connect(path)) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0003_security_audit')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0004_oidc_attempts')")
         connection.execute("CREATE TABLE state (value TEXT NOT NULL)")
         connection.execute("INSERT INTO state VALUES (?)", (value,))
         connection.execute(
@@ -370,7 +370,7 @@ def test_create_refuses_a_stamp_only_database(tmp_path: Path) -> None:
     data.mkdir()
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0003_security_audit')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0004_oidc_attempts')")
         connection.commit()
 
     with pytest.raises(BackupError, match="schema is incomplete"):

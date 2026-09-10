@@ -26,6 +26,11 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
         "REDDOCK_DATABASE_PASSWORD_FILE",
         "REDDOCK_DEPLOYMENT_MODE",
         "REDDOCK_PUBLIC_ORIGIN",
+        "REDDOCK_OIDC_ISSUER",
+        "REDDOCK_OIDC_CLIENT_ID",
+        "REDDOCK_OIDC_CLIENT_SECRET_FILE",
+        "REDDOCK_OIDC_ENDPOINT_ORIGINS",
+        "REDDOCK_SERVER_ORGANIZATION_SLUG",
         "REDDOCK_API_DOCS_ENABLED",
     ):
         monkeypatch.delenv(name, raising=False)

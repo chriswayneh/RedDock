@@ -9,7 +9,10 @@ description = "RedDock Core API"
 requires-python = ">=3.13"
 dependencies = [
   "alembic==1.19.2",
+  "cryptography==50.0.1",
   "fastapi==0.141.1",
+  "httpx==0.28.1",
+  "joserfc==1.7.5",
   "sqlalchemy==2.0.52",
   "uvicorn[standard]==0.52.4",
 ]
@@ -19,7 +22,6 @@ postgres = [
   "psycopg[binary]==3.3.5",
 ]
 dev = [
-  "httpx==0.28.1",
   "pip-audit==2.10.1",
   "psycopg[binary]==3.3.5",
   "pytest==9.1.1",

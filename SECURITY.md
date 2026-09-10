@@ -115,6 +115,13 @@ Every target action passes DockGuard before a tool runs, and DockGuard fails clo
 - Liveness discloses only that the process can answer. The separate readiness route performs one database query and returns a generic 503 without connection details; container orchestration uses readiness rather than treating a database-blind process check as healthy.
 - The only accepted deployment mode is `local`. `REDDOCK_DEPLOYMENT_MODE=server` and unknown values fail startup until authenticated server mode is implemented; enabling PostgreSQL does not widen the trust boundary.
 - Future server-browser primitives already require one exact HTTPS origin and a host-bound `Secure`, `HttpOnly`, `SameSite=Lax` session cookie. Their request verifier rejects ambiguous duplicate credentials and requires both exact Origin and session-bound CSRF proof for unsafe methods. They are deliberately disconnected from routes, and setting `REDDOCK_PUBLIC_ORIGIN` in local mode fails startup rather than implying authentication that is not present.
+- Dormant OIDC primitives accept provider endpoints only from deployment-owned
+  HTTPS origins, reject redirects and oversized responses, use authorization
+  code with PKCE, bind one-use state to a host-only transaction cookie, and
+  validate asymmetric ID-token signatures plus issuer, audience, time, and
+  nonce claims. They retain no provider token or profile claim and resolve only
+  a pre-provisioned issuer/subject identity. No authentication route is
+  registered, and server mode still fails startup.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - No secrets are checked into this repository.

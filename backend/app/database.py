@@ -3,13 +3,10 @@ from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, Engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
-
-
-class Base(DeclarativeBase):
-    pass
+from app.orm import Base as Base
 
 
 def _connect_args(database_url: str | URL) -> dict:

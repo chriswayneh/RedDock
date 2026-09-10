@@ -5,7 +5,12 @@ from alembic.config import Config
 from sqlalchemy import inspect
 from sqlalchemy.engine import Connection, Engine
 
-from app.database import Base
+from app.orm import Base
+
+
+class MigrationError(RuntimeError):
+    """A database cannot be migrated without operator intervention."""
+
 
 BASELINE_REVISION = "0001_v080"
 
@@ -328,7 +333,7 @@ def _validate_legacy_baseline(connection: Connection) -> None:
                 f"{table} ({', '.join(names)})" for table, names in missing_columns.items()
             )
             details.append(f"missing columns: {columns}")
-        raise RuntimeError(
+        raise MigrationError(
             "Database does not match the released RedDock v0.8.0 schema; " + "; ".join(details)
         )
 

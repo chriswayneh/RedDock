@@ -1,5 +1,6 @@
 import re
 import secrets
+from base64 import urlsafe_b64encode
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
@@ -40,6 +41,14 @@ def _as_utc(value: datetime) -> datetime:
 
 def _digest(token: str) -> str:
     return sha256(token.encode("ascii")).hexdigest()
+
+
+def csrf_token_for_session(token: str) -> str | None:
+    """Derive the browser-readable CSRF proof from a valid bearer token."""
+    if not is_browser_session_token(token):
+        return None
+    digest = sha256(b"reddock-csrf-v1\0" + token.encode("ascii")).digest()
+    return urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 def is_browser_session_token(token: str) -> bool:
@@ -85,7 +94,9 @@ def issue_browser_session(
         stale_session.revoked_at = issued_at
 
     token = secrets.token_urlsafe(_TOKEN_BYTES)
-    csrf_token = secrets.token_urlsafe(_TOKEN_BYTES)
+    csrf_token = csrf_token_for_session(token)
+    if csrf_token is None:  # pragma: no cover - token generator contract guard
+        raise SessionRejected("Secure token generation returned an unexpected shape")
     expires_at = issued_at + SESSION_LIFETIME
     record = BrowserSession(
         token_hash=_digest(token),

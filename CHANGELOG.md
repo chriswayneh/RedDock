@@ -6,6 +6,14 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A dormant OIDC authorization-code foundation with strict future-server
+  configuration, explicit HTTPS endpoint-origin allowlisting, bounded
+  no-redirect discovery/JWKS/token exchange, PKCE/state/nonce transactions,
+  asymmetric ID-token verification, and an offline first-owner bootstrap. No
+  route is registered and authenticated server mode remains unavailable.
+- A one-use OIDC login-attempt migration and a configuration-free ORM metadata
+  boundary so offline maintenance can migrate a dedicated PostgreSQL engine
+  without mutating runtime settings.
 - An offline SQLite maintenance tool and locked-down Compose overlay for
   creating, verifying, restoring, and recovering backups of both the database
   and retained RedLedger evidence, with cross-platform operator instructions.

@@ -404,7 +404,25 @@ interrupted report failed and removes its partial reporting directory.
 
 ## Persistence evolution
 
-Database setup is isolated in `backend/app/database.py` and each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0 schema contract and versioned Alembic baseline before ownership changed. Migration `0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and hash-only browser-session storage; assigns every existing Dockyard to the reserved local organization; and makes that ownership non-null. Migration `0003_security_audit` adds structured, tenant-bound security-event storage without a free-form detail field. Neither migration enables authentication or networked server mode. A legacy database is completed additively, validated table by table and column by column, and only then stamped; an unknown shape fails startup without being stamped. Fresh installs create the current tables, stamp the baseline, and still run every data migration rather than skipping seed invariants. `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and `tests/test_postgres.py` verify old data survival, idempotency, local ownership, and both SQLite and PostgreSQL paths.
+Runtime database setup remains in `backend/app/database.py`, while configuration-free
+SQLAlchemy metadata lives in `backend/app/orm.py` so reviewed offline maintenance
+tools can migrate a dedicated engine without initializing the application runtime.
+Each domain model owns its table definition. Phase 8 introduced a frozen v0.8.0
+schema contract and versioned Alembic baseline before ownership changed. Migration
+`0002_identity` creates organizations, OIDC-keyed user profiles, memberships, and
+hash-only browser-session storage; assigns every existing Dockyard to the reserved
+local organization; and makes that ownership non-null. Migration
+`0003_security_audit` adds structured, tenant-bound security-event storage without
+a free-form detail field. Migration `0004_oidc_attempts` adds only short-lived,
+one-use, browser-bound OIDC transaction state for the dormant authentication
+boundary. None of these migrations enables authentication or networked server
+mode. A legacy database is completed additively, validated table by table and
+column by column, and only then stamped; an unknown shape fails startup without
+being stamped. Fresh installs create the current tables, stamp the baseline, and
+still run every data migration rather than skipping seed invariants.
+`tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and
+`tests/test_postgres.py` verify old data survival, idempotency, local ownership,
+and both SQLite and PostgreSQL paths.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 

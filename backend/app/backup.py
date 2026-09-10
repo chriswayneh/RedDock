@@ -62,7 +62,13 @@ _WINDOWS_RESERVED = {
     *(f"com{number}" for number in range(1, 10)),
     *(f"lpt{number}" for number in range(1, 10)),
 }
-_SCHEMA_REVISIONS = {"0001_v080", "0002_identity", "0003_security_audit"}
+_SCHEMA_REVISIONS = {
+    "0001_v080",
+    "0002_identity",
+    "0003_security_audit",
+    "0004_oidc_attempts",
+}
+_CURRENT_SCHEMA_REVISION = "0004_oidc_attempts"
 
 
 class BackupError(RuntimeError):
@@ -465,7 +471,7 @@ def _reference_schema_contract(
         engine = create_engine(f"sqlite:///{database.as_posix()}")
         try:
             upgrade_database(engine)
-            if revision != "0003_security_audit":
+            if revision != _CURRENT_SCHEMA_REVISION:
                 with engine.begin() as connection:
                     config = Config()
                     config.set_main_option(

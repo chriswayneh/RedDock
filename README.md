@@ -372,10 +372,13 @@ Phase 8 is still in development. Completed checkpoints include:
 - complete paginated inventories, evidence lists, and run histories
 - fail-closed release automation and native AMD64/ARM64 product verification
 - offline, integrity-checked SQLite backup and rollback-safe restore recovery
+- dormant, unregistered OIDC protocol validation and offline first-owner
+  bootstrap foundations
 
-Authentication is not enabled, and shared mode remains blocked. OIDC,
-administration, scaling, PostgreSQL disaster recovery, and production deployment
-hardening are still planned. See the [roadmap](ROADMAP.md) for the detailed status.
+Authentication is not enabled, and shared mode remains blocked. Authenticated
+routes, user administration, scaling, PostgreSQL disaster recovery, and
+production deployment hardening are still planned. See the
+[roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security
 

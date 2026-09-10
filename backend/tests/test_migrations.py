@@ -13,9 +13,10 @@ def test_fresh_database_is_stamped_at_the_current_head(environment: Path):
     with app.database.engine.connect() as connection:
         assert inspect(connection).has_table("dockyards")
         assert inspect(connection).has_table("security_audit_events")
+        assert inspect(connection).has_table("oidc_login_attempts")
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0003_security_audit"
+            == "0004_oidc_attempts"
         )
         assert connection.exec_driver_sql(
             "SELECT name FROM organizations WHERE id = 1"

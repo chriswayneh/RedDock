@@ -23,8 +23,10 @@ from app.targets import TargetError, TargetKind, normalize_target
 
 MAX_PUBLIC_ORIGIN_LENGTH = 512
 SESSION_COOKIE_NAME = "__Host-reddock_session"
+OIDC_TRANSACTION_COOKIE_NAME = "__Host-reddock_oidc"
 CSRF_HEADER_NAME = "X-RedDock-CSRF"
 SESSION_COOKIE_MAX_AGE = int(SESSION_LIFETIME.total_seconds())
+OIDC_TRANSACTION_COOKIE_MAX_AGE = 10 * 60
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
@@ -101,6 +103,19 @@ def _session_cookie(request: Request) -> str | None:
     return candidates[0]
 
 
+def oidc_transaction_cookie(request: Request) -> str | None:
+    """Extract one unquoted OIDC browser-binding token, rejecting ambiguity."""
+    candidates: list[str] = []
+    for header in request.headers.getlist("cookie"):
+        for item in header.split(";"):
+            name, separator, value = item.partition("=")
+            if separator and name.strip() == OIDC_TRANSACTION_COOKIE_NAME:
+                candidates.append(value)
+    if len(candidates) != 1 or not is_browser_session_token(candidates[0]):
+        return None
+    return candidates[0]
+
+
 def authenticate_browser_request(
     session: Session,
     request: Request,
@@ -139,6 +154,31 @@ def clear_browser_session_cookie(response: Response) -> None:
     """Expire the bearer cookie using the same host-only security attributes."""
     response.delete_cookie(
         key=SESSION_COOKIE_NAME,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def set_oidc_transaction_cookie(response: Response, token: str) -> None:
+    """Bind a future callback to one browser for at most ten minutes."""
+    if not is_browser_session_token(token):
+        raise BrowserSecurityError("OIDC transaction token is malformed")
+    response.set_cookie(
+        key=OIDC_TRANSACTION_COOKIE_NAME,
+        value=token,
+        max_age=OIDC_TRANSACTION_COOKIE_MAX_AGE,
+        path="/",
+        secure=True,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def clear_oidc_transaction_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=OIDC_TRANSACTION_COOKIE_NAME,
         path="/",
         secure=True,
         httponly=True,

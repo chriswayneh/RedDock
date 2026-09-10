@@ -157,6 +157,14 @@ These primitives are not an enabled authentication system:
 - Local mode rejects public-origin configuration. Central response hardening
   denies framing and browser capabilities, blocks content sniffing and referrer
   disclosure, and marks every API response `no-store`.
+- A dormant, unregistered OIDC client validates deployment-owned endpoint
+  origins, bounded discovery/JWKS/token responses, authorization-code PKCE,
+  one-use browser-bound login state, and asymmetric issuer/audience/nonce/time
+  claims. It retains no provider tokens or profile claims and does not enable
+  sign-in or `server` mode.
+- The next enablement checkpoint still needs application-scoped provider/JWKS
+  caching, cross-worker database rate limits, session idle/touch/rotation,
+  callback and administration routes, TLS proxy trust, and end-to-end tests.
 
 #### Automated review
 

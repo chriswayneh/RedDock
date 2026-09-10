@@ -36,7 +36,6 @@ Server mode will fail startup unless every mandatory control is configured:
 - One exact public origin and exact trusted Host names.
 - OIDC authorization-code flow with PKCE, state, and nonce validation. RedDock
   will not store user passwords in the first server-mode release.
-- A high-entropy session secret supplied through a mounted secret file.
 - TLS termination at a trusted reverse proxy, strict proxy-header handling, and
   `Secure`, `HttpOnly`, same-site session cookies.
 - Server-side sessions stored as hashes, with rotation, expiry, revocation, and
@@ -53,8 +52,9 @@ public origin cannot silently leave the local unauthenticated API enabled.
 Phase 8 adds:
 
 - `Organization`: tenant and policy boundary.
-- `User`: profile synchronized from a verified OIDC issuer/subject pair. Email
-  is display/contact data, never the stable identity key.
+- `User`: an identity provisioned and matched only by its verified OIDC
+  issuer/subject pair. Provider profile claims are not retained by the first
+  authentication checkpoint.
 - `Membership`: a user's role and status in an organization.
 - `Dockyard.organization_id`: mandatory owner for engagement state.
 - `Session`: expiring and revocable; only a token hash is retained server-side.

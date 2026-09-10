@@ -14,7 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from app.orm import Base
 
 
 class Organization(Base):
@@ -97,6 +97,32 @@ class BrowserSession(Base):
         DateTime(timezone=True), index=True, nullable=False
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OidcLoginAttempt(Base):
+    """One short-lived, one-use OIDC authorization-code transaction."""
+
+    __tablename__ = "oidc_login_attempts"
+    __table_args__ = (
+        CheckConstraint("length(state_hash) = 64", name="ck_oidc_attempt_state_hash"),
+        CheckConstraint(
+            "length(browser_token_hash) = 64", name="ck_oidc_attempt_browser_token_hash"
+        ),
+        CheckConstraint("length(nonce_hash) = 64", name="ck_oidc_attempt_nonce_hash"),
+        CheckConstraint(
+            "length(pkce_verifier) BETWEEN 43 AND 128", name="ck_oidc_attempt_pkce_verifier"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    state_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    browser_token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    nonce_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    pkce_verifier: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=False
+    )
 
 
 class SecurityAuditEvent(Base):
