@@ -22,6 +22,7 @@ app/browser_security.py exact HTTPS origin and secure session-cookie contract
 app/response_security.py uniform response headers and API no-store policy
 app/security_audit.py bounded, tenant-scoped security-event writer and reader
 app/evidence.py     hashed evidence storage
+app/backup.py       offline SQLite backup, verification, restore, and recovery
 ```
 
 A discovery adapter may contact a target after DockGuard allows it. A detector
@@ -74,6 +75,16 @@ mounted Compose secret, PostgreSQL has no host port, and CI proves the migration
 head and CRUD behavior against a real server. This remains a loopback-only
 validation profile, not the future authenticated server mode. See
 [Optional PostgreSQL](../docs/POSTGRESQL.md).
+
+The default SQLite package has a separate offline maintenance path. It packages
+the database and retained evidence together, verifies archive hashes, SQLite
+integrity and migration state, and database-backed evidence references, then
+supports a staged rollback-safe restore. A recovery marker blocks startup after
+an interrupted replacement until explicit recovery. The database and evidence
+are separate paths, so this is not described as one crash-atomic filesystem
+transaction. POSIX file and directory flushes order the recovery state; native
+Windows host operation does not promise sudden-power-loss ordering. See
+[SQLite backup and restore](../docs/BACKUP_RESTORE.md).
 
 Phase 8 also defines the deny-by-default owner, admin, operator, auditor, and
 viewer permission sets. Every API method/path is classified as public or bound

@@ -1,0 +1,61 @@
+# Offline SQLite maintenance only. Always combine this file with compose.yaml,
+# stop the application first, and use `run --rm --no-deps` as documented.
+x-reddock-maintenance: &reddock-maintenance
+  image: ${REDDOCK_MAINTENANCE_IMAGE:-reddock:maintenance}
+  build:
+    context: .
+  entrypoint: ["python", "-m", "app.backup"]
+  command: ["--help"]
+  user: "999:999"
+  network_mode: none
+  read_only: true
+  tmpfs:
+    # Worst-case stdin verification holds a bounded 4.125 GiB archive plus a
+    # bounded 2 GiB extracted database and private-operation overhead.
+    - /tmp:rw,noexec,nosuid,nodev,size=8589934592,mode=1777
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  pids_limit: 32
+  restart: "no"
+  profiles:
+    - maintenance
+
+services:
+  reddock-backup:
+    <<: *reddock-maintenance
+    # Linux operators set this to `id -u`; group 999 retains read access to
+    # the application-owned volume while the host user owns the 0600 export.
+    user: "${REDDOCK_MAINTENANCE_UID:-999}:999"
+    volumes:
+      - reddock-data:/var/lib/reddock:ro
+      - type: bind
+        source: ${REDDOCK_BACKUP_DIR:-./backups}
+        target: /backups
+
+  reddock-verify:
+    <<: *reddock-maintenance
+    user: "${REDDOCK_MAINTENANCE_UID:-999}:999"
+    volumes:
+      - type: bind
+        source: ${REDDOCK_BACKUP_DIR:-./backups}
+        target: /backups
+        read_only: true
+
+  reddock-restore:
+    <<: *reddock-maintenance
+    volumes:
+      - reddock-data:/var/lib/reddock
+      - type: bind
+        source: ${REDDOCK_BACKUP_DIR:-./backups}
+        target: /backups
+        read_only: true
+
+  reddock-recover:
+    <<: *reddock-maintenance
+    volumes:
+      - reddock-data:/var/lib/reddock
+
+volumes:
+  reddock-data:

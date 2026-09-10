@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, Engine
@@ -57,6 +58,12 @@ def get_session() -> Iterator[Session]:
 
 
 def initialize_database() -> None:
+    settings = get_settings()
+    if settings.database_password is None and settings.database_url.startswith("sqlite:///"):
+        from app.backup import assert_no_incomplete_restore
+
+        database_path = Path(settings.database_url.removeprefix("sqlite:///"))
+        assert_no_incomplete_restore(database_path.resolve().parent)
     # Import before migration so the current target metadata is registered.
     from app import models  # noqa: F401
     from app.migration_runner import upgrade_database

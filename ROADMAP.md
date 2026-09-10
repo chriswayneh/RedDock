@@ -83,6 +83,10 @@ sign-in, SSO, and shared-user access are not available yet.
   attested AMD64/ARM64 container image and GitHub Release.
 - **Native platform checks:** both AMD64 and ARM64 GitHub runners now build the
   production image and complete the same discovery-through-reporting smoke test.
+- **Recoverable local data:** the default SQLite package has an offline,
+  integrity-checked backup format, a networkless least-privilege maintenance
+  overlay, rollback-safe staged restore, and POSIX-ordered interrupted-restore
+  recovery that blocks application startup until an operator resolves it.
 - **Reliability and safety fixes:** the September 7 checkpoint strengthens
   target exclusions, limits slow web checks, prevents duplicate validation
   approvals, and improves interrupted-run recovery and report consistency. It
@@ -106,7 +110,9 @@ service.** Unsupported deployment modes remain blocked.
 ### Still needed before release
 
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
-- **Operational readiness:** complete deployment, backup and restore, and scaling.
+- **Operational readiness:** complete PostgreSQL disaster recovery, production
+  deployment, and scaling validation. Continue recovery drills for the shipped
+  SQLite procedure.
 - **End-to-end and independent review:** test the complete experience and
   address review findings. Passing automated checks is not a security certification.
 
@@ -123,6 +129,14 @@ service.** Unsupported deployment modes remain blocked.
   database-backed readiness probe separate from process liveness.
 - Explicit no-LLM default and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle;
   this does not mark all Phase 8 platform work complete.
+- Offline SQLite archives bind the database and retained evidence with strict
+  portable manifests and SHA-256 hashes. Verification checks SQLite integrity,
+  known migration state, and database-backed evidence references. Restore uses
+  staged same-volume replacements plus an ordered recovery marker. POSIX paths
+  receive file and directory durability flushes; native Windows host operation
+  does not claim sudden-power-loss ordering. Because the database and evidence
+  are separate paths, neither mode claims one crash-atomic filesystem
+  transaction.
 
 #### Identity and session groundwork
 
@@ -176,7 +190,7 @@ that refuses requests unless its security requirements are satisfied.
 
 Phase 8 is complete only when identity and browser controls are integrated
 with OIDC and route authentication, and administration, deployment,
-backup/restore, scaling, and operational requirements are documented and
+PostgreSQL recovery, scaling, and remaining operational requirements are documented and
 validated end to end.
 
 </details>

@@ -184,6 +184,10 @@ Open [http://localhost:8080](http://localhost:8080). Process liveness is at [htt
 
 Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
 
+Protect that volume with the [offline SQLite backup, verification, restore, and
+recovery procedure](docs/BACKUP_RESTORE.md). Backups contain sensitive assessment
+evidence and are not encrypted.
+
 > **Use Compose, and do not publish port 8080 beyond loopback.** The command above binds `127.0.0.1:8080`. Local mode has no sign-in, so anything that can reach the API can add scope and start discovery runs. Publishing the port yourself — `docker run -p 8080:8080`, a `0.0.0.0` bind, or a proxy forwarding a permitted `Host` — exposes that unauthenticated API to your network and is not a supported deployment.
 
 ### Optional intelligence provider
@@ -330,6 +334,7 @@ docs/          Architecture decisions and project documentation
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
 | [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
 | [PostgreSQL](docs/POSTGRESQL.md) | Private Compose profile, secret handling, and current deployment boundary |
+| [SQLite backup and restore](docs/BACKUP_RESTORE.md) | Offline verified backups, rollback-safe restore, and interrupted-restore recovery |
 | [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
 | [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
 | [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
@@ -366,10 +371,11 @@ Phase 8 is still in development. Completed checkpoints include:
 - hardened responses, readiness checks, and dependency scanning
 - complete paginated inventories, evidence lists, and run histories
 - fail-closed release automation and native AMD64/ARM64 product verification
+- offline, integrity-checked SQLite backup and rollback-safe restore recovery
 
 Authentication is not enabled, and shared mode remains blocked. OIDC,
-administration, scaling, backup/restore, and production deployment hardening
-are still planned. See the [roadmap](ROADMAP.md) for the detailed status.
+administration, scaling, PostgreSQL disaster recovery, and production deployment
+hardening are still planned. See the [roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security
 

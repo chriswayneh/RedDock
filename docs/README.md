@@ -13,6 +13,7 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 | Know what is finished and what is not | [Roadmap](../ROADMAP.md) and [changelog](../CHANGELOG.md) |
 | Add optional AI advice | [Local and configurable AI](LOCAL_AI.md) |
 | Understand downloaded reports | [DockPack format and verification](DOCKPACK.md) |
+| Protect or recover local data | [SQLite backup and restore](BACKUP_RESTORE.md) |
 | Review security or disclose a vulnerability | [Security policy](../SECURITY.md) and [threat model](THREAT_MODEL.md) |
 | Explore advanced configuration | [PostgreSQL](POSTGRESQL.md), [lab controls](LAB_MODE.md), and [data-only detector plugins](../plugins/README.md) |
 | Prepare an official release | [Release process](RELEASING.md) |
