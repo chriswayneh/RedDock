@@ -1273,7 +1273,7 @@ def test_create_refuses_evidence_links(tmp_path: Path) -> None:
     except OSError:
         pytest.skip("creating symlinks is unavailable on this host")
 
-    with pytest.raises(BackupError, match="non-link"):
+    with pytest.raises(BackupError, match="cannot contain links"):
         create_backup(data, tmp_path / "backup.zip")
 
 
