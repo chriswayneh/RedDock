@@ -32,7 +32,7 @@ deployment is secure.
 
 ## Safety controls
 
-**Scope enforcement**
+### Scope enforcement
 
 - DockGuard is evaluated on the server for every discovery request, and again immediately before the adapter is invoked. A validation request is also re-evaluated at approval time, immediately before its fixed recheck. Frontend checks are convenience only.
 - Exclusions always override inclusions, and a Dockyard with no scope denies everything.
@@ -40,7 +40,7 @@ deployment is secure.
 - Denied requests are persisted as discovery runs so refused attempts remain auditable.
 - A scope entry may not cover more than 256 addresses (IPv4 /24, IPv6 /120), and a default route such as `0.0.0.0/0` is rejected. There is no internet-wide scanning mode.
 
-**Target handling**
+### Target handling
 
 - Targets are normalized to a single canonical form before comparison or execution. Integer, packed, zero-padded, and hexadecimal IP forms are rejected as ambiguous, including a name built only from numeric components such as `0x7f000001`, which a C resolver would read as `127.0.0.1`.
 - A canonical target may contain only `[A-Za-z0-9._:/-]` and can never begin with `-`.
@@ -49,7 +49,7 @@ deployment is secure.
 - Resolution is opt-in, records the resolved addresses as evidence, and refuses when a resolved address is explicitly excluded. Adapters contact the recorded address rather than the name.
 - IPv4-mapped IPv6 DNS answers are rejected before execution so alternate address representations cannot bypass IPv4 exclusions.
 
-**Tool execution**
+### Tool execution
 
 - Argument vectors are generated internally from a fixed table of approved options. No operator-supplied flag reaches a tool, and adapters re-check every variable value before building the vector.
 - Processes are started with `shell=False`; no command string is ever concatenated.
@@ -59,7 +59,7 @@ deployment is secure.
 - One absolute HTTP deadline spans connection, TLS, every underlying response read, and HEAD-to-GET fallback; a continuously trickling peer cannot reset the total budget.
 - HTTPS probes require TLS 1.2 or newer for both verified and certificate-observation handshakes. RedDock does not weaken its client policy to enumerate obsolete protocol support.
 
-**Validation**
+### Validation
 
 - Phase 3 validation is not a target-entry or tool-selection feature. It can only recheck an eligible, open `http.security_headers` finding at the HTTP origin already recorded on that finding.
 - Requesting validation stores intent and makes no network contact. A separate local operator approval note is required before RedDock makes the recheck, and that approval does not itself prove authorization to assess a system. Like every other state-changing route, the request is JSON, so a page the operator merely has open cannot submit it as a plain cross-origin form and spend this Dockyard's fixed validation budget.
@@ -68,16 +68,16 @@ deployment is secure.
 - The validator reuses the fixed HTTP probe: a bodyless `HEAD`, with one standards-required `GET` fallback for `405` or `501`; it accepts no URL, payload, credential, cookie, command, flag, redirect, response body, crawler, or browser automation.
 - A result is `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. It never changes the original finding's severity, confidence, or operator status.
 
-**Lab mode**
+### Lab mode
 
 - Lab capability requires two independent gates: the deployment owner must enable a process-level switch that the API cannot change, and an operator must create a 5–120 minute authorization for one capability and Dockyard using the exact acknowledgement shown in the Lab console.
 - The current lab profile accepts exactly one effective host only, including after hostname resolution, and uses a fixed TCP connect scan of Nmap's top 1,000 ports with bounded version detection. It still has no scripts, UDP, OS detection, evasion, credential testing, brute force, payload, exploit, or operator-supplied flag.
 - RedDock rechecks the deployment switch, active authorization, single-host constraint, and DockGuard immediately before execution. A network target is refused even when it is in ordinary DockGuard scope.
 - Authorization, request, execute, deny, and revoke decisions are append-only audit events. Expiration, supersession, revocation, and denial do not erase history.
 
-**Detection**
+### Detection
 
-- Detection reads only what RedDock already recorded. A detector receives an immutable snapshot of one Dockyard and is given no database session, no socket, no subprocess, no target, and no operator-supplied option, so there is nothing for it to reach, execute, or widen. `tests/test_detection_contract.py` parses the detection package and fails the build if a detector imports anything that could.
+- Detection reads only what RedDock already recorded. A detector receives an immutable snapshot of one Dockyard and is given no database session, socket, subprocess, target, or operator-supplied option. `tests/test_detection_contract.py` rejects the defined imports and capabilities that could cross this boundary.
 - A detection request carries no parameters at all. There is no target field, no detector selection, and no options, so no operator string reaches a detector.
 - Built-in detectors are registered explicitly in code. Optional Phase 7 extensions are bounded, deployment-owned JSON rules loaded outside the detection package; they cannot name a module, command, URL, template, target, or tool, and there is no dynamic import, `eval`, or `exec` anywhere in the detection package.
 - The complete plugin set is schema-checked and frozen at startup. Symlinks, path escapes, duplicate JSON keys or IDs, unknown fields, excessive sizes, and IDs outside the `plugin.` namespace fail startup closed. The API and detection evidence expose each manifest's SHA-256; a manifest still requires human review because data can author a misleading claim without executing code.
@@ -87,7 +87,7 @@ deployment is secure.
 - Ratings are stated conservatively and separately. Severity and confidence are distinct fields, missing hardening headers are reported as `low`, and RedDock produces no risk score, CVSS vector, or aggregate rating because it does not compute one.
 - RedDock downloads no CVE data. Enrichment is off unless an operator supplies a local catalogue, matches only an exact product and version, and never changes a finding's severity, confidence, or status.
 
-**Correlation**
+### Correlation
 
 - Correlation reads one Dockyard's stored state and accepts an empty request body. It has no target, network or process capability, selector, weighting, dynamic rule, or operator-supplied option.
 - Asset relationships require exact equality between a web asset's recorded address and a host asset's normalized identity, plus the observation and retained discovery hash that support it.
@@ -95,7 +95,7 @@ deployment is secure.
 - Fixed CWE mappings classify existing detector rules only; they never create a finding or alter severity, confidence, status, or validation outcome.
 - RedPath is not attack-path analysis. It does not claim reachability, exploitability, causation, likelihood, or aggregate risk, and correlation output is capped at 5,000 edges per snapshot.
 
-**Intelligence**
+### Intelligence
 
 - Intelligence is disabled unless an operator supplies a provider base URL and model through deployment configuration. Provider credentials may come from a mounted secret file or the backward-compatible process variable; they are masked in settings and are never accepted by the API, stored, returned to the browser, retained as evidence, or logged.
 - Creating a run makes no provider request. It freezes and hashes the exact versioned packet from active, evidence-linked findings in the latest completed correlation; the browser displays that JSON and the destination before a separate approval note can send it.
@@ -104,7 +104,7 @@ deployment is secure.
 - Provider output must match a strict schema and may cite only finding IDs and evidence hashes in the reviewed packet. Unknown or duplicate references fail the run as a whole.
 - Output is retained, hashed advice only. It cannot alter a finding, trigger validation or discovery, invoke a tool, modify scope, or apply remediation. An operator remains responsible for reviewing both the advice and a provider's data-handling terms.
 
-**Reporting and DockPack exports**
+### Reporting and DockPack exports
 
 - Reporting reads one Dockyard's stored state and accepts an empty request body. It has no target, provider, prompt, output path, filename, selector, command, network, or process capability.
 - A snapshot is refused while source discovery, detection, validation, or correlation work is active. Pending intelligence packets may be included as retained input, while only completed, hash-verified advice is included as output.
@@ -114,7 +114,7 @@ deployment is secure.
 - Stored text remains untrusted and is placed in delimiter-safe literal code spans before Markdown rendering, including in portable exports. Reports are evidence summaries, not HTML, executable content, vulnerability verdicts, or aggregate risk scores.
 - A DockPack can contain targets, service banners, finding details, validation and lab authorization notes, lab policy decisions, model advice, and other assessment evidence. Treat it as potentially sensitive engagement data: review it before sharing, store it with access controls, and verify its manifest before extraction.
 
-**Evidence and data**
+### Evidence and data
 
 - Evidence paths are built from integer identifiers and a validated artifact name, and each resolved destination is confirmed to be inside its run directory before a write.
 - Raw artifacts are capped at 2 MiB and marked when truncated.
@@ -123,7 +123,7 @@ deployment is secure.
 - Discovery commits inventory, observations, evidence references, and completion together after successful file writes. A write failure rolls back partial inventory, preventing detection from consuming an observation before its evidence reference exists.
 - Every finding is traceable to the observations it was drawn from, the discovery run that recorded them, and the hash of the retained artifact they came from.
 
-**Runtime**
+### Runtime
 
 - The production container runs as an unprivileged `reddock` user, with no `privileged: true`, no added capabilities, and no `network_mode: host`. Nmap therefore runs unprivileged and uses TCP connect scanning; RedDock does not request raw-socket capabilities to enable features it does not need. The RedDock service drops every Linux capability, which it can afford because it binds an unprivileged port and TCP-connect scanning needs none. Every Compose service, RedDock and the optional PostgreSQL and Ollama sidecars alike, sets `no-new-privileges`, so a process inside a container cannot acquire privilege it did not start with. The sidecars keep the capabilities their official entry points use to initialize a data directory and drop to their own unprivileged user; dropping those would stop them starting at all.
 - SQLite data and evidence are held in a named volume by default. The optional PostgreSQL profile uses a separate named volume and a private service with no host port; its password is mounted as a Compose secret. None of this state is baked into the image.
@@ -144,12 +144,12 @@ deployment is secure.
   registered, and server mode still fails startup.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
-- No secrets are checked into this repository.
+- Secrets must not be committed. GitHub secret scanning and push protection check the public repository for likely credentials.
 - GitHub push protection and secret scanning are enabled, while a pinned CodeQL `security-extended` matrix analyzes workflow, frontend, and backend languages on changes and weekly. CodeQL receives read-only contents plus only the `security-events: write` permission required to publish results. PyPA `pip-audit` and npm audit also fail CI for known Python-runtime or high-severity frontend dependency vulnerabilities. Dependabot checks GitHub Actions, Docker, npm, and pip weekly; minor and patch updates are grouped, major updates stay isolated, and no update is auto-merged.
 
 ## What RedDock does not do
 
-RedDock contains no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, autonomous AI action, automated remediation, or automated external report delivery. No operator-supplied script or shell command is executed anywhere in the product.
+Supported RedDock workflows contain no exploitation, credential testing, brute force, injection testing, payload execution, evasion, persistence, lateral movement, post-exploitation, attack-path analysis, autonomous AI action, automated remediation, or automated external report delivery. They do not execute operator-supplied scripts or shell commands.
 
 It performs no exploitation or broad active vulnerability testing. Detection, correlation, and reporting reason over data an earlier, non-invasive discovery already recorded; they send nothing. RedPath visualizes evidence-linked relationships, not attack reachability. Phase 3 can only recheck the limited HTTP transport/header conditions it owns through an approval-gated, fixed, bodyless HTTP-origin probe. Phase 5 can send a separately approved evidence packet to a configured model for advice, but provides no action channel. Phase 6 can export the retained record for operator-controlled handling but cannot upload, email, publish, or transmit it. A finding therefore remains a conclusion from evidence, not a claim that RedDock exploited a system: a version banner is a disclosure rather than a vulnerability, and a CVE association or CWE classification is never a statement that a service is exploitable.
 

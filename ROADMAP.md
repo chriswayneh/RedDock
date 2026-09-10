@@ -6,39 +6,39 @@ You can already run RedDock locally, define allowed targets, collect observation
 
 The latest release is **v0.8.0 (Phase 7)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
 
-Before that release, the review backlog includes complete lists and counts beyond 100 rows and more resilient page loading. Production identity, deployment, backup/restore, and operational verification still need end-to-end completion. The detailed checkpoints below distinguish shipped features from that remaining work.
+Current work focuses on connecting the dormant identity and session foundations into a complete sign-in flow, adding administration, and proving the PostgreSQL, proxy, recovery, scaling, and deployment paths end to end. The checkpoints below separate what works now from what still needs to be finished.
 
-## Completed — Phase 0: Foundation
+## Phase 0: Foundation (complete)
 
 Containerized application, React UI shell, FastAPI API, OpenAPI 3.1 schema and Swagger UI explorer, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
 
-## Completed — Phase 1: Discovery
+## Phase 1: Discovery (complete)
 
 DockGuard scope definitions, asset/service/observation models, the Nmap and HTTP discovery adapters, discovery-run auditing, and the RedLedger evidence foundation. Scoped discovery now produces auditable asset observations with hashed evidence. Released as v0.2.0 and finalized in v0.2.1.
 
-## Completed — Phase 2: Detection
+## Phase 2: Detection (complete)
 
 Normalized findings, the detector contract and registry, detection runs, deduplication by stable fingerprint, a finding lifecycle that resolves rather than deletes, and the CVE enrichment boundary. Observations now become traceable findings without fabricating data: a finding names the detector and rule that produced it, cites the observations it was drawn from, and carries the hashes that verify them. Released as v0.3.0.
 
 RedDock ships no CVE data. Enrichment is a boundary with a local, operator-supplied catalogue behind it, and a catalogue match is an association rather than a conclusion. See [ADR 0007](docs/adr/0007-cve-enrichment-is-an-association.md).
 
-## Completed — Phase 3: Validation
+## Phase 3: Validation (complete)
 
 Controlled non-destructive validation is now limited to one fixed HTTP-origin recheck for an eligible open `http.security_headers` finding. Creating a request makes no network contact; a separate local approval note is required, DockGuard re-evaluates the recorded origin immediately before the probe, and a raw/normalized/metadata/manifest evidence package is SHA-256 hashed. Outcomes are `confirmed`, `not_reproduced`, or `indeterminate`, with confidence stated separately. There are no payloads, credentials, arbitrary URLs, redirects, response bodies, or commands. Released as v0.4.0.
 
-## Completed — Phase 4: Correlation
+## Phase 4: Correlation (complete)
 
 Finding correlation, exact-address asset relationships, fixed CWE mappings, and the RedPath visualization are implemented. Correlation reads stored state only, accepts no target or tuning parameters, and retains a hashed snapshot. Every displayed relationship states its basis and carries the discovery evidence hash or hashes that support it; it does not infer exploitability, reachability, or aggregate risk. Released as v0.5.0.
 
-## Completed — Phase 5: Intelligence
+## Phase 5: Intelligence (complete)
 
 Optional local or cloud OpenAI-compatible analysis now produces remediation and prioritization advice from stored, evidence-linked findings. Creating a run freezes and hashes the exact packet without contacting a provider; a separate approval note is required after review, and provider identity is bound to that approval. Output is schema-checked against the packet's finding IDs and evidence hashes, retained as hashed advice, and cannot change findings, targets, scope, tools, or commands. RedDock remains fully functional with intelligence disabled. Released as v0.6.0.
 
-## Completed — Phase 6: Reporting
+## Phase 6: Reporting (complete)
 
 Technical and executive reports, evidence manifests, and portable DockPack exports are implemented. A report freezes one bounded Dockyard snapshot, re-verifies every database-referenced source artifact against its retained SHA-256, and produces deterministic Markdown, JSON, a manifest, and a byte-reproducible ZIP without contacting a target or model. Downloads are hash-checked again before delivery. Released as v0.7.0.
 
-## Completed — Phase 7: Advanced / Lab
+## Phase 7: Advanced / Lab (complete)
 
 The first capability is a fixed, single-host extended
 TCP service-discovery profile guarded by both deployment opt-in and a separate,
@@ -51,9 +51,9 @@ Portable lab-audit provenance is included in reporting and DockPacks, and real
 Phase 7 screenshots are published. The final security review and complete
 CI/Docker test matrix passed. Released as v0.8.0.
 
-## Phase 8 — Production polish
+## Phase 8: Production polish
 
-**Status: in progress—not released.**
+**Status: in progress, not released.**
 
 The goal is to make RedDock more reliable to operate and prepare it for future
 team use. Today it remains a **local, single-operator application**. Working
@@ -87,7 +87,7 @@ sign-in, SSO, and shared-user access are not available yet.
   integrity-checked backup format, a networkless least-privilege maintenance
   overlay, rollback-safe staged restore, and POSIX-ordered interrupted-restore
   recovery that blocks application startup until an operator resolves it.
-- **Reliability and safety fixes:** the September 7 checkpoint strengthens
+- **Reliability and safety fixes:** current protections strengthen
   target exclusions, limits slow web checks, prevents duplicate validation
   approvals, and improves interrupted-run recovery and report consistency. It
   also stops another website from starting a validation through your browser,
@@ -98,7 +98,7 @@ sign-in, SSO, and shared-user access are not available yet.
   Exact compact port lists are retained as evidence; count-only summaries never
   become guessed inventory, and newly closed ports do not fill the service list.
 
-### Foundations built—not yet enabled for users
+### Foundations built but not enabled
 
 Supporting code exists for organizations, user profiles, role-based permissions,
 and secure browser sessions. These pieces still need to be connected into a
@@ -116,7 +116,7 @@ service.** Unsupported deployment modes remain blocked.
 - **End-to-end and independent review:** test the complete experience and
   address review findings. Passing automated checks is not a security certification.
 
-### Technical details for reviewers
+### Technical details
 
 <details>
 <summary>Expand implementation checkpoints and security boundaries</summary>
@@ -177,7 +177,7 @@ These primitives are not an enabled authentication system:
 - Native AMD64 and ARM64 container jobs run the complete production smoke path,
   including the gated lab profile and packaged detector provenance.
 
-#### September 7 regression checkpoint
+#### Reliability fixes
 
 - Mapped-IPv6 exclusion bypass and slow-response HTTP worker exhaustion fixed.
 - Overlapping validation approvals prevented; interrupted validation recovered.

@@ -2,7 +2,7 @@
 
 All notable changes to RedDock are documented here.
 
-## Unreleased — Phase 8 Production polish
+## Unreleased: Phase 8 Production polish
 
 ### Added
 
@@ -214,7 +214,7 @@ All notable changes to RedDock are documented here.
 - Fresh and legacy migration tests prove local identity seeding, non-null
   Dockyard ownership, idempotency, and fail-closed unknown-schema handling
 
-## [0.8.0] — 2026-09-05 — Phase 7 Advanced / Lab
+## [0.8.0] - 2026-09-05 - Phase 7 Advanced / Lab
 
 ### Added
 
@@ -261,7 +261,7 @@ All notable changes to RedDock are documented here.
   lab gate, executes the fixed lab profile against container loopback only,
   revokes the grant, and verifies the policy ledger inside the downloaded DockPack
 
-## [0.7.0] — Phase 6 Reporting
+## [0.7.0] - Phase 6 Reporting
 
 ### Added
 
@@ -288,7 +288,7 @@ All notable changes to RedDock are documented here.
 - Frontend coverage for report generation, previews, manifest display, downloads, empty request bodies, and stale Dockyard response protection
 - The end-to-end Docker smoke test now creates two unchanged report snapshots and verifies identical hashes plus the downloaded DockPack bytes
 
-## [0.6.0] — Phase 5 Intelligence
+## [0.6.0] - Phase 5 Intelligence
 
 ### Added
 
@@ -309,7 +309,7 @@ All notable changes to RedDock are documented here.
 - Model output is advice only and cannot modify finding state, trigger validation, widen scope, invoke a tool, or perform remediation
 - Stored strings are treated as untrusted data, and output that cites an unknown finding or evidence hash fails closed
 
-## [0.5.0] — Phase 4 Correlation
+## [0.5.0] - Phase 4 Correlation
 
 ### Added
 
@@ -329,7 +329,7 @@ All notable changes to RedDock are documented here.
 - Exact identifier equality is the only asset-linking rule, and correlation does not claim attack reachability, exploitability, causation, or risk
 - Snapshot edge count is capped at 5,000 per Dockyard
 
-## [0.4.0] — Phase 3 Validation
+## [0.4.0] - Phase 3 Validation
 
 Phase 3 adds a deliberately narrow path to recheck a conclusion without turning
 RedDock into a general-purpose scanner.
@@ -353,7 +353,7 @@ RedDock into a general-purpose scanner.
 - Only an open eligible finding may be requested, requests are bounded per Dockyard, and scope removal between request and approval denies the attempt before any contact
 - An approval is a local audit assertion, not proof of external authorization; DockGuard remains the technical scope boundary
 
-## [0.3.0] — Phase 2 Detection
+## [0.3.0] - Phase 2 Detection
 
 Observations can now become findings. They remain separate concepts: an observation states what an adapter saw, a finding states what one named detector concluded from one or more of them, and a finding that cites no observation is refused rather than stored.
 
@@ -401,7 +401,7 @@ Observations can now become findings. They remain separate concepts: an observat
 - A version test asserting the application, the API, and both packages report one version
 - The end-to-end smoke test now covers detection, findings, evidence traceability, and deduplication
 
-## [0.2.1] — Phase 1 Discovery, finalized
+## [0.2.1] - Phase 1 Discovery, finalized
 
 Phase 1 remains as released in 0.2.0; this is a corrective patch release.
 
@@ -415,7 +415,7 @@ Phase 1 remains as released in 0.2.0; this is a corrective patch release.
 
 - No change to DockGuard, discovery, inventory, or evidence behaviour
 
-## [0.2.0] — Phase 1 Discovery
+## [0.2.0] - Phase 1 Discovery
 
 ### Added
 
@@ -449,7 +449,7 @@ Phase 1 remains as released in 0.2.0; this is a corrective patch release.
 - Schema-upgrade test proving Phase 0 data survives the Phase 1 schema
 - Frontend tests covering scope, DockGuard decisions, and discovery gating
 
-## [0.1.0] — Phase 0 Foundation
+## [0.1.0] - Phase 0 Foundation
 
 ### Added
 

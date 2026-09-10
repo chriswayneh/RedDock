@@ -4,6 +4,13 @@
 
 RedDock helps you collect security observations, explain what they mean, and share the evidence. This guide runs a small demonstration against RedDock itself. You do not need to write code, scan your home network, or sign up for an AI service.
 
+By the end, you will have:
+
+- RedDock running only on your computer
+- a demonstration Dockyard with recorded observations and findings
+- a RedPath view and downloadable report package
+- a safe way to stop and resume without deleting your data
+
 ## Before you start
 
 - Use a computer where you are allowed to install and run software.
@@ -23,11 +30,15 @@ docker compose up --build
 
 The first command downloads the project. The second enters its folder. The third builds and starts it. These commands use the latest `master` checkout, which includes unfinished Phase 8 work; the latest tagged release is v0.8.0.
 
-Leave that terminal open. Once startup finishes, open [RedDock in your browser](http://localhost:8080). An empty dashboard is expected: the app does not secretly scan anything or come populated with someone else's data.
+Leave that terminal open. Startup is complete when the output says the application is running and the health check has settled. Then open [RedDock in your browser](http://localhost:8080). An empty dashboard is expected: the app does not scan anything until you ask it to, and it does not come populated with someone else's data.
 
 If you already downloaded the repository, use its existing folder instead of cloning a second copy.
 
-> **Start it with Compose, and do not publish port 8080 to every interface.** The supported command above binds RedDock to `127.0.0.1:8080`, so only your own machine can reach it. RedDock in local mode has no sign-in: anything that can reach the API can add scope and start discovery runs. Publishing the port yourself — `docker run -p 8080:8080`, a `0.0.0.0` bind, or a reverse proxy forwarding a permitted `Host` — hands that unauthenticated API to your whole network, and is not a supported deployment.
+> **Keep RedDock on your computer.** Use the Compose command above. It binds RedDock to `127.0.0.1:8080`, which keeps the current account-free API on your machine. Do not publish it to your network or the internet.
+
+Advanced network settings such as `docker run -p 8080:8080`, a `0.0.0.0`
+bind, a public tunnel, or a reverse proxy can expose the API. Those setups are
+not supported while sign-in is unfinished.
 
 ## 2. Create a demonstration workspace
 
@@ -39,9 +50,13 @@ Scope is your allowlist, not permission from a system's owner. For real assessme
 
 ## 3. Collect observations and look for findings
 
-1. Open **Discovery**. Choose the HTTP adapter and its HTTP probe profile (`http_probe`). Enter `http://127.0.0.1:8080`, click **Check with DockGuard**, and then click **Run discovery** once allowed. This tab needs its own check even if you already tested the target in Scope.
-2. Wait for the run to complete. **Assets**, **Services**, and **Observations** show what was recorded.
-3. Open **Detection** and select **Run detection**. Then open **Findings** to inspect the results and their evidence.
+1. Open **Discovery**.
+2. Choose the **HTTP** adapter and the `http_probe` profile.
+3. Enter `http://127.0.0.1:8080`.
+4. Select **Check with DockGuard**. This tab needs its own check even if you already checked the target under Scope.
+5. When the result says `ALLOWED`, select **Run discovery**.
+6. Wait for the run to finish. **Assets**, **Services**, and **Observations** now show what RedDock recorded.
+7. Open **Detection** and select **Run detection**. Then open **Findings** to inspect the results and their evidence.
 
 A finding is a rule's conclusion, not proof that someone can break in. A missing security header is not the same as a compromised server. Zero findings is also a valid result; it means these checks did not produce findings, not that the system has no vulnerabilities. Results may differ from screenshots as the application changes.
 
@@ -53,7 +68,7 @@ A finding is a rule's conclusion, not proof that someone can break in. A missing
 2. Open **Reporting**, select the same Dockyard, and choose **Generate report set** after source runs finish.
 3. Read the executive and technical previews. Open the readable manifest for a list of supporting files, or download the **DockPack** ZIP to retain the reports and evidence together.
 
-The executive report is the management handoff; the technical report and source files let a reviewer inspect the basis for it. File hashes act like digital fingerprints to detect changed bytes. They do not establish that every conclusion is correct or certify security. Treat real assessment exports as sensitive; review them before sharing.
+The plain-language report summarizes the result. The technical report and source files show the details behind it. File hashes act like digital fingerprints that reveal changed bytes; they do not prove that every conclusion is correct or certify security. Treat real assessment exports as sensitive and review them before sharing.
 
 Click the RedDock name/logo to return to the main dashboard.
 
@@ -67,7 +82,7 @@ docker compose down
 
 Your default local database and evidence stay in Docker's named data volume. To resume, open a terminal in the same RedDock folder and run `docker compose up --build`, then reopen the browser link.
 
-Do not add `-v` to the shutdown command unless you intend to delete that stored data. Docker volume cleanup can also delete it. Persistent storage is not a backup; do not make this evaluation setup the only copy of important assessment evidence.
+Do not add `-v` to the shutdown command unless you intend to delete that stored data. Docker volume cleanup can also delete it. Persistent storage is not a backup; do not make this local setup the only copy of important assessment evidence.
 
 ## Finding your way around
 
@@ -137,4 +152,4 @@ For help, collect the error and your Docker version. Review logs and screenshots
 
 ## What comes next?
 
-Try the local demo before adding real, explicitly authorized targets. RedDock is currently best evaluated in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8--production-polish) still has known work around UI recovery and production operations. Working accounts, SSO, and shared-user deployments are not available yet.
+Try the local demo before adding real, explicitly authorized targets. RedDock is currently best used in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8-production-polish) still has known work around authentication and production operations. Working accounts, SSO, and shared-user deployments are not available yet.
