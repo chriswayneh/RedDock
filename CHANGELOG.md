@@ -55,9 +55,8 @@ All notable changes to RedDock are documented here.
   Swagger, OpenAPI, SPA deep links, bundle paths, and rejected-Host headers.
   The existing strict application CSP remains in place; its documentation
   exception applies only to successfully served, explicitly enabled docs.
-- A plain-English first-run walkthrough, documentation reading paths, benefit-led
-  product overview, and CISO/recruiter evaluation guide, with explicit local-only
-  limits and a clickable screenshot tour.
+- A plain-English first-run walkthrough, documentation reading paths, personal
+  project overview, explicit local-only limits, and a clickable screenshot tour.
 - A source-backed threat model and accepted identity/tenancy architecture that
   preserve the loopback local workflow while requiring a separate fail-closed
   authenticated server mode
