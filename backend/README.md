@@ -4,6 +4,23 @@
 
 This package contains RedDock Core's FastAPI application: the API, DockGuard scope enforcement, the discovery adapters, the detectors, and SQLAlchemy persistence with SQLite by default and packaged PostgreSQL support. Run it via the repository's Docker Compose workflow, or install it locally for development with Python 3.13.
 
+## Security posture for operators and reviewers
+
+| Mode or boundary | Status | Practical meaning |
+| --- | --- | --- |
+| Default local mode | Supported | Loopback-only, account-free operation with Host restrictions. Anyone who can reach the API has local-owner authority, so do not expose it to a network. |
+| Optional PostgreSQL | Supported for local use | Private persistence and real-server migration coverage. It does not add authentication or make shared deployment safe. |
+| Tenant and role enforcement | Enforced in the API | Routes are permission-classified and data loaders require an organization context. Today that context is always the reserved local owner. |
+| OIDC and browser sessions | Dormant | Protocol, cookie, CSRF, session, audit, and first-owner primitives are testable but not registered on any route. |
+| Authenticated server mode | Blocked | Startup refuses `REDDOCK_DEPLOYMENT_MODE=server` until the remaining identity, proxy, lifecycle, administration, scaling, and end-to-end gates are complete. |
+
+Least privilege is applied where the current package can enforce it. The
+application container is non-root, drops all Linux capabilities, accepts no
+operator-created shell command, and gives detectors no network or process
+handle. Zero trust means browser input, provider documents, target output,
+model output, and stored artifacts are validated at their boundaries. It does
+not mean the unfinished server mode is production-ready.
+
 ```text
 app/targets.py      target parsing and normalization
 app/dockguard.py    scope evaluation and decisions
