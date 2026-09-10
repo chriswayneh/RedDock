@@ -4,7 +4,7 @@
 
 **Discover. Validate. Prove.**
 
-**A local security workbench I build in my spare time.**
+**A local security workbench built in my spare time.**
 
 I use RedDock to explore controlled security checks, explainable findings, and evidence that stays connected to the result.
 
