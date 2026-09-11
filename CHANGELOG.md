@@ -113,6 +113,9 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- Require state-specific recovery confirmation: prepared restores accept only
+  `--confirm-rollback`, while committed restores accept only
+  `--confirm-finalize` before old rollback copies are deleted.
 - SQLite maintenance runs without a network, ports, capabilities, or a writable
   container root. Backup creation mounts application data read-only; verification
   and restore mount archive input read-only; output replacement requires an

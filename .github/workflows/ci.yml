@@ -197,7 +197,7 @@ jobs:
             exit 1
           fi
           "${compose[@]}" run --rm --no-deps reddock-recover recover \
-            --data-dir /var/lib/reddock --confirm-offline --confirm-rollback
+            --data-dir /var/lib/reddock --confirm-offline --confirm-finalize
 
           docker run -d --name "$ready_container" --network none \
             --cap-drop ALL --security-opt no-new-privileges \
