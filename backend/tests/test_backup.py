@@ -985,6 +985,43 @@ def test_restore_rolls_back_both_paths_when_replacement_fails(
     assert not list(target.glob(".*.rollback-*"))
 
 
+def test_restore_preserves_rollbacks_when_commit_directory_fsync_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _make_data(tmp_path / "source", "source", b"source evidence")
+    archive = tmp_path / "backup.zip"
+    create_backup(source, archive)
+    target = _make_data(tmp_path / "target", "target", b"target evidence")
+    real_replace = backup.os.replace
+    real_fsync_directory = backup._fsync_directory
+    committed_marker_replaced = False
+    failure_raised = False
+
+    def track_committed_marker(source_path: Path, destination_path: Path) -> None:
+        nonlocal committed_marker_replaced
+        real_replace(source_path, destination_path)
+        if Path(destination_path) == target / backup.RESTORE_MARKER:
+            committed_marker_replaced = True
+
+    def fail_commit_directory_fsync(path: Path) -> None:
+        nonlocal failure_raised
+        if committed_marker_replaced and Path(path) == target and not failure_raised:
+            failure_raised = True
+            raise OSError("simulated commit-directory fsync failure")
+        real_fsync_directory(path)
+
+    monkeypatch.setattr(backup.os, "replace", track_committed_marker)
+    monkeypatch.setattr(backup, "_fsync_directory", fail_commit_directory_fsync)
+
+    with pytest.raises(BackupError, match="commit durability is uncertain"):
+        restore_backup(target, archive, confirm_replace=True)
+
+    assert _read_database(target / "reddock.db") == "source"
+    assert (target / "evidence" / "dockyard" / "artifact.json").read_bytes() == b"source evidence"
+    assert list(target.glob(".*.rollback-*"))
+    assert (target / backup.RESTORE_MARKER).exists()
+
+
 def test_restore_orders_tree_and_directory_durability_boundaries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1052,6 +1089,15 @@ def test_recover_rolls_back_a_prepared_interrupted_restore(tmp_path: Path) -> No
 
     with pytest.raises(BackupError, match="interrupted"):
         backup.assert_no_incomplete_restore(data)
+    with pytest.raises(BackupError, match="prepared.*confirm-rollback"):
+        backup.recover_restore(
+            data,
+            confirm_offline=True,
+            confirm_finalize=True,
+        )
+    assert old_database.exists()
+    assert old_evidence.exists()
+    assert (data / backup.RESTORE_MARKER).exists()
     assert backup.recover_restore(
         data,
         confirm_offline=True,
@@ -1080,6 +1126,17 @@ def test_recover_requires_an_explicit_offline_confirmation(tmp_path: Path) -> No
 
     with pytest.raises(BackupError, match="confirm-offline"):
         backup.recover_restore(data, confirm_rollback=True)
+
+    assert (data / backup.RESTORE_MARKER).exists()
+    with pytest.raises(BackupError, match="prepared.*confirm-rollback"):
+        backup.recover_restore(data, confirm_offline=True)
+    with pytest.raises(BackupError, match="only one state-specific confirmation"):
+        backup.recover_restore(
+            data,
+            confirm_offline=True,
+            confirm_rollback=True,
+            confirm_finalize=True,
+        )
 
     assert (data / backup.RESTORE_MARKER).exists()
 
@@ -1158,10 +1215,20 @@ def test_recover_finalizes_a_committed_interrupted_restore(tmp_path: Path) -> No
         create=True,
     )
 
+    with pytest.raises(BackupError, match="committed.*confirm-finalize"):
+        backup.recover_restore(
+            data,
+            confirm_offline=True,
+            confirm_rollback=True,
+        )
+    assert old_database.exists()
+    assert old_evidence.exists()
+    assert (data / backup.RESTORE_MARKER).exists()
+
     assert backup.recover_restore(
         data,
         confirm_offline=True,
-        confirm_rollback=True,
+        confirm_finalize=True,
     )
 
     assert _read_database(data / "reddock.db") == "restored"
@@ -1206,7 +1273,7 @@ def test_committed_recovery_preserves_rollbacks_when_live_evidence_is_invalid(
         backup.recover_restore(
             data,
             confirm_offline=True,
-            confirm_rollback=True,
+            confirm_finalize=True,
         )
 
     assert old_database.exists()

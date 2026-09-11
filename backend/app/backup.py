@@ -1460,12 +1460,13 @@ def recover_restore(
     data_dir: Path,
     *,
     confirm_offline: bool = False,
-    confirm_rollback: bool,
+    confirm_rollback: bool = False,
+    confirm_finalize: bool = False,
 ) -> bool:
     if not confirm_offline:
         raise BackupError("Recovery requires --confirm-offline after RedDock has been stopped")
-    if not confirm_rollback:
-        raise BackupError("Recovery requires --confirm-rollback")
+    if confirm_rollback and confirm_finalize:
+        raise BackupError("Recovery accepts only one state-specific confirmation")
     if _is_link(data_dir):
         raise BackupError("Data directory must be a regular, non-link directory")
     data_dir = data_dir.resolve()
@@ -1477,6 +1478,16 @@ def recover_restore(
     document = _load_restore_marker(data_dir)
     if document["had_evidence"] and not document["had_database"]:
         raise BackupError("Restore marker describes evidence without a database")
+    if document["state"] == "prepared" and not confirm_rollback:
+        raise BackupError(
+            "Interrupted restore is prepared; inspect the data, then rerun with "
+            "--confirm-rollback to restore the previous database and evidence"
+        )
+    if document["state"] == "committed" and not confirm_finalize:
+        raise BackupError(
+            "Interrupted restore is committed; inspect the restored data, then rerun with "
+            "--confirm-finalize to keep it and delete the previous rollback copies"
+        )
     token = str(document["token"])
     staging = data_dir / f".restore-{token}"
     old_database = data_dir / f".reddock.db.rollback-{token}"
@@ -1623,6 +1634,12 @@ def restore_backup(
         _write_restore_marker(marker, marker_document, create=False)
     except Exception as error:
         if marker_created:
+            recovery_state = _load_restore_marker(data_dir)["state"]
+            if recovery_state == "committed":
+                raise BackupError(
+                    "Restore reached committed state, but commit durability is uncertain; "
+                    "keep RedDock stopped and run recover to inspect the required action"
+                ) from error
             recover_restore(
                 data_dir,
                 confirm_offline=True,
@@ -1681,7 +1698,9 @@ def main() -> int:
     recover = subparsers.add_parser("recover", help="recover an interrupted restore")
     recover.add_argument("--data-dir", type=Path, required=True)
     recover.add_argument("--confirm-offline", action="store_true")
-    recover.add_argument("--confirm-rollback", action="store_true")
+    recovery_confirmation = recover.add_mutually_exclusive_group()
+    recovery_confirmation.add_argument("--confirm-rollback", action="store_true")
+    recovery_confirmation.add_argument("--confirm-finalize", action="store_true")
     arguments = parser.parse_args()
     try:
         if arguments.command == "create":
@@ -1711,6 +1730,7 @@ def main() -> int:
                 arguments.data_dir,
                 confirm_offline=arguments.confirm_offline,
                 confirm_rollback=arguments.confirm_rollback,
+                confirm_finalize=arguments.confirm_finalize,
             )
             print("Recovered interrupted restore" if recovered else "No interrupted restore found")
     except BackupError as error:

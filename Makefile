@@ -1,4 +1,4 @@
-.PHONY: up up-ai up-postgres up-postgres-ai down down-ai down-postgres build logs test test-backend test-frontend lint smoke backup-sqlite verify-sqlite-backup restore-sqlite-backup recover-sqlite-restore reset-data
+.PHONY: up up-ai up-postgres up-postgres-ai down down-ai down-postgres build logs test test-backend test-frontend lint smoke backup-sqlite verify-sqlite-backup restore-sqlite-backup recover-sqlite-restore rollback-sqlite-restore finalize-sqlite-restore reset-data
 
 BACKUP_FILE ?= reddock-backup.rdbackup
 BACKUP_HOST_DIR ?= $(if $(REDDOCK_BACKUP_DIR),$(REDDOCK_BACKUP_DIR),./backups)
@@ -57,7 +57,15 @@ restore-sqlite-backup: down
 
 recover-sqlite-restore: down
 	docker compose -f compose.yaml -f compose.maintenance.yaml build reddock-recover
+	docker compose -f compose.yaml -f compose.maintenance.yaml run --rm --no-deps reddock-recover recover --data-dir /var/lib/reddock --confirm-offline
+
+rollback-sqlite-restore: down
+	docker compose -f compose.yaml -f compose.maintenance.yaml build reddock-recover
 	docker compose -f compose.yaml -f compose.maintenance.yaml run --rm --no-deps reddock-recover recover --data-dir /var/lib/reddock --confirm-offline --confirm-rollback
+
+finalize-sqlite-restore: down
+	docker compose -f compose.yaml -f compose.maintenance.yaml build reddock-recover
+	docker compose -f compose.yaml -f compose.maintenance.yaml run --rm --no-deps reddock-recover recover --data-dir /var/lib/reddock --confirm-offline --confirm-finalize
 
 lint:
 	docker run --rm -v "$(CURDIR)/backend:/workspace" -w /workspace python:3.13-slim sh -c "pip install ruff && python -m ruff check app tests"
