@@ -4,9 +4,9 @@
 
 **Discover. Validate. Prove.**
 
-**A local security workbench built in my spare time.**
+**A local security workbench I’m building for my own use.**
 
-I use RedDock to explore controlled security checks, explainable findings, and evidence that stays connected to the result.
+I’m building RedDock to run controlled security checks, investigate findings, and produce reports with evidence I can trace back to each result.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -53,7 +53,7 @@ I keep it open source under the MIT license so other curious builders and securi
 
 ### Why I am building it
 
-RedDock is my hands-on place to learn, experiment, and turn security ideas into a tool I can actually run. I am especially interested in a few questions:
+I want a security workbench that keeps scope, findings, and evidence together in one workflow. These questions guide how I build it:
 
 - Can active checks stay narrow, explicit, and easy to audit?
 - Can a finding keep a clear trail back to the evidence behind it?
