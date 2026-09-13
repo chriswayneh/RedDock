@@ -6,6 +6,11 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A dormant trusted-ingress boundary for future server mode. It accepts one
+  exact HTTPS forwarding hop only from explicitly configured proxy addresses,
+  rejects ambiguous or conflicting forwarding headers, and records a verified
+  client address for later database-backed throttling. Uvicorn's implicit
+  proxy-header interpretation is disabled.
 - A dormant OIDC authorization-code foundation with strict future-server
   configuration, explicit HTTPS endpoint-origin allowlisting, bounded
   no-redirect discovery/JWKS/token exchange, PKCE/state/nonce transactions,

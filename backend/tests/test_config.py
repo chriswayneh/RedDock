@@ -151,9 +151,7 @@ def test_provider_key_file_and_direct_value_are_mutually_exclusive(
         get_settings()
 
 
-def _dormant_server_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> dict[str, str]:
+def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     client_secret = tmp_path / "oidc-client-secret"
     client_secret.write_text("confidential-client-secret", encoding="utf-8")
     database_secret = tmp_path / "database-secret"
@@ -165,6 +163,7 @@ def _dormant_server_environment(
         "REDDOCK_OIDC_CLIENT_SECRET_FILE": str(client_secret),
         "REDDOCK_OIDC_ENDPOINT_ORIGINS": "https://identity.example,https://keys.example",
         "REDDOCK_SERVER_ORGANIZATION_SLUG": "example-team",
+        "REDDOCK_TRUSTED_PROXY_CIDRS": "10.20.0.2,2001:db8:20::2/128",
         "REDDOCK_DATABASE_HOST": "postgres",
         "REDDOCK_DATABASE_PORT": "5432",
         "REDDOCK_DATABASE_NAME": "reddock",
@@ -191,6 +190,7 @@ def test_dormant_server_identity_contract_parses_without_enabling_server(
         "https://identity.example",
         "https://keys.example",
     )
+    assert parsed.trusted_proxy_cidrs == ("10.20.0.2/32", "2001:db8:20::2/128")
     assert "confidential-client-secret" not in repr(parsed)
 
     monkeypatch.setenv("REDDOCK_DEPLOYMENT_MODE", "server")
@@ -222,6 +222,9 @@ def test_dormant_server_identity_preserves_a_canonical_trailing_slash_issuer(
         ("REDDOCK_OIDC_ENDPOINT_ORIGINS", "https://identity.example,http://keys.example", "HTTPS"),
         ("REDDOCK_OIDC_ENDPOINT_ORIGINS", "https://keys.example", "issuer origin"),
         ("REDDOCK_SERVER_ORGANIZATION_SLUG", "local", "non-reserved"),
+        ("REDDOCK_TRUSTED_PROXY_CIDRS", "0.0.0.0/0", "at most 65536"),
+        ("REDDOCK_TRUSTED_PROXY_CIDRS", "10.20.0.2,10.20.0.2/32", "duplicates"),
+        ("REDDOCK_TRUSTED_PROXY_CIDRS", "proxy.internal", "invalid address"),
     ],
 )
 def test_dormant_server_identity_rejects_unsafe_values(

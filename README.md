@@ -360,6 +360,8 @@ Phase 8 is still in development. Completed checkpoints include:
 - offline, integrity-checked SQLite backup and rollback-safe restore recovery
 - dormant, unregistered OIDC protocol validation and offline first-owner
   bootstrap foundations
+- a dormant, exact one-hop trusted-proxy contract with implicit proxy-header
+  interpretation disabled
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
 routes, user administration, scaling, PostgreSQL disaster recovery, and

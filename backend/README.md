@@ -146,11 +146,14 @@ unsafe method, exactly one Origin and CSRF header; both proofs must match the
 same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`; these
 helpers remain unused until the complete OIDC/session route boundary is ready.
 
-The next dormant layer validates an all-or-none future server identity
-configuration without permitting `server` mode. It requires PostgreSQL,
+The next dormant layer validates an all-or-none future server identity and
+ingress configuration without permitting `server` mode. It requires PostgreSQL,
 canonical HTTPS public and issuer URLs, a mounted confidential-client secret,
-and an explicit deployment-owned allowlist for every discovery-returned
-endpoint origin. The isolated OIDC client uses authorization code plus PKCE,
+an explicit deployment-owned allowlist for every discovery-returned endpoint
+origin, and one to sixteen bounded proxy address ranges. Uvicorn does not trust
+proxy headers by default. The dedicated ingress middleware accepts one exact
+HTTPS forwarding hop only from a configured proxy address. The isolated OIDC
+client uses authorization code plus PKCE,
 bounded no-redirect HTTP, one-use browser-bound database transactions, and
 asymmetric ID-token validation. It requests only `openid`, retains no provider
 profile claims or tokens, and resolves only an exact pre-provisioned
@@ -160,7 +163,7 @@ authorization still always selects the reserved local owner.
 Before server mode can be enabled, the provider/cache must be application
 scoped, pending-login and request rate limits must be database-enforced across
 workers, and browser sessions need a reviewed idle-expiry/touch/rotation policy.
-TLS proxy trust, callback/error routes, administration, and end-to-end
+A packaged TLS proxy, callback/error routes, administration, and end-to-end
 PostgreSQL concurrency tests remain release blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
