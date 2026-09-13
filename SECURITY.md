@@ -155,9 +155,14 @@ deployment is secure.
   validation failures make a best-effort attempt to record bounded denial
   events, and expected failures reveal no provider, database, identity, or
   session detail. No auth route or UI calls this code, and server mode
-  remains disabled. Before activation, the application must prove that the
-  explicitly supplied lifecycle engine matches the validated server database
-  configuration and must bound its statement and lock waits.
+  remains disabled. The configured dormant lifespan builds an owned primary
+  database runtime from the same validated server configuration and gives its
+  engine to the coordinator. Startup verifies the effective login, database,
+  search path, and timeout policy. Connection, checkout, statement, lock,
+  idle-transaction, and transaction waits are bounded, and shutdown disposes
+  the owned engine. This does not narrow the main role, which still runs
+  migrations and accesses application data. It does not enable a route, UI, or
+  server mode.
 - Future authentication throttling uses atomic database updates shared across
   workers. A global bucket is checked before any client bucket, counters stop at
   their fixed limit, client and identity values are protected by a

@@ -14,9 +14,15 @@ All notable changes to RedDock are documented here.
   burned before token exchange, and post-burn exchange and ID-token validation
   failures make a best-effort attempt to record bounded denial events.
   PostgreSQL concurrency proves one callback can issue at most one session. The
-  configured dormant lifespan requires its lifecycle database engine
-  explicitly. Local mode, Compose, routes, UI, and server-mode rejection are
+  configured dormant lifespan supplies its owned primary database engine to the
+  coordinator. Local mode, Compose, routes, UI, and server-mode rejection are
   unchanged.
+- An exact-config dormant primary PostgreSQL runtime that verifies the effective
+  database session policy, owns its engine and session factory, bounds
+  connection, checkout, statement, lock, idle-transaction, and transaction
+  waits, serializes migration and recovery startup, and disposes its engine at
+  shutdown. The main role still runs migrations. Current local and Compose
+  startup do not create this runtime.
 - A dormant, process-owned limiter capability that reads one server-only mounted
   key in canonical 64-character lowercase hexadecimal form and keeps it paired
   with an isolated, prewarmed two-connection PostgreSQL pool. Bounded checkout,

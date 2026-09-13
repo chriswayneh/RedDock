@@ -347,23 +347,30 @@ def _validate_legacy_baseline(connection: Connection) -> None:
         )
 
 
+def upgrade_database_connection(connection: Connection) -> None:
+    """Bootstrap and migrate using one caller-owned transaction connection."""
+
+    inspector = inspect(connection)
+    tables = set(inspector.get_table_names())
+    config = _config(connection)
+
+    if "alembic_version" not in tables:
+        if tables:
+            _create_missing_baseline_tables(connection)
+            _validate_legacy_baseline(connection)
+            command.stamp(config, BASELINE_REVISION)
+        else:
+            # Bootstrap the current model except objects whose migrations must
+            # validate ownership themselves. Earlier idempotent migrations still
+            # run so their data seeding is never skipped.
+            _create_bootstrap_tables(connection)
+            command.stamp(config, BASELINE_REVISION)
+
+    command.upgrade(config, "head")
+
+
 def upgrade_database(engine: Engine) -> None:
     """Bootstrap a released schema once, then apply every versioned migration."""
+
     with engine.begin() as connection:
-        inspector = inspect(connection)
-        tables = set(inspector.get_table_names())
-        config = _config(connection)
-
-        if "alembic_version" not in tables:
-            if tables:
-                _create_missing_baseline_tables(connection)
-                _validate_legacy_baseline(connection)
-                command.stamp(config, BASELINE_REVISION)
-            else:
-                # Bootstrap the current model except objects whose migrations must
-                # validate ownership themselves. Earlier idempotent migrations still
-                # run so their data seeding is never skipped.
-                _create_bootstrap_tables(connection)
-                command.stamp(config, BASELINE_REVISION)
-
-        command.upgrade(config, "head")
+        upgrade_database_connection(connection)

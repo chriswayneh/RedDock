@@ -346,19 +346,20 @@ The current identity boundary is intentionally incomplete. Local requests map
 to one explicit reserved owner because local mode is account-free and
 loopback-only. A future FastAPI process owns one dormant OIDC provider and its
 thread-safe metadata and signing-key caches for one application lifespan. The
-configured lifespan also owns one authentication coordinator that receives the
-process provider, isolated limiter, and an explicitly supplied lifecycle
-engine. It admits login before provider work, admits callback before consuming
+configured lifespan also owns a primary database runtime built from the same
+validated server configuration. That runtime owns the main engine and session
+factory, verifies its effective login, database, search path, and timeout
+policy, and supplies its engine to the authentication coordinator. It admits
+login before provider work, admits callback before consuming
 one-use state, burns that state before token exchange, validates the provider
 identity, locks and resolves an exact pre-provisioned membership, and issues an
 audited hash-only session. Expected failures cross this boundary only as a
 generic authentication failure. The shipped local application creates none of
 these resources. Dormant identity and session primitives do not change the
 current authorization boundary. Server mode continues to fail startup until
-authenticated context selection, HTTP and cookie integration, a lifecycle
-engine proven to match the validated server configuration, proxy trust,
-administration, bounded main-database waits, metrics, and end-to-end tenant
-tests are complete. Dormant login, callback, and
+authenticated context selection, HTTP and cookie integration, proxy trust,
+administration, metrics, capacity validation, and end-to-end tenant tests are
+complete. Dormant login, callback, and
 mutation limits use database-serialized global and subject buckets in a separate
 short transaction. Subjects are protected with a deployment-keyed HMAC before
 storage, and a denied global request never creates a new attacker-selected
@@ -400,6 +401,14 @@ guarantee database-wide capacity, and consistent HMAC-key distribution remains
 a separate deployment gate. No HTTP auth route or UI uses the coordinator, no
 protected route resolves its sessions, the shipped local and Compose paths are
 unchanged, and server mode remains disabled.
+
+The primary and limiter runtimes own separate pools. The primary runtime caps
+connection and checkout waits at five seconds and applies fixed statement,
+lock, idle-transaction, and transaction timeouts. It serializes migration and
+interrupted-work recovery with a PostgreSQL advisory lock, marks itself ready
+only after both complete, and disposes its engine at shutdown or failed startup.
+The primary role still runs migrations and accesses application data; only the
+limiter role has the bucket-only privilege contract.
 
 ## Trust boundaries
 

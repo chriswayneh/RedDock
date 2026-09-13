@@ -13,7 +13,13 @@ from app.api import router
 from app.authentication import AuthenticationRuntime, create_authentication_runtime
 from app.config import DormantServerRuntimeConfig, get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
-from app.database import SessionLocal, create_rate_limiter_runtime, initialize_database
+from app.database import (
+    PrimaryDatabaseRuntime,
+    SessionLocal,
+    create_rate_limiter_runtime,
+    create_server_primary_database_runtime,
+    initialize_database,
+)
 from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
@@ -29,6 +35,29 @@ STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 logger = logging.getLogger("reddock")
 
 
+def _recover_interrupted_work(session) -> None:
+    """Recover every workflow through the session owned by this lifespan."""
+
+    interrupted = recover_interrupted_runs(session)
+    detections = recover_interrupted_detections(session)
+    correlations = recover_interrupted_correlations(session)
+    intelligence = recover_interrupted_intelligence(session)
+    reports = recover_interrupted_reports(session)
+    validations = recover_interrupted_validations(session)
+    if interrupted:
+        logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
+    if detections:
+        logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
+    if correlations:
+        logger.warning("Marked %s correlation run(s) as interrupted by restart", correlations)
+    if intelligence:
+        logger.warning("Marked %s intelligence run(s) as interrupted by restart", intelligence)
+    if reports:
+        logger.warning("Marked %s report run(s) as interrupted by restart", reports)
+    if validations:
+        logger.warning("Marked %s validation run(s) as interrupted by restart", validations)
+
+
 def build_lifespan(
     server_config: DormantServerRuntimeConfig | None = None,
     *,
@@ -36,60 +65,46 @@ def build_lifespan(
     limiter_factory: Callable[
         [DormantServerRuntimeConfig], RateLimiterRuntime
     ] = create_rate_limiter_runtime,
+    primary_database_factory: Callable[
+        [DormantServerRuntimeConfig], PrimaryDatabaseRuntime
+    ] = create_server_primary_database_runtime,
     authentication_factory: Callable[
         [DormantServerRuntimeConfig, OidcProvider, RateLimiterRuntime, Engine],
         AuthenticationRuntime,
     ] = create_authentication_runtime,
-    lifecycle_engine: Engine | None = None,
 ):
     """Own future server resources once per application process and lifespan."""
-
-    if server_config is not None and not isinstance(lifecycle_engine, Engine):
-        raise ValueError("an explicit server lifecycle engine is required")
 
     @asynccontextmanager
     async def managed_lifespan(application: FastAPI):
         # Deployment-owned detector manifests are frozen and validated before the
         # service accepts traffic. A malformed extension fails startup closed.
         available_detectors()
-        initialize_database()
-        with SessionLocal() as session:
-            # A run that was in flight when the process stopped did not finish.
-            # Saying so is more useful than leaving it looking active forever, and a
-            # detection run left active would keep refusing the next one.
-            interrupted = recover_interrupted_runs(session)
-            detections = recover_interrupted_detections(session)
-            correlations = recover_interrupted_correlations(session)
-            intelligence = recover_interrupted_intelligence(session)
-            reports = recover_interrupted_reports(session)
-            validations = recover_interrupted_validations(session)
-        if interrupted:
-            logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
-        if detections:
-            logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
-        if correlations:
-            logger.warning("Marked %s correlation run(s) as interrupted by restart", correlations)
-        if intelligence:
-            logger.warning("Marked %s intelligence run(s) as interrupted by restart", intelligence)
-        if reports:
-            logger.warning("Marked %s report run(s) as interrupted by restart", reports)
-        if validations:
-            logger.warning("Marked %s validation run(s) as interrupted by restart", validations)
-
+        primary_database = None
         provider = None
         rate_limiter = None
         authentication_runtime = None
         try:
             if server_config is not None:
+                primary_database = primary_database_factory(server_config)
+                with primary_database.startup_session() as session:
+                    _recover_interrupted_work(session)
                 rate_limiter = limiter_factory(server_config)
                 provider = provider_factory(server_config)
                 authentication_runtime = authentication_factory(
                     server_config,
                     provider,
                     rate_limiter,
-                    lifecycle_engine,
+                    primary_database.engine,
                 )
+                application.state.primary_database_runtime = primary_database
                 application.state.authentication_runtime = authentication_runtime
+            else:
+                initialize_database()
+                with SessionLocal() as session:
+                    # A run that was in flight when the process stopped did not finish.
+                    # Recovery makes that terminal state explicit before serving traffic.
+                    _recover_interrupted_work(session)
             yield
         finally:
             try:
@@ -101,8 +116,14 @@ def build_lifespan(
                     if provider is not None:
                         provider.close()
                 finally:
-                    if rate_limiter is not None:
-                        rate_limiter.close()
+                    try:
+                        if rate_limiter is not None:
+                            rate_limiter.close()
+                    finally:
+                        if primary_database is not None:
+                            if hasattr(application.state, "primary_database_runtime"):
+                                del application.state.primary_database_runtime
+                            primary_database.close()
 
     return managed_lifespan
 

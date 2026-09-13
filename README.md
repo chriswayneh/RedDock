@@ -376,13 +376,17 @@ Phase 8 is still in development. Completed checkpoints include:
 - a dormant authentication coordinator that applies login and callback limits,
   consumes browser-bound OIDC state once, resolves only pre-provisioned active
   memberships, and issues audited hash-only sessions
+- a dormant primary PostgreSQL runtime built from the same validated server
+  configuration, with bounded database waits and one owned process lifecycle
 
 Authentication is not enabled, and shared mode remains blocked. No
 authentication route or UI calls this coordinator, no protected request
 resolves a browser session, and server mode still fails startup. HTTP auth and
 cookie wiring, authenticated request context, user administration, scaling,
 PostgreSQL disaster recovery, and production hardening are still planned. The
-current local and PostgreSQL Compose profiles remain unchanged.
+current local and PostgreSQL Compose profiles remain unchanged and create none
+of the dormant primary-database, limiter, provider, or authentication runtimes.
+
 Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
 tests cover issuance, touch, rotation, logout, membership revocation, cleanup,
 and limiter-pool isolation. See the [roadmap](ROADMAP.md) for the detailed
