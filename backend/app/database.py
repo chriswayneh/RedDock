@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -13,6 +13,11 @@ from app.orm import Base as Base
 POSTGRES_APPLICATION_POOL_SIZE = 5
 POSTGRES_APPLICATION_MAX_OVERFLOW = 10
 POSTGRES_APPLICATION_POOL_TIMEOUT_SECONDS = 5
+POSTGRES_SERVER_STATEMENT_TIMEOUT_MS = 120_000
+POSTGRES_SERVER_LOCK_TIMEOUT_MS = 5_000
+POSTGRES_SERVER_IDLE_TRANSACTION_TIMEOUT_MS = 660_000
+POSTGRES_SERVER_TRANSACTION_TIMEOUT_MS = 900_000
+POSTGRES_SERVER_STARTUP_LOCK_TIMEOUT_MS = 120_000
 POSTGRES_LIMITER_POOL_SIZE = 2
 POSTGRES_LIMITER_POOL_TIMEOUT_SECONDS = 2
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 5
@@ -328,6 +333,245 @@ def _application_engine(url: str | URL) -> Engine:
             pool_pre_ping=True,
         )
     return create_engine(url, **options)
+
+
+class PrimaryDatabaseUnavailable(RuntimeError):
+    """The future server database capability could not start safely."""
+
+    def __init__(self) -> None:
+        super().__init__("primary database runtime is unavailable")
+
+
+def _server_database_url(config: DormantServerRuntimeConfig) -> URL:
+    return URL.create(
+        "postgresql+psycopg",
+        username=config.database_user,
+        password=config.database_password.get_secret_value(),
+        host=config.database_host,
+        port=config.database_port,
+        database=config.database_name,
+    )
+
+
+def _server_application_engine(config: DormantServerRuntimeConfig) -> Engine:
+    """Build only from the validated component configuration, never ambient settings."""
+
+    return create_engine(
+        _server_database_url(config),
+        pool_size=POSTGRES_APPLICATION_POOL_SIZE,
+        max_overflow=POSTGRES_APPLICATION_MAX_OVERFLOW,
+        pool_timeout=POSTGRES_APPLICATION_POOL_TIMEOUT_SECONDS,
+        pool_pre_ping=True,
+        isolation_level="READ COMMITTED",
+        execution_options={"schema_translate_map": {None: "public"}},
+        connect_args={
+            "connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS,
+            "application_name": "reddock-server-main",
+            "options": (
+                f"-c statement_timeout={POSTGRES_SERVER_STATEMENT_TIMEOUT_MS} "
+                f"-c lock_timeout={POSTGRES_SERVER_LOCK_TIMEOUT_MS} "
+                "-c idle_in_transaction_session_timeout="
+                f"{POSTGRES_SERVER_IDLE_TRANSACTION_TIMEOUT_MS} "
+                f"-c transaction_timeout={POSTGRES_SERVER_TRANSACTION_TIMEOUT_MS} "
+                "-c search_path=pg_catalog,public"
+            ),
+        },
+    )
+
+
+def _primary_connection_is_exact(
+    connection: Connection,
+    *,
+    expected_user: str,
+    expected_database: str,
+) -> bool:
+    if connection.dialect.name != "postgresql":
+        return False
+    return (
+        connection.execute(
+            text(
+                """
+                SELECT
+                    current_user = :expected_user
+                    AND session_user = :expected_user
+                    AND current_database() = :expected_database
+                    AND current_setting('application_name') = 'reddock-server-main'
+                    AND current_setting('search_path') = 'pg_catalog,public'
+                    AND current_setting('statement_timeout')::interval =
+                        make_interval(secs => :statement_ms / 1000.0)
+                    AND current_setting('lock_timeout')::interval =
+                        make_interval(secs => :lock_ms / 1000.0)
+                    AND current_setting('idle_in_transaction_session_timeout')::interval =
+                        make_interval(secs => :idle_ms / 1000.0)
+                    AND current_setting('transaction_timeout')::interval =
+                        make_interval(secs => :transaction_ms / 1000.0)
+                """
+            ),
+            {
+                "expected_user": expected_user,
+                "expected_database": expected_database,
+                "statement_ms": POSTGRES_SERVER_STATEMENT_TIMEOUT_MS,
+                "lock_ms": POSTGRES_SERVER_LOCK_TIMEOUT_MS,
+                "idle_ms": POSTGRES_SERVER_IDLE_TRANSACTION_TIMEOUT_MS,
+                "transaction_ms": POSTGRES_SERVER_TRANSACTION_TIMEOUT_MS,
+            },
+        ).scalar_one()
+        is True
+    )
+
+
+class PrimaryDatabaseRuntime:
+    """Own the future server's exact-config primary engine and session factory."""
+
+    def __init__(self, config: DormantServerRuntimeConfig, engine: Engine) -> None:
+        if not isinstance(config, DormantServerRuntimeConfig) or not isinstance(engine, Engine):
+            raise ValueError("validated server configuration and owned engine are required")
+        self.__engine = engine
+        self.__sessions = sessionmaker(
+            bind=engine,
+            autoflush=False,
+            autocommit=False,
+        )
+        self.__expected_user = config.database_user
+        self.__expected_database = config.database_name
+        self.__ready = False
+        self.__closed = False
+
+    def __repr__(self) -> str:
+        return (
+            "PrimaryDatabaseRuntime("
+            f"ready={self.__ready}, closed={self.__closed})"
+        )
+
+    def _ensure_open(self) -> None:
+        if self.__closed:
+            raise PrimaryDatabaseUnavailable()
+
+    def attest(self) -> None:
+        """Prove the effective database identity and fixed session policy."""
+
+        self._ensure_open()
+        try:
+            with self.__engine.connect() as connection:
+                if not _primary_connection_is_exact(
+                    connection,
+                    expected_user=self.__expected_user,
+                    expected_database=self.__expected_database,
+                ):
+                    raise PrimaryDatabaseUnavailable()
+        except PrimaryDatabaseUnavailable:
+            raise
+        except SQLAlchemyError:
+            raise PrimaryDatabaseUnavailable() from None
+
+    @contextmanager
+    def startup_session(self) -> Iterator[Session]:
+        """Serialize migration and recovery, yielding one runtime-bound session."""
+
+        self._ensure_open()
+        if self.__ready:
+            raise PrimaryDatabaseUnavailable()
+        try:
+            from app.migration_runner import upgrade_database_connection
+
+            with self.__engine.connect() as connection:
+                if not _primary_connection_is_exact(
+                    connection,
+                    expected_user=self.__expected_user,
+                    expected_database=self.__expected_database,
+                ):
+                    raise PrimaryDatabaseUnavailable()
+                connection.commit()
+                lock_acquired = False
+                acquisition_uncertain = False
+                try:
+                    connection.execute(
+                        text("SELECT set_config('lock_timeout', :timeout, true)"),
+                        {"timeout": f"{POSTGRES_SERVER_STARTUP_LOCK_TIMEOUT_MS}ms"},
+                    )
+                    acquisition_uncertain = True
+                    connection.execute(
+                        text("SELECT pg_advisory_lock(1919247471, 1937011316)")
+                    ).scalar_one_or_none()
+                    lock_acquired = True
+                    acquisition_uncertain = False
+                    connection.commit()
+                    with connection.begin():
+                        upgrade_database_connection(connection)
+                    with Session(bind=connection) as session:
+                        yield session
+                finally:
+                    cleanup_failed = acquisition_uncertain
+                    try:
+                        if connection.in_transaction():
+                            connection.rollback()
+                    except SQLAlchemyError:
+                        cleanup_failed = True
+                    if lock_acquired and not cleanup_failed:
+                        try:
+                            unlocked = connection.execute(
+                                text("SELECT pg_advisory_unlock(1919247471, 1937011316)")
+                            ).scalar_one()
+                            if unlocked is not True:
+                                cleanup_failed = True
+                            else:
+                                connection.commit()
+                        except SQLAlchemyError:
+                            cleanup_failed = True
+                    if cleanup_failed:
+                        try:
+                            connection.invalidate()
+                        except SQLAlchemyError:
+                            pass
+                        raise PrimaryDatabaseUnavailable()
+                self.__ready = True
+        except Exception:
+            raise PrimaryDatabaseUnavailable() from None
+
+    @property
+    def engine(self) -> Engine:
+        self._ensure_open()
+        if not self.__ready:
+            raise PrimaryDatabaseUnavailable()
+        return self.__engine
+
+    def session(self) -> Session:
+        self._ensure_open()
+        if not self.__ready:
+            raise PrimaryDatabaseUnavailable()
+        return self.__sessions()
+
+    def close(self) -> None:
+        if self.__closed:
+            return
+        self.__closed = True
+        self.__ready = False
+        self.__engine.dispose()
+
+
+def create_server_primary_database_runtime(
+    config: DormantServerRuntimeConfig,
+) -> PrimaryDatabaseRuntime:
+    """Create and attest one exact-config future server database capability."""
+
+    if not isinstance(config, DormantServerRuntimeConfig):
+        raise ValueError("validated dormant server runtime configuration is required")
+    engine = None
+    runtime = None
+    try:
+        engine = _server_application_engine(config)
+        runtime = PrimaryDatabaseRuntime(config, engine)
+        runtime.attest()
+        return runtime
+    except (PrimaryDatabaseUnavailable, SQLAlchemyError):
+        try:
+            if runtime is not None:
+                runtime.close()
+            elif engine is not None:
+                engine.dispose()
+        except Exception:
+            pass
+        raise PrimaryDatabaseUnavailable() from None
 
 
 engine: Engine

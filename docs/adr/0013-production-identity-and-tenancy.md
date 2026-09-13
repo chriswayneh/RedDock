@@ -116,9 +116,10 @@ database secrets exist in one process. Database-wide capacity and consistent
 HMAC-key distribution remain separate operational gates.
 
 The dormant configured application lifespan composes one authentication
-coordinator from the process-owned provider, isolated limiter, and an explicitly
-supplied lifecycle engine. Login admission occurs before provider discovery and
-state creation. Callback admission occurs before one-use state consumption; the
+coordinator from the process-owned provider, isolated limiter, and the engine
+owned by an exact-config primary database runtime. Login admission occurs
+before provider discovery and state creation. Callback admission occurs before
+one-use state consumption; the
 state is then burned before token exchange. A verified token must map to an
 exact pre-provisioned issuer/subject membership, locked through session
 issuance, before an audited hash-only session is created. Post-burn provider
@@ -126,9 +127,14 @@ exchange and ID-token validation failures make a best-effort attempt to record
 bounded denial events. Expected failures are generic, with a retry interval
 only for a durable rate-limit denial. No HTTP route or UI invokes this
 coordinator, no protected request resolves its sessions, and server mode
-remains disabled. A future server composition must prove that the lifecycle
-engine matches the validated server database configuration and apply bounded
-statement and lock waits before activation.
+remains disabled. The primary runtime verifies its effective login, database,
+fixed search path, and timeout policy; owns its engine and session factory for
+the application lifespan; bounds connection, checkout, statement, lock,
+idle-transaction, and transaction waits; and disposes the engine at shutdown.
+Migration and interrupted-work recovery share one connection behind a fixed
+PostgreSQL advisory lock before the runtime is ready. The main role still runs
+migrations and retains application-data authority. This runtime is not a
+substitute for the separately credentialed limiter role.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
@@ -200,6 +206,9 @@ removing role change.
 - Authentication orchestration tests cover admission order, generic failures,
   provider outages, replay, unprovisioned identities, process lifecycle, and
   one-winner PostgreSQL callback concurrency.
+- Primary database tests cover exact-config construction, effective session
+  policy, bounded timeout options, serialized startup, owned session and engine
+  lifecycle, and cleanup after partial startup failure.
 - Logs and errors exclude cookies, authorization codes, client secrets, session
   tokens, and model credentials.
 - Server mode is not production-ready until PostgreSQL, migrations,

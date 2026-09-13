@@ -38,6 +38,7 @@ app/reporting/      deterministic reports, evidence manifests, and DockPack expo
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
 app/authentication.py dormant login and callback coordinator; no HTTP routes
+app/database.py      local persistence plus dormant owned PostgreSQL runtimes
 app/oidc.py         dormant OIDC protocol and identity-resolution boundary
 app/rate_limits.py  dormant cross-worker authentication throttling
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
@@ -165,8 +166,8 @@ shares signing-key refresh backoff across its request threads, and closes the
 owned client at shutdown. No auth router is registered and the current request
 authorization still always selects the reserved local owner.
 
-The dormant configured lifespan composes the provider, limiter, and an
-explicitly supplied lifecycle database engine behind one process-owned
+The dormant configured lifespan composes the provider, limiter, and the engine
+owned by its exact-config primary database runtime behind one process-owned
 authentication coordinator. Login admission happens before provider discovery
 or stored state. Callback admission happens before the one-use state is
 consumed, and that state is burned before token exchange. A verified,
@@ -175,9 +176,21 @@ exchange and token-validation failures make a best-effort attempt to record a
 bounded, typed denial event. Expected failures return one generic
 authentication error; only a
 durable rate-limit denial may carry a retry interval. This coordinator has no
-route or UI and does not authenticate current requests. A future server
-composition must prove that its lifecycle engine was built from the same
-validated database configuration before any route can be enabled.
+route or UI and does not authenticate current requests. It receives the engine
+owned by the same exact-config primary database runtime, so it cannot be paired
+with an unrelated ambient database engine.
+
+The dormant primary database runtime is constructed directly from the validated
+server configuration. It owns the main PostgreSQL engine and session factory
+for one application lifespan, verifies the effective login, database, search
+path, and timeout policy at startup, and disposes the engine at shutdown.
+Connection and pool checkout wait at most five seconds. Normal statements wait
+at most two minutes, locks five seconds, idle transactions eleven minutes, and
+transactions fifteen minutes. Migration and interrupted-work recovery share one
+connection behind a fixed PostgreSQL advisory lock before the runtime is marked
+ready. The main role still runs migrations and accesses normal application
+data. This is lifecycle and availability hardening, not a least-privilege
+replacement for the separate limiter role.
 
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
@@ -227,8 +240,8 @@ actual process count.
 
 Before server mode can be enabled, HTTP sign-in, callback, logout, cookie, and
 error handling; authenticated request context; a packaged TLS proxy;
-administration; metrics; capacity planning; bounded main-database lock and
-statement waits; and authenticated end-to-end tests remain release blockers.
+administration; metrics; capacity planning; and authenticated end-to-end tests
+remain release blockers.
 
 An operator or infrastructure tool must provision this role after migrations;
 RedDock migrations do not create or manage database logins. Rotate its password

@@ -188,6 +188,11 @@ These primitives are not an enabled authentication system:
   resolution, and audited hash-only session issuance. PostgreSQL concurrency
   proves that one callback state can issue at most one session. No route or UI
   calls it.
+- A dormant primary PostgreSQL runtime now comes from the exact validated server
+  configuration. It owns its engine and session factory for one process
+  lifespan, verifies its effective connection policy, serializes migration and
+  recovery startup, and bounds connection, checkout, statement, lock, idle, and
+  transaction waits. Local and Compose startup do not create it.
 - Dormant authentication throttling is serialized in PostgreSQL across workers.
   It admits through a global bucket before creating a client bucket, stores
   only deployment-keyed HMACs, owns a separate transaction, groups IPv6 clients
@@ -207,8 +212,8 @@ These primitives are not an enabled authentication system:
   RedDock migrations.
 - The next enablement checkpoint still needs HTTP sign-in, callback, logout,
   cookie, and error handling; authenticated request context; administration; a
-  packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; bounded
-  main-database waits; capacity planning; and end-to-end authenticated tests.
+  packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
+  capacity planning; and end-to-end authenticated tests.
 
 #### Automated review
 

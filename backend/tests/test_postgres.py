@@ -1096,3 +1096,131 @@ def test_postgresql_migrations_and_crud(
         monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'after-postgres.db'}")
         app.config.get_settings.cache_clear()
         app.database.configure_engine()
+
+
+def test_postgresql_primary_database_runtime_serializes_startup_and_bounds_locks():
+    url = os.getenv("REDDOCK_TEST_POSTGRES_URL")
+    if not url:
+        pytest.skip("REDDOCK_TEST_POSTGRES_URL is not configured")
+
+    from threading import Lock
+    from time import monotonic, sleep
+
+    from pydantic import SecretBytes, SecretStr
+    from sqlalchemy.engine import make_url
+
+    from app.config import DormantServerRuntimeConfig
+    from app.database import (
+        POSTGRES_SERVER_IDLE_TRANSACTION_TIMEOUT_MS,
+        POSTGRES_SERVER_LOCK_TIMEOUT_MS,
+        POSTGRES_SERVER_STATEMENT_TIMEOUT_MS,
+        POSTGRES_SERVER_TRANSACTION_TIMEOUT_MS,
+        PrimaryDatabaseUnavailable,
+        create_server_primary_database_runtime,
+    )
+
+    parsed = make_url(url)
+    config = DormantServerRuntimeConfig(
+        public_origin="https://reddock.example",
+        oidc_issuer="https://identity.example/realms/reddock",
+        oidc_client_id="reddock",
+        oidc_client_secret=SecretStr("integration-client-secret"),
+        oidc_endpoint_origins=("https://identity.example",),
+        organization_slug="integration-team",
+        database_host=parsed.host or "127.0.0.1",
+        database_port=parsed.port or 5432,
+        database_name=parsed.database or "reddock",
+        database_user=parsed.username or "reddock",
+        database_password=SecretStr(parsed.password or ""),
+        rate_limit_key=SecretBytes(bytes.fromhex("cd" * 32)),
+        rate_limit_database_user="unused_limiter_role",
+        rate_limit_database_password=SecretStr("unused-limiter-secret"),
+        server_workers=2,
+    )
+    runtimes = [create_server_primary_database_runtime(config) for _ in range(2)]
+    active = 0
+    maximum_active = 0
+    counter_lock = Lock()
+    start_barrier = Barrier(2)
+
+    def serialized_startup(runtime):
+        nonlocal active, maximum_active
+        start_barrier.wait(timeout=5)
+        with runtime.startup_session() as session:
+            assert session.execute(text("SELECT 1")).scalar_one() == 1
+            with counter_lock:
+                active += 1
+                maximum_active = max(maximum_active, active)
+            sleep(0.2)
+            with counter_lock:
+                active -= 1
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(serialized_startup, runtime) for runtime in runtimes]
+            for future in futures:
+                future.result(timeout=15)
+        assert maximum_active == 1
+
+        runtime = runtimes[0]
+        with runtime.session() as session:
+            policy = session.execute(
+                text(
+                    """
+                    SELECT
+                        current_user,
+                        current_database(),
+                        current_setting('application_name'),
+                        current_setting('search_path'),
+                        extract(epoch FROM current_setting('statement_timeout')::interval) * 1000,
+                        extract(epoch FROM current_setting('lock_timeout')::interval) * 1000,
+                        extract(
+                            epoch FROM current_setting(
+                                'idle_in_transaction_session_timeout'
+                            )::interval
+                        ) * 1000,
+                        extract(epoch FROM current_setting('transaction_timeout')::interval) * 1000
+                    """
+                )
+            ).one()
+        assert policy[0] == config.database_user
+        assert policy[1] == config.database_name
+        assert policy[2] == "reddock-server-main"
+        assert policy[3] == "pg_catalog,public"
+        assert tuple(int(value) for value in policy[4:]) == (
+            POSTGRES_SERVER_STATEMENT_TIMEOUT_MS,
+            POSTGRES_SERVER_LOCK_TIMEOUT_MS,
+            POSTGRES_SERVER_IDLE_TRANSACTION_TIMEOUT_MS,
+            POSTGRES_SERVER_TRANSACTION_TIMEOUT_MS,
+        )
+
+        probe = f"primary_runtime_lock_{uuid4().hex}"
+        admin_engine = create_engine(url)
+        try:
+            with admin_engine.begin() as connection:
+                connection.execute(text(f"CREATE TABLE {probe} (id integer PRIMARY KEY)"))
+                connection.execute(text(f"INSERT INTO {probe} (id) VALUES (1)"))
+            with admin_engine.connect() as blocker:
+                blocker_transaction = blocker.begin()
+                blocker.execute(text(f"SELECT id FROM {probe} WHERE id = 1 FOR UPDATE"))
+                started = monotonic()
+                with runtime.session() as session:
+                    with pytest.raises(SQLAlchemyError):
+                        session.execute(text(f"SELECT id FROM {probe} WHERE id = 1 FOR UPDATE"))
+                    session.rollback()
+                assert monotonic() - started < 8
+                blocker_transaction.rollback()
+            with runtime.session() as session:
+                assert session.execute(text(f"SELECT id FROM {probe}")).scalar_one() == 1
+        finally:
+            with admin_engine.begin() as connection:
+                connection.execute(text(f"DROP TABLE IF EXISTS {probe}"))
+            admin_engine.dispose()
+    finally:
+        for runtime in runtimes:
+            runtime.close()
+
+    with pytest.raises(PrimaryDatabaseUnavailable, match="unavailable") as closed:
+        runtimes[0].session()
+    assert closed.value.__cause__ is None
+    assert config.database_password.get_secret_value() not in repr(runtimes[0])

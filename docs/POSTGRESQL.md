@@ -86,6 +86,26 @@ These component settings take precedence over the legacy
 URL remains available for development and CI, but managed deployments should
 mount the password secret instead.
 
+## Future primary database runtime
+
+The dormant future-server path builds its primary PostgreSQL runtime directly
+from the validated component configuration and mounted main password. One
+application process owns that engine and session factory until shutdown. It
+verifies the effective login, database, fixed `pg_catalog,public` search path,
+and timeout policy before use.
+
+Connection and pool checkout wait at most five seconds. Normal statements wait
+at most two minutes, locks five seconds, idle transactions eleven minutes, and
+transactions fifteen minutes. Startup may wait up to two minutes for a fixed
+PostgreSQL advisory lock while migrations and interrupted-work recovery run on
+one owned connection. Failure closes the runtime without marking it ready.
+
+The authentication coordinator receives this owned engine. The main login still
+runs migrations and accesses normal RedDock tables; the separate limiter login
+remains the narrow bucket-only capability. This runtime is not created by the
+supported local or PostgreSQL Compose profiles. It registers no route and does
+not make server mode available.
+
 ## Future server connection budget
 
 The dormant server runtime accepts `REDDOCK_RATE_LIMIT_KEY_FILE` only when the
@@ -99,10 +119,10 @@ together.
 Each process can use up to 15 main database connections and reserves 2 more in
 an isolated, prewarmed limiter pool. PostgreSQL therefore needs at least 17
 connections per process plus headroom for migrations, administration,
-monitoring, and recovery. Pool checkout, database connection, statement, and
-lock waits are bounded; if a trustworthy limiter decision cannot be completed,
-the request is denied. Real PostgreSQL tests fill each pool and confirm that the
-other remains usable.
+monitoring, and recovery. Both pools bound connection, checkout, statement, and
+lock waits, with shorter limits on the limiter path. If a trustworthy limiter
+decision cannot be completed, the request is denied. Real PostgreSQL tests fill
+each pool and confirm that the other remains usable.
 
 ## Future limiter database role
 
