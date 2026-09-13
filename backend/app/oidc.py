@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import compare_digest
+from threading import RLock
 from typing import Any
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -115,11 +116,11 @@ def issue_login_attempt(
 ) -> IssuedLoginAttempt:
     """Create one bounded transaction after purging stale attempts."""
     issued_at = _as_utc(now or _now())
-    session.execute(
-        delete(OidcLoginAttempt).where(OidcLoginAttempt.expires_at <= issued_at)
-    )
+    session.execute(delete(OidcLoginAttempt).where(OidcLoginAttempt.expires_at <= issued_at))
     pending = session.scalar(
-        select(func.count()).select_from(OidcLoginAttempt).where(
+        select(func.count())
+        .select_from(OidcLoginAttempt)
+        .where(
             OidcLoginAttempt.expires_at > issued_at,
         )
     )
@@ -300,10 +301,16 @@ class OidcProvider:
         self._jwks: dict[str, Any] | None = None
         self._last_jwks_refresh: datetime | None = None
         self._jwks_loaded_at: datetime | None = None
+        self._cache_lock = RLock()
+        self._closed = False
 
     def close(self) -> None:
-        if self._owns_client:
-            self._client.close()
+        with self._cache_lock:
+            if self._closed:
+                return
+            self._closed = True
+            if self._owns_client:
+                self._client.close()
 
     def __enter__(self) -> OidcProvider:
         return self
@@ -376,59 +383,60 @@ class OidcProvider:
         return _decode_json(b"".join(chunks), label="provider response")
 
     def discovery(self) -> ProviderMetadata:
-        if self._metadata is not None:
-            return self._metadata
-        url = self._config.oidc_issuer.rstrip("/") + "/.well-known/openid-configuration"
-        document = self._json_request("GET", url, max_bytes=MAX_DISCOVERY_BYTES)
-        if document.get("issuer") != self._config.oidc_issuer:
-            raise OidcError("OIDC discovery issuer does not match configuration")
-        metadata = ProviderMetadata(
-            issuer=self._config.oidc_issuer,
-            authorization_endpoint=self._allowed_endpoint(
-                document.get("authorization_endpoint"), label="authorization endpoint"
-            ),
-            token_endpoint=self._allowed_endpoint(
-                document.get("token_endpoint"), label="token endpoint"
-            ),
-            jwks_uri=self._allowed_endpoint(document.get("jwks_uri"), label="JWKS endpoint"),
-            signing_algorithms=(),
-        )
-        methods = _bounded_string_list(
-            document.get("code_challenge_methods_supported"),
-            label="PKCE methods",
-        )
-        if "S256" not in methods:
-            raise OidcError("OIDC provider does not advertise PKCE S256")
-        algorithms = _bounded_string_list(
-            document.get("id_token_signing_alg_values_supported"),
-            label="ID-token algorithms",
-        )
-        advertised_algorithms = tuple(
-            sorted(ALLOWED_ID_TOKEN_ALGORITHMS.intersection(algorithms))
-        )
-        if not advertised_algorithms:
-            raise OidcError("OIDC provider has no allowed ID-token algorithm")
-        response_types = _bounded_string_list(
-            document.get("response_types_supported"),
-            label="response types",
-        )
-        if "code" not in response_types:
-            raise OidcError("OIDC provider does not advertise authorization code flow")
-        auth_methods = _bounded_string_list(
-            document.get("token_endpoint_auth_methods_supported"),
-            label="token endpoint authentication methods",
-        )
-        if "client_secret_basic" not in auth_methods:
-            raise OidcError("OIDC provider does not advertise client_secret_basic")
-        metadata = ProviderMetadata(
-            issuer=metadata.issuer,
-            authorization_endpoint=metadata.authorization_endpoint,
-            token_endpoint=metadata.token_endpoint,
-            jwks_uri=metadata.jwks_uri,
-            signing_algorithms=advertised_algorithms,
-        )
-        self._metadata = metadata
-        return metadata
+        with self._cache_lock:
+            if self._metadata is not None:
+                return self._metadata
+            url = self._config.oidc_issuer.rstrip("/") + "/.well-known/openid-configuration"
+            document = self._json_request("GET", url, max_bytes=MAX_DISCOVERY_BYTES)
+            if document.get("issuer") != self._config.oidc_issuer:
+                raise OidcError("OIDC discovery issuer does not match configuration")
+            metadata = ProviderMetadata(
+                issuer=self._config.oidc_issuer,
+                authorization_endpoint=self._allowed_endpoint(
+                    document.get("authorization_endpoint"), label="authorization endpoint"
+                ),
+                token_endpoint=self._allowed_endpoint(
+                    document.get("token_endpoint"), label="token endpoint"
+                ),
+                jwks_uri=self._allowed_endpoint(document.get("jwks_uri"), label="JWKS endpoint"),
+                signing_algorithms=(),
+            )
+            methods = _bounded_string_list(
+                document.get("code_challenge_methods_supported"),
+                label="PKCE methods",
+            )
+            if "S256" not in methods:
+                raise OidcError("OIDC provider does not advertise PKCE S256")
+            algorithms = _bounded_string_list(
+                document.get("id_token_signing_alg_values_supported"),
+                label="ID-token algorithms",
+            )
+            advertised_algorithms = tuple(
+                sorted(ALLOWED_ID_TOKEN_ALGORITHMS.intersection(algorithms))
+            )
+            if not advertised_algorithms:
+                raise OidcError("OIDC provider has no allowed ID-token algorithm")
+            response_types = _bounded_string_list(
+                document.get("response_types_supported"),
+                label="response types",
+            )
+            if "code" not in response_types:
+                raise OidcError("OIDC provider does not advertise authorization code flow")
+            auth_methods = _bounded_string_list(
+                document.get("token_endpoint_auth_methods_supported"),
+                label="token endpoint authentication methods",
+            )
+            if "client_secret_basic" not in auth_methods:
+                raise OidcError("OIDC provider does not advertise client_secret_basic")
+            metadata = ProviderMetadata(
+                issuer=metadata.issuer,
+                authorization_endpoint=metadata.authorization_endpoint,
+                token_endpoint=metadata.token_endpoint,
+                jwks_uri=metadata.jwks_uri,
+                signing_algorithms=advertised_algorithms,
+            )
+            self._metadata = metadata
+            return metadata
 
     def authorization_url(self, attempt: IssuedLoginAttempt) -> str:
         metadata = self.discovery()
@@ -447,30 +455,31 @@ class OidcProvider:
         return f"{metadata.authorization_endpoint}?{query}"
 
     def _load_jwks(self, *, refresh: bool) -> dict[str, Any]:
-        checked_at = _as_utc(self._clock())
-        fresh_cache = (
-            self._jwks is not None
-            and self._jwks_loaded_at is not None
-            and checked_at - self._jwks_loaded_at < JWKS_CACHE_LIFETIME
-        )
-        if fresh_cache and not refresh:
+        with self._cache_lock:
+            checked_at = _as_utc(self._clock())
+            fresh_cache = (
+                self._jwks is not None
+                and self._jwks_loaded_at is not None
+                and checked_at - self._jwks_loaded_at < JWKS_CACHE_LIFETIME
+            )
+            if fresh_cache and not refresh:
+                return self._jwks
+            if self._last_jwks_refresh is not None:
+                if checked_at - self._last_jwks_refresh < JWKS_REFRESH_BACKOFF:
+                    raise OidcError("OIDC JWKS refresh is temporarily rate limited")
+            # Advance before I/O so a failing endpoint cannot be hammered by kid storms.
+            self._last_jwks_refresh = checked_at
+            document = self._json_request(
+                "GET", self.discovery().jwks_uri, max_bytes=MAX_JWKS_BYTES
+            )
+            keys = document.get("keys")
+            if not isinstance(keys, list) or not 1 <= len(keys) <= MAX_JWKS_KEYS:
+                raise OidcError("OIDC JWKS contains an invalid number of keys")
+            if any(not isinstance(key, dict) for key in keys):
+                raise OidcError("OIDC JWKS contains an invalid key")
+            self._jwks = {"keys": keys}
+            self._jwks_loaded_at = checked_at
             return self._jwks
-        if self._last_jwks_refresh is not None:
-            if checked_at - self._last_jwks_refresh < JWKS_REFRESH_BACKOFF:
-                raise OidcError("OIDC JWKS refresh is temporarily rate limited")
-        # Advance before I/O so a failing endpoint cannot be hammered by kid storms.
-        self._last_jwks_refresh = checked_at
-        document = self._json_request(
-            "GET", self.discovery().jwks_uri, max_bytes=MAX_JWKS_BYTES
-        )
-        keys = document.get("keys")
-        if not isinstance(keys, list) or not 1 <= len(keys) <= MAX_JWKS_KEYS:
-            raise OidcError("OIDC JWKS contains an invalid number of keys")
-        if any(not isinstance(key, dict) for key in keys):
-            raise OidcError("OIDC JWKS contains an invalid key")
-        self._jwks = {"keys": keys}
-        self._jwks_loaded_at = checked_at
-        return self._jwks
 
     @staticmethod
     def _select_key(jwks: dict[str, Any], kid: str, algorithm: str) -> dict[str, Any] | None:
@@ -527,8 +536,10 @@ class OidcProvider:
         return key
 
     def exchange_code(self, *, code: str, pkce_verifier: str) -> str:
-        if not isinstance(code, str) or not 1 <= len(code) <= 4_096 or any(
-            ord(character) < 0x20 for character in code
+        if (
+            not isinstance(code, str)
+            or not 1 <= len(code) <= 4_096
+            or any(ord(character) < 0x20 for character in code)
         ):
             raise OidcError("OIDC authorization code is malformed")
         if not _PKCE.fullmatch(pkce_verifier):
@@ -611,8 +622,10 @@ class OidcProvider:
             raise OidcError("OIDC ID token claims are invalid") from error
         if issuer != self._config.oidc_issuer:
             raise OidcError("OIDC ID token issuer is invalid")
-        if not isinstance(subject, str) or not 1 <= len(subject) <= 255 or any(
-            ord(character) < 0x20 for character in subject
+        if (
+            not isinstance(subject, str)
+            or not 1 <= len(subject) <= 255
+            or any(ord(character) < 0x20 for character in subject)
         ):
             raise OidcError("OIDC ID token subject is invalid")
         audiences = [audience] if isinstance(audience, str) else audience
@@ -633,10 +646,7 @@ class OidcProvider:
             or issued > now + OIDC_CLOCK_SKEW_SECONDS
             or issued < now - MAX_ID_TOKEN_AGE_SECONDS
             or expires <= issued
-            or (
-                not_before is not None
-                and not_before > now + OIDC_CLOCK_SKEW_SECONDS
-            )
+            or (not_before is not None and not_before > now + OIDC_CLOCK_SKEW_SECONDS)
         ):
             raise OidcError("OIDC ID token time claims are invalid")
         if (

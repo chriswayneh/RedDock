@@ -171,9 +171,13 @@ These primitives are not an enabled authentication system:
   one-use browser-bound login state, and asymmetric issuer/audience/nonce/time
   claims. It retains no provider tokens or profile claims and does not enable
   sign-in or `server` mode.
-- The next enablement checkpoint still needs application-scoped provider/JWKS
-  caching, cross-worker database rate limits, session idle/touch/rotation,
-  callback and administration routes, a packaged TLS proxy, and end-to-end tests.
+- Each future application process owns one thread-safe provider/JWKS cache for
+  its full lifespan. Concurrent first loads and signing-key refreshes are
+  serialized, refresh backoff is shared by request threads, and shutdown closes
+  the owned client. Local mode creates no provider.
+- The next enablement checkpoint still needs cross-worker database rate limits,
+  session idle/touch/rotation, callback and administration routes, a packaged
+  TLS proxy, and end-to-end tests.
 
 #### Automated review
 

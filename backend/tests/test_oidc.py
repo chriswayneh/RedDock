@@ -1,5 +1,8 @@
 from base64 import urlsafe_b64encode
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from threading import Lock
+from time import sleep
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -75,9 +78,7 @@ def _signing_key(algorithm: str = "RS256", kid: str = "key-1"):
         return jwk.ECKey.generate_key(
             "P-256", parameters={"kid": kid, "use": "sig", "alg": algorithm}
         )
-    return jwk.RSAKey.generate_key(
-        2048, parameters={"kid": kid, "use": "sig", "alg": algorithm}
-    )
+    return jwk.RSAKey.generate_key(2048, parameters={"kid": kid, "use": "sig", "alg": algorithm})
 
 
 def _claims(default_nonce: str, **changes: object) -> dict[str, object]:
@@ -190,6 +191,24 @@ def test_discovery_builds_fixed_openid_pkce_authorization_request():
         "code_challenge": ["C" * 43],
         "code_challenge_method": ["S256"],
     }
+
+
+def test_discovery_cache_serializes_concurrent_first_load():
+    calls = 0
+    calls_lock = Lock()
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        sleep(0.02)
+        return httpx.Response(200, json=_metadata())
+
+    with _provider(handler) as provider, ThreadPoolExecutor(max_workers=8) as executor:
+        metadata = list(executor.map(lambda _: provider.discovery(), range(8)))
+
+    assert calls == 1
+    assert all(item is metadata[0] for item in metadata)
 
 
 @pytest.mark.parametrize(
@@ -393,6 +412,7 @@ def test_id_token_rejects_embedded_key_reference_and_unadvertised_algorithm():
         provider.validate_id_token(embedded, expected_nonce_hash="0" * 64)
 
     ordinary = _signed_token(key, nonce)
+
     def unadvertised_handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("openid-configuration"):
             return httpx.Response(
@@ -444,6 +464,7 @@ def test_jwks_rejects_overlarge_rsa_and_malformed_ec_coordinates():
     malformed_ec["x"] = urlsafe_b64encode(b"x" * 31).rstrip(b"=").decode()
 
     for key, public in ((rsa, oversized_rsa), (ec, malformed_ec)):
+
         def handler(request: httpx.Request, public_key=public) -> httpx.Response:
             if request.url.path.endswith("openid-configuration"):
                 return httpx.Response(200, json=_metadata())
@@ -491,6 +512,49 @@ def test_unknown_kid_refresh_is_backoff_bounded():
             expected_nonce_hash=__import__("hashlib").sha256(nonce.encode()).hexdigest(),
         )
     assert jwks_calls == 1
+
+
+def test_jwks_cache_serializes_concurrent_validation_and_refreshes_after_ttl():
+    key = _signing_key()
+    nonce = "N" * 43
+    token = _signed_token(key, nonce)
+    nonce_hash = __import__("hashlib").sha256(nonce.encode()).hexdigest()
+    clock = [NOW]
+    discovery_calls = 0
+    jwks_calls = 0
+    calls_lock = Lock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal discovery_calls, jwks_calls
+        if request.url.path.endswith("openid-configuration"):
+            with calls_lock:
+                discovery_calls += 1
+            return httpx.Response(200, json=_metadata())
+        with calls_lock:
+            jwks_calls += 1
+        sleep(0.02)
+        return httpx.Response(200, json={"keys": [key.as_dict()]})
+
+    with _provider(handler, clock=lambda: clock[0]) as provider:
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            identities = list(
+                executor.map(
+                    lambda _: provider.validate_id_token(
+                        token,
+                        expected_nonce_hash=nonce_hash,
+                    ),
+                    range(6),
+                )
+            )
+        assert all(identity.subject == "owner-subject" for identity in identities)
+        assert discovery_calls == 1
+        assert jwks_calls == 1
+
+        clock[0] += timedelta(hours=1)
+        provider._load_jwks(refresh=False)
+
+    assert discovery_calls == 1
+    assert jwks_calls == 2
 
 
 def _server_identity(session: Session, *, subject: str = "owner-subject", status: str = "active"):
@@ -558,9 +622,7 @@ def test_verified_identity_resolver_rejects_a_direct_different_issuer(session: S
 
 
 @pytest.mark.parametrize("status", ["disabled", "active"])
-def test_verified_identity_rejects_inactive_or_unknown_without_jit(
-    session: Session, status: str
-):
+def test_verified_identity_rejects_inactive_or_unknown_without_jit(session: Session, status: str):
     _, user, _ = _server_identity(session, status=status)
     subject = user.oidc_subject if status == "disabled" else "unknown-subject"
     with pytest.raises(OidcError, match="not provisioned"):
@@ -573,9 +635,7 @@ def test_verified_identity_rejects_inactive_or_unknown_without_jit(
             ),
         )
     assert session.scalar(select(User).where(User.oidc_subject == "unknown-subject")) is None
-    event = session.scalar(
-        select(SecurityAuditEvent).order_by(SecurityAuditEvent.id.desc())
-    )
+    event = session.scalar(select(SecurityAuditEvent).order_by(SecurityAuditEvent.id.desc()))
     assert event is not None
     assert event.action == "authentication.deny"
     assert event.reason_code == "identity_not_provisioned"

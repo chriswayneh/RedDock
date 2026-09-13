@@ -344,8 +344,11 @@ their current role.
 
 The current identity boundary is intentionally incomplete. Local requests map
 to one explicit reserved owner because local mode is account-free and
-loopback-only. The dormant OIDC and session primitives do not change that
-fact. Server mode continues to fail startup until authenticated context
+loopback-only. A future FastAPI process owns one dormant OIDC provider and its
+thread-safe metadata and signing-key caches for one application lifespan. The
+shipped local application creates no provider, and these dormant identity and
+session primitives do not change the current authorization boundary. Server
+mode continues to fail startup until authenticated context
 selection, route integration, session lifecycle, proxy trust, administration,
 cross-worker controls, and end-to-end tenant tests are complete.
 

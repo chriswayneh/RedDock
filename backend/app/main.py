@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,13 +9,14 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
-from app.config import get_settings
+from app.config import DormantServerIdentityConfig, get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import SessionLocal, initialize_database
 from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
+from app.oidc import OidcProvider
 from app.reporting.runner import recover_interrupted_runs as recover_interrupted_reports
 from app.response_security import ResponseSecurityMiddleware
 from app.validation.runner import recover_interrupted_runs as recover_interrupted_validations
@@ -24,35 +26,56 @@ STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 logger = logging.getLogger("reddock")
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    # Deployment-owned detector manifests are frozen and validated before the
-    # service accepts traffic. A malformed extension fails startup closed.
-    available_detectors()
-    initialize_database()
-    with SessionLocal() as session:
-        # A run that was in flight when the process stopped did not finish.
-        # Saying so is more useful than leaving it looking active forever, and a
-        # detection run left active would keep refusing the next one.
-        interrupted = recover_interrupted_runs(session)
-        detections = recover_interrupted_detections(session)
-        correlations = recover_interrupted_correlations(session)
-        intelligence = recover_interrupted_intelligence(session)
-        reports = recover_interrupted_reports(session)
-        validations = recover_interrupted_validations(session)
-    if interrupted:
-        logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
-    if detections:
-        logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
-    if correlations:
-        logger.warning("Marked %s correlation run(s) as interrupted by restart", correlations)
-    if intelligence:
-        logger.warning("Marked %s intelligence run(s) as interrupted by restart", intelligence)
-    if reports:
-        logger.warning("Marked %s report run(s) as interrupted by restart", reports)
-    if validations:
-        logger.warning("Marked %s validation run(s) as interrupted by restart", validations)
-    yield
+def build_lifespan(
+    oidc_config: DormantServerIdentityConfig | None = None,
+    *,
+    provider_factory: Callable[[DormantServerIdentityConfig], OidcProvider] = OidcProvider,
+):
+    """Own one future OIDC provider per application process and lifespan."""
+
+    @asynccontextmanager
+    async def managed_lifespan(application: FastAPI):
+        # Deployment-owned detector manifests are frozen and validated before the
+        # service accepts traffic. A malformed extension fails startup closed.
+        available_detectors()
+        initialize_database()
+        with SessionLocal() as session:
+            # A run that was in flight when the process stopped did not finish.
+            # Saying so is more useful than leaving it looking active forever, and a
+            # detection run left active would keep refusing the next one.
+            interrupted = recover_interrupted_runs(session)
+            detections = recover_interrupted_detections(session)
+            correlations = recover_interrupted_correlations(session)
+            intelligence = recover_interrupted_intelligence(session)
+            reports = recover_interrupted_reports(session)
+            validations = recover_interrupted_validations(session)
+        if interrupted:
+            logger.warning("Marked %s discovery run(s) as interrupted by restart", interrupted)
+        if detections:
+            logger.warning("Marked %s detection run(s) as interrupted by restart", detections)
+        if correlations:
+            logger.warning("Marked %s correlation run(s) as interrupted by restart", correlations)
+        if intelligence:
+            logger.warning("Marked %s intelligence run(s) as interrupted by restart", intelligence)
+        if reports:
+            logger.warning("Marked %s report run(s) as interrupted by restart", reports)
+        if validations:
+            logger.warning("Marked %s validation run(s) as interrupted by restart", validations)
+
+        provider = provider_factory(oidc_config) if oidc_config is not None else None
+        if provider is not None:
+            application.state.oidc_provider = provider
+        try:
+            yield
+        finally:
+            if provider is not None:
+                del application.state.oidc_provider
+                provider.close()
+
+    return managed_lifespan
+
+
+lifespan = build_lifespan()
 
 
 def frontend(path: str):
