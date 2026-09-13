@@ -94,6 +94,25 @@ jobs:
               "/run/secrets/reddock-postgres-password"
           )
           assert "REDDOCK_POSTGRES_PASSWORD" not in str(postgres_document["services"])
+
+          # This profile validates local PostgreSQL only. Authenticated server-mode
+          # limiter credentials, key material, and role provisioning stay absent.
+          serialized_postgres = json.dumps(postgres_document, sort_keys=True)
+          limiter_variables = (
+              "REDDOCK_RATE_LIMIT_DATABASE_USER",
+              "REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE",
+              "REDDOCK_RATE_LIMIT_KEY_FILE",
+              "REDDOCK_SERVER_WORKERS",
+          )
+          for variable in limiter_variables:
+              assert variable not in serialized_postgres, f"unexpected {variable}"
+          assert set(postgres_document.get("secrets", {})) == {
+              "reddock-postgres-password"
+          }, "unexpected limiter-specific Compose secret"
+          assert set(postgres_document["services"]) == {
+              "postgres",
+              "reddock",
+          }, "unexpected limiter role-provisioning service"
           PY
       - run: docker build -t reddock:ci .
       - name: Verify the stable unprivileged image identity

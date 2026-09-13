@@ -194,8 +194,14 @@ These primitives are not an enabled authentication system:
   two-connection pool with bounded failure times. The main pool is capped at 15
   connections, making the application budget 17 per process plus operational
   headroom. Real PostgreSQL tests exercise isolation while either pool is full.
-- The next enablement checkpoint still needs a separate least-privilege limiter
-  database role, session and limiter route integration, callback and
+- A separate limiter login and mounted password are now mandatory and may not
+  reuse the main database username or password. Startup verifies a direct,
+  `LOGIN NOINHERIT` role limited to exactly twice `REDDOCK_SERVER_WORKERS`.
+  It receives only database connect, `public` schema usage, bucket-table
+  changes, and sequence usage. Operators provision and rotate it outside
+  RedDock migrations.
+- The next enablement checkpoint still needs session and limiter route
+  integration, callback and
   administration routes, a packaged TLS proxy, metrics, PostgreSQL disaster
   recovery exercises, capacity planning, and end-to-end authenticated tests.
 

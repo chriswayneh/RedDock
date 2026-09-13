@@ -21,6 +21,9 @@ def _config() -> DormantServerRuntimeConfig:
         database_user="reddock",
         database_password=SecretStr("database-secret"),
         rate_limit_key=SecretBytes(b"r" * 32),
+        rate_limit_database_user="reddock_limiter",
+        rate_limit_database_password=SecretStr("limiter-database-secret"),
+        server_workers=1,
     )
 
 

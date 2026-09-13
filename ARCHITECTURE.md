@@ -366,9 +366,31 @@ The mounted key must contain exactly 64 lowercase hexadecimal characters and is
 available only to the future server runtime. All workers use the same key.
 Rotation requires stopping every worker, replacing the shared secret, and
 restarting them together so mixed keys cannot split counters. Local mode and
-the current Compose profiles create no limiter resource. A separate
-least-privilege database role for the limiter remains required before routes or
-server mode can be enabled.
+the current Compose profiles create no limiter resource.
+
+The future server configuration also requires
+`REDDOCK_RATE_LIMIT_DATABASE_USER` and a mounted
+`REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE`. Both the username and password
+must differ from the application database credentials. The limiter engine uses
+that login with a fixed `pg_catalog,public` search path. Startup checks that it
+is a direct `LOGIN NOINHERIT` role whose connection limit is exactly twice the
+configured `REDDOCK_SERVER_WORKERS` count. It permits no role memberships or
+elevated flags, and only `CONNECT`, `public` schema `USAGE`,
+`rate_limit_buckets` `SELECT`/`INSERT`/`UPDATE`/`DELETE`, and its sequence
+`USAGE`. Ownership, grant options, database or schema creation, temporary
+access, column-level grants, other databases, large objects, database parameter
+grants, role-level settings, user-defined routines, standalone PostgreSQL type
+ownership, bucket policies or triggers, foreign keys, rewrite rules,
+inheritance, and unrelated application objects cause startup failure.
+
+The application migrations continue to run as the main database role and do
+not create or alter deployment logins. Operators provision the limiter role
+after schema migration and rotate its password with a coordinated stop and
+restart. Both database secrets still enter one application process, and the
+role check runs at startup rather than continuously. Pool separation does not
+guarantee database-wide capacity, and consistent HMAC-key distribution remains
+a separate deployment gate. No protected route uses the limiter yet, and
+server mode remains disabled.
 
 ## Trust boundaries
 

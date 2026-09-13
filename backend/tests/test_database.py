@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 import pytest
-from pydantic import SecretBytes, SecretStr
+from pydantic import SecretBytes, SecretStr, ValidationError
 from sqlalchemy import create_engine
 
 from app.config import DormantServerRuntimeConfig
@@ -22,7 +22,25 @@ def _server_config() -> DormantServerRuntimeConfig:
         database_user="reddock",
         database_password=SecretStr("database-secret"),
         rate_limit_key=SecretBytes(bytes.fromhex("ab" * 32)),
+        rate_limit_database_user="reddock_limiter",
+        rate_limit_database_password=SecretStr("limiter-database-secret"),
+        server_workers=1,
     )
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"rate_limit_database_user": "reddock"},
+        {"rate_limit_database_password": SecretStr("database-secret")},
+    ],
+)
+def test_server_runtime_model_rejects_limiter_credential_reuse(overrides):
+    values = _server_config().model_dump()
+    values.update(overrides)
+
+    with pytest.raises(ValidationError):
+        DormantServerRuntimeConfig(**values)
 
 
 def test_application_postgres_pool_has_an_explicit_connection_budget(monkeypatch):
@@ -70,13 +88,22 @@ def test_limiter_factory_builds_and_primes_a_distinct_bounded_pool(monkeypatch):
         assert captured["pool_timeout"] == 2
         assert captured["pool_pre_ping"] is True
         assert captured["isolation_level"] == "READ COMMITTED"
+        assert captured["execution_options"] == {
+            "schema_translate_map": {None: "public"}
+        }
         assert captured["connect_args"] == {
             "connect_timeout": 5,
             "application_name": "reddock-limiter",
-            "options": "-c statement_timeout=2000 -c lock_timeout=1000",
+            "options": (
+                "-c statement_timeout=2000 -c lock_timeout=1000 "
+                "-c search_path=pg_catalog,public"
+            ),
         }
         rendered_url = captured["url"]
+        assert rendered_url.username == "reddock_limiter"
+        assert rendered_url.password == "limiter-database-secret"
         assert "database-secret" not in str(rendered_url)
+        assert "limiter-database-secret" not in str(rendered_url)
     finally:
         runtime.close()
     assert repr(runtime) == "RateLimiterRuntime(closed=True)"

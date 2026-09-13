@@ -3,10 +3,10 @@ import re
 from functools import lru_cache
 from ipaddress import ip_address, ip_network
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, Field, SecretBytes, SecretStr
+from pydantic import BaseModel, Field, SecretBytes, SecretStr, model_validator
 
 from app.targets import TargetKind, normalize_target
 
@@ -24,7 +24,13 @@ _SERVER_IDENTITY_VARIABLES = (
     "REDDOCK_SERVER_ORGANIZATION_SLUG",
     "REDDOCK_TRUSTED_PROXY_CIDRS",
 )
-_SERVER_ONLY_VARIABLES = (*_SERVER_IDENTITY_VARIABLES, "REDDOCK_RATE_LIMIT_KEY_FILE")
+_SERVER_RUNTIME_VARIABLES = (
+    "REDDOCK_RATE_LIMIT_KEY_FILE",
+    "REDDOCK_RATE_LIMIT_DATABASE_USER",
+    "REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE",
+    "REDDOCK_SERVER_WORKERS",
+)
+_SERVER_ONLY_VARIABLES = (*_SERVER_IDENTITY_VARIABLES, *_SERVER_RUNTIME_VARIABLES)
 _RATE_LIMIT_KEY = re.compile(r"[0-9a-f]{64}")
 
 
@@ -179,6 +185,22 @@ class DormantServerRuntimeConfig(DormantServerIdentityConfig):
     """Complete future process configuration, including masked limiter material."""
 
     rate_limit_key: SecretBytes = Field(min_length=32, max_length=32)
+    rate_limit_database_user: str
+    rate_limit_database_password: SecretStr
+    server_workers: int = Field(ge=1, le=64)
+
+    @model_validator(mode="after")
+    def validate_limiter_identity(self) -> Self:
+        if not _DATABASE_NAME.fullmatch(self.rate_limit_database_user):
+            raise ValueError("rate-limit database user is invalid")
+        if self.rate_limit_database_user == self.database_user:
+            raise ValueError("rate-limit database user must differ from application user")
+        if (
+            self.rate_limit_database_password.get_secret_value()
+            == self.database_password.get_secret_value()
+        ):
+            raise ValueError("rate-limit database password must be independent")
+        return self
 
 
 def dormant_server_identity_config() -> DormantServerIdentityConfig:
@@ -292,9 +314,36 @@ def dormant_server_runtime_config() -> DormantServerRuntimeConfig:
         raise ConfigurationError(
             "REDDOCK_RATE_LIMIT_KEY_FILE must contain exactly 64 lowercase hexadecimal characters"
         )
+    limiter_user = os.getenv("REDDOCK_RATE_LIMIT_DATABASE_USER") or None
+    limiter_password = _read_secret_file("REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE")
+    worker_text = os.getenv("REDDOCK_SERVER_WORKERS") or None
+    if limiter_user is None or limiter_password is None:
+        raise ConfigurationError(
+            "Limiter database configuration requires REDDOCK_RATE_LIMIT_DATABASE_USER and "
+            "REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE"
+        )
+    if not _DATABASE_NAME.fullmatch(limiter_user):
+        raise ConfigurationError("REDDOCK_RATE_LIMIT_DATABASE_USER is invalid")
+    if limiter_user == identity.database_user:
+        raise ConfigurationError(
+            "REDDOCK_RATE_LIMIT_DATABASE_USER must differ from REDDOCK_DATABASE_USER"
+        )
+    if limiter_password == identity.database_password.get_secret_value():
+        raise ConfigurationError(
+            "REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE must use an independent credential"
+        )
+    try:
+        server_workers = int(worker_text or "")
+    except ValueError:
+        raise ConfigurationError("REDDOCK_SERVER_WORKERS must be an integer from 1 to 64") from None
+    if not 1 <= server_workers <= 64:
+        raise ConfigurationError("REDDOCK_SERVER_WORKERS must be an integer from 1 to 64")
     return DormantServerRuntimeConfig(
         **identity.model_dump(),
         rate_limit_key=SecretBytes(bytes.fromhex(encoded_key)),
+        rate_limit_database_user=limiter_user,
+        rate_limit_database_password=SecretStr(limiter_password),
+        server_workers=server_workers,
     )
 
 

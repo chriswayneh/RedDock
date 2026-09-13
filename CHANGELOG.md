@@ -13,8 +13,16 @@ All notable changes to RedDock are documented here.
   15 connections, giving a 17-connection application budget per process plus
   operational headroom. Real PostgreSQL tests fill either pool and confirm that
   the other remains available. Local mode and current Compose profiles remain
-  unchanged, routes and server mode stay disabled, and a separate
-  least-privilege limiter database role is still required.
+  unchanged, and routes and server mode stay disabled. The dormant server
+  contract now requires a separate limiter username and mounted password,
+  rejects reused application credentials, fixes the limiter search path, and
+  checks the least-privilege role contract at startup. Server deployments must
+  declare `REDDOCK_SERVER_WORKERS` from 1 through 64, and the role connection
+  limit must equal twice that deployment-wide worker count. Operators retain
+  responsibility for provisioning and rotating that role outside migrations.
+  The startup gate also rejects indirect schema authority through foreign keys,
+  rewrite rules, inheritance, triggers, row-level security, or standalone
+  PostgreSQL type ownership.
 - A dormant browser-session lifecycle built around stable families of hash-only
   token generations. Sessions become idle after 30 minutes, activity updates
   are throttled to once every five minutes, and bearer and CSRF credentials

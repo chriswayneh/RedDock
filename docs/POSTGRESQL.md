@@ -104,17 +104,76 @@ lock waits are bounded; if a trustworthy limiter decision cannot be completed,
 the request is denied. Real PostgreSQL tests fill each pool and confirm that the
 other remains usable.
 
-The current runtime uses the configured application database credentials to
-build this dormant capability. A production server still needs a separate
-least-privilege role with only the schema, table, and sequence access required
-for `rate_limit_buckets`. This role, capacity planning, and route integration
-remain release gates.
+## Future limiter database role
+
+The dormant server contract separates normal application access from limiter
+access. Configure these additional values only in a future server deployment:
+
+| Variable | Meaning |
+| --- | --- |
+| `REDDOCK_RATE_LIMIT_DATABASE_USER` | Dedicated PostgreSQL login for limiter decisions |
+| `REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE` | In-container path to that login's UTF-8 password secret |
+| `REDDOCK_SERVER_WORKERS` | Total server process count, from 1 through 64 |
+
+The limiter username must differ from `REDDOCK_DATABASE_USER`, and its password
+must differ from the main database password. RedDock rejects either form of
+credential reuse. Each future process still receives both secrets because it
+owns both pools, so this separation reduces database authority rather than
+creating a process-level secret boundary.
+
+Set `REDDOCK_SERVER_WORKERS` to the actual total process count across the whole
+deployment, and give every process the same value. RedDock compares the role's
+connection limit with that declaration. It cannot discover how many processes
+the orchestrator actually launched.
+
+Provision the role through deployment automation or an administrator session
+after the application role has run migrations. RedDock migrations intentionally
+do not create, own, or rotate PostgreSQL logins. At startup, RedDock checks that
+the limiter identity has exactly this effective contract:
+
+- direct `LOGIN NOINHERIT` with a connection limit exactly twice
+  `REDDOCK_SERVER_WORKERS` and no role-level settings;
+- no memberships, superuser, database creation, role creation, replication, or
+  row-security bypass flags;
+- `CONNECT` on the configured database, without temporary access, database
+  creation, ownership, or grant options;
+- `USAGE` only on the `public` schema, without creation, ownership, or grant
+  options;
+- `SELECT`, `INSERT`, `UPDATE`, and `DELETE` on
+  `public.rate_limit_buckets`, without ownership, grant options, truncate,
+  references, trigger, maintenance privileges, column-level grants, row-level
+  security, triggers, foreign keys, rewrite rules, or inheritance;
+- `USAGE` only on `public.rate_limit_buckets_id_seq`, without ownership, select,
+  update, or grant options; and
+- no access to another connectable database;
+- no ownership or privileges on unrelated non-system schemas, tables, views,
+  columns, foreign tables, materialized views, sequences, or user-defined
+  routines, including no ownership of standalone PostgreSQL types; and
+- no large-object, database-parameter, tablespace-creation, foreign-wrapper, or
+  foreign-server privileges.
+
+PostgreSQL can provide database `CONNECT`, temporary-table access, and routine
+execution through `PUBLIC`. Meeting this contract may require changing those
+defaults. Review such changes for the whole deployment because altering a
+`PUBLIC` grant affects every database role, not only RedDock.
+
+Limiter connections fix their search path to `pg_catalog,public`. A missing,
+overprivileged, underprivileged, inherited, or wrong role fails startup with a
+generic limiter-unavailable error. This is a startup-time verification, not
+continuous monitoring of later database changes.
+
+Rotate the limiter password with a coordinated restart: stop every worker,
+replace the mounted password secret, update the PostgreSQL role, and restart all
+workers together. The HMAC key has its own full-stop rotation procedure above.
+Database-wide connection capacity, consistent HMAC-key distribution, TLS, and
+route integration remain separate release gates.
 
 This profile is a validation milestone, not the final production topology.
 Tenant ownership, the reviewed role-permission contract, backup tooling, and
 cross-worker rate-limit and pool-isolation tests now exist. OIDC and session
-route integration, a least-privilege limiter role, TLS proxy configuration,
-metrics, disaster recovery drills, and authenticated end-to-end tests remain
-mandatory. Setting `REDDOCK_DEPLOYMENT_MODE=server` is explicitly rejected until
-those controls are implemented; PostgreSQL configuration can never silently
-enable shared mode.
+route integration, TLS proxy configuration, metrics, disaster recovery drills,
+database capacity planning, and authenticated end-to-end tests remain
+mandatory. The current Compose files do not provision the limiter role, mount
+its credentials, or enable server mode. Setting
+`REDDOCK_DEPLOYMENT_MODE=server` remains explicitly rejected; PostgreSQL
+configuration can never silently enable shared mode.

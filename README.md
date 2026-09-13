@@ -74,7 +74,7 @@ internet-facing use.
 | Identity and ingress | Account-free local mode binds to loopback and restricts Host values. Requesting server mode fails startup. | There is no sign-in flow or supported networked deployment. Dormant OIDC code is not connected to routes. |
 | API authorization | Every route is classified as public or mapped to a permission, unknown roles deny access, and tenant-owned resources are loaded through organization-scoped queries. | The current request context is the reserved local owner, not an authenticated human identity. |
 | Active operations | DockGuard checks scope immediately before target contact. Tools receive fixed arguments, bounded time, and no shell. Sensitive rechecks and model disclosure require separate approval. | RedDock cannot prove that an operator was entitled to declare a target in scope. Engagement authorization remains an operator responsibility. |
-| Runtime privilege | The application container runs as a fixed non-root user, drops every Linux capability, and sets `no-new-privileges`. PostgreSQL and Ollama have no published host ports. | Sidecars retain the limited privileges their upstream entry points require. This is not a claim of host or cluster isolation. |
+| Runtime privilege | The application container runs as a fixed non-root user, drops every Linux capability, and sets `no-new-privileges`. The dormant limiter uses a separate PostgreSQL login restricted to its bucket table and sequence, and verifies that contract at startup. | Sidecars retain the limited privileges their upstream entry points require. The main database role still owns migrations, and both database secrets exist in one process. This is not a claim of host or cluster isolation. |
 | Untrusted data | Browser input, target output, model output, archives, and retained evidence cross explicit validation, size, identity, and hash checks. | Automated checks reduce risk but are not a penetration test or security certification. |
 
 ### Technical capability reference
@@ -370,12 +370,15 @@ Phase 8 is still in development. Completed checkpoints include:
   PostgreSQL concurrency proof
 - a dormant process-owned limiter runtime that loads one canonical mounted key
   and reserves two prewarmed PostgreSQL connections outside the request pool
+- a separately credentialed limiter database role whose bucket-scoped
+  database privileges and lack of unrelated object ownership are checked at
+  startup, including standalone PostgreSQL types
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
-routes, a separate least-privilege limiter database role, session route
-integration, user administration, scaling, PostgreSQL disaster recovery, and
-production deployment hardening are still planned. The current local and
-PostgreSQL Compose profiles remain unchanged and create no limiter runtime.
+routes, session route integration, user administration, scaling, PostgreSQL
+disaster recovery, and production deployment hardening are still planned. The
+current local and PostgreSQL Compose profiles remain unchanged and create no
+limiter runtime or limiter role.
 Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
 tests cover issuance, touch, rotation, logout, membership revocation, cleanup,
 and limiter-pool isolation. See the [roadmap](ROADMAP.md) for the detailed
