@@ -106,6 +106,19 @@ remains the narrow bucket-only capability. This runtime is not created by the
 supported local or PostgreSQL Compose profiles. It registers no route and does
 not make server mode available.
 
+The dormant configured lifespan also installs one immutable request binding.
+Its FastAPI request database dependencies use
+`PrimaryDatabaseRuntime.session`, and each yielded session is closed. A missing
+or malformed binding returns a generic `503` from the database dependency
+instead of using the ambient local database. Configured protected routes return
+`401` because browser identity is not connected; they do not inherit the local
+owner. Supported local and PostgreSQL Compose requests keep their explicit
+local-mode session binding.
+
+Discovery passes the exact request session factory into its worker. This
+prevents database fallback, but the executor still needs coordinated drain or
+cancellation before the primary runtime can close safely.
+
 ## Future server connection budget
 
 The dormant server runtime accepts `REDDOCK_RATE_LIMIT_KEY_FILE` only when the
@@ -186,13 +199,15 @@ Rotate the limiter password with a coordinated restart: stop every worker,
 replace the mounted password secret, update the PostgreSQL role, and restart all
 workers together. The HMAC key has its own full-stop rotation procedure above.
 Database-wide connection capacity, consistent HMAC-key distribution, TLS, and
-route integration remain separate release gates.
+authenticated route integration, background executor drain and shutdown remain
+separate release gates.
 
 This profile is a validation milestone, not the final production topology.
 Tenant ownership, the reviewed role-permission contract, backup tooling, and
 cross-worker rate-limit and pool-isolation tests now exist. OIDC and session
-route integration, TLS proxy configuration, metrics, disaster recovery drills,
-database capacity planning, and authenticated end-to-end tests remain
+route integration, browser session resolution, TLS proxy configuration,
+metrics, executor lifecycle, disaster recovery drills, database capacity
+planning, and authenticated end-to-end tests remain
 mandatory. The current Compose files do not provision the limiter role, mount
 its credentials, or enable server mode. Setting
 `REDDOCK_DEPLOYMENT_MODE=server` remains explicitly rejected; PostgreSQL

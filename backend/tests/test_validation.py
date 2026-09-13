@@ -23,7 +23,7 @@ def test_startup_recovers_running_validations_and_preserves_pending(
     client, dockyard_id, header_finding
 ):
     from app.database import SessionLocal
-    from app.main import app
+    from app.main import create_app
     from app.models import ValidationRun
     from app.reporting.runner import _reject_active_sources
 
@@ -33,7 +33,9 @@ def test_startup_recovers_running_validations_and_preserves_pending(
     with SessionLocal() as db:
         db.get(ValidationRun, interrupted).status = "running"
         db.commit()
-    with TestClient(app, base_url="http://localhost"):
+    # A separate application instance models a restarted process without
+    # re-entering the already-running fixture application's lifespan.
+    with TestClient(create_app(), base_url="http://localhost"):
         with SessionLocal() as db:
             recovered = db.get(ValidationRun, interrupted)
             assert recovered.status == "failed"

@@ -23,6 +23,14 @@ All notable changes to RedDock are documented here.
   waits, serializes migration and recovery startup, and disposes its engine at
   shutdown. The main role still runs migrations. Current local and Compose
   startup do not create this runtime.
+- An immutable lifespan-owned request database binding. Local requests use the
+  global session factory only through an explicit local binding; configured
+  requests use the owned primary runtime, and missing or malformed state returns
+  a generic database-dependency `503` without ambient fallback. Configured
+  protected routes return
+  `401` until browser identity is connected. Discovery passes the exact request
+  factory into its worker. Auth routes, browser session resolution, executor
+  drain, server mode, and current local and Compose behavior remain unchanged.
 - A dormant, process-owned limiter capability that reads one server-only mounted
   key in canonical 64-character lowercase hexadecimal form and keeps it paired
   with an isolated, prewarmed two-connection PostgreSQL pool. Bounded checkout,

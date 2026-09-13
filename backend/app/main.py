@@ -14,6 +14,8 @@ from app.authentication import AuthenticationRuntime, create_authentication_runt
 from app.config import DormantServerRuntimeConfig, get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import (
+    DATABASE_REQUEST_BINDING_STATE,
+    DatabaseRequestBinding,
     PrimaryDatabaseRuntime,
     SessionLocal,
     create_rate_limiter_runtime,
@@ -80,10 +82,14 @@ def build_lifespan(
         # Deployment-owned detector manifests are frozen and validated before the
         # service accepts traffic. A malformed extension fails startup closed.
         available_detectors()
+        if hasattr(application.state, DATABASE_REQUEST_BINDING_STATE):
+            raise RuntimeError("database request capability is already installed")
         primary_database = None
         provider = None
         rate_limiter = None
         authentication_runtime = None
+        request_session_factory = None
+        request_capability_installed = False
         try:
             if server_config is not None:
                 primary_database = primary_database_factory(server_config)
@@ -99,31 +105,45 @@ def build_lifespan(
                 )
                 application.state.primary_database_runtime = primary_database
                 application.state.authentication_runtime = authentication_runtime
+                request_session_factory = primary_database.session
+                deployment_mode = "server"
             else:
                 initialize_database()
                 with SessionLocal() as session:
                     # A run that was in flight when the process stopped did not finish.
                     # Recovery makes that terminal state explicit before serving traffic.
                     _recover_interrupted_work(session)
+                request_session_factory = SessionLocal
+                deployment_mode = "local"
+            setattr(
+                application.state,
+                DATABASE_REQUEST_BINDING_STATE,
+                DatabaseRequestBinding(deployment_mode, request_session_factory),
+            )
+            request_capability_installed = True
             yield
         finally:
             try:
-                if authentication_runtime is not None:
-                    del application.state.authentication_runtime
-                    authentication_runtime.close()
+                if request_capability_installed:
+                    delattr(application.state, DATABASE_REQUEST_BINDING_STATE)
             finally:
                 try:
-                    if provider is not None:
-                        provider.close()
+                    if authentication_runtime is not None:
+                        del application.state.authentication_runtime
+                        authentication_runtime.close()
                 finally:
                     try:
-                        if rate_limiter is not None:
-                            rate_limiter.close()
+                        if provider is not None:
+                            provider.close()
                     finally:
-                        if primary_database is not None:
-                            if hasattr(application.state, "primary_database_runtime"):
-                                del application.state.primary_database_runtime
-                            primary_database.close()
+                        try:
+                            if rate_limiter is not None:
+                                rate_limiter.close()
+                        finally:
+                            if primary_database is not None:
+                                if hasattr(application.state, "primary_database_runtime"):
+                                    del application.state.primary_database_runtime
+                                primary_database.close()
 
     return managed_lifespan
 

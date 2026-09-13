@@ -193,6 +193,11 @@ These primitives are not an enabled authentication system:
   lifespan, verifies its effective connection policy, serializes migration and
   recovery startup, and bounds connection, checkout, statement, lock, idle, and
   transaction waits. Local and Compose startup do not create it.
+- One immutable lifespan binding now selects the request database factory.
+  Local requests use the explicit local factory; configured requests use the
+  owned primary runtime and never fall back to ambient state. Configured
+  protected routes return `401` until browser identity is connected. Discovery
+  passes that exact factory from request submission into its worker.
 - Dormant authentication throttling is serialized in PostgreSQL across workers.
   It admits through a global bucket before creating a client bucket, stores
   only deployment-keyed HMACs, owns a separate transaction, groups IPv6 clients
@@ -211,9 +216,11 @@ These primitives are not an enabled authentication system:
   changes, and sequence usage. Operators provision and rotate it outside
   RedDock migrations.
 - The next enablement checkpoint still needs HTTP sign-in, callback, logout,
-  cookie, and error handling; authenticated request context; administration; a
+  cookie, and error handling; browser session resolution and authenticated
+  request context; administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
-  capacity planning; and end-to-end authenticated tests.
+  capacity planning; background executor shutdown and drain; and end-to-end
+  authenticated tests.
 
 #### Automated review
 

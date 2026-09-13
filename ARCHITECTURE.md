@@ -410,11 +410,26 @@ only after both complete, and disposes its engine at shutdown or failed startup.
 The primary role still runs migrations and accesses application data; only the
 limiter role has the bucket-only privilege contract.
 
+The lifespan installs one immutable database request binding only after startup
+finishes. Supported local and PostgreSQL Compose requests use the global
+`SessionLocal` factory through an explicit local binding. A configured request
+uses `PrimaryDatabaseRuntime.session`, and every yielded session is closed. A
+missing or malformed binding makes the database dependency produce a generic
+`503`; there is no ambient fallback. Configured protected routes receive no
+local-owner context and return `401` until browser session resolution is
+connected.
+
+Discovery passes the exact request session factory from submission into its
+bounded worker. The worker no longer imports ambient database state. The
+executor can still outlive the request that submitted work, so coordinated
+drain or cancellation before primary-runtime shutdown remains required.
+
 ## Trust boundaries
 
 | Boundary | Treatment |
 | --- | --- |
 | Browser → API | Untrusted input. Pydantic validation, `extra="forbid"`, bounded lengths. UI checks are convenience; the server decides. |
+| API request → database | One immutable lifespan binding selects either the explicit local session factory or the configured primary runtime. Missing or malformed state fails closed without crossing between them. |
 | API → DockGuard | Every target, always, server-side. |
 | DockGuard → adapter | Only normalized targets and internally generated options cross. Operator strings never become flags. |
 | Adapter → target | Non-invasive profiles only, without a shell, under a timeout, with output bounds. |
@@ -527,7 +542,9 @@ routes or assigned a named permission, and a completeness test fails if a route
 is added without a decision. A router dependency enforces that manifest for the
 explicit local owner today, and negative tests replace that context with a
 viewer or inactive user to prove sensitive and mutating routes are refused.
-Server mode remains unavailable, and configuration rejects
+The configured dormant path does not inherit the local owner: public routes
+remain reachable, while protected routes return `401` until browser identity is
+resolved. Server mode remains unavailable, and configuration rejects
 `REDDOCK_DEPLOYMENT_MODE=server`, until sessions, organization-scoped resource
 loading, and authenticated context resolution are complete. The API remains the
 enforcement point; UI visibility will never grant authority.

@@ -72,7 +72,7 @@ internet-facing use.
 | Boundary | Enforced today | Not yet claimed |
 | --- | --- | --- |
 | Identity and ingress | Account-free local mode binds to loopback and restricts Host values. Requesting server mode fails startup. | There is no sign-in flow or supported networked deployment. Dormant OIDC code is not connected to routes. |
-| API authorization | Every route is classified as public or mapped to a permission, unknown roles deny access, and tenant-owned resources are loaded through organization-scoped queries. | The current request context is the reserved local owner, not an authenticated human identity. |
+| API authorization | Every route is classified as public or mapped to a permission, unknown roles deny access, and tenant-owned resources are loaded through organization-scoped queries. | Local requests use the reserved local owner, not an authenticated human identity. Configured protected requests return `401` until browser identity is connected. |
 | Active operations | DockGuard checks scope immediately before target contact. Tools receive fixed arguments, bounded time, and no shell. Sensitive rechecks and model disclosure require separate approval. | RedDock cannot prove that an operator was entitled to declare a target in scope. Engagement authorization remains an operator responsibility. |
 | Runtime privilege | The application container runs as a fixed non-root user, drops every Linux capability, and sets `no-new-privileges`. The dormant limiter uses a separate PostgreSQL login restricted to its bucket table and sequence, and verifies that contract at startup. | Sidecars retain the limited privileges their upstream entry points require. The main database role still owns migrations, and both database secrets exist in one process. This is not a claim of host or cluster isolation. |
 | Untrusted data | Browser input, target output, model output, archives, and retained evidence cross explicit validation, size, identity, and hash checks. | Automated checks reduce risk but are not a penetration test or security certification. |
@@ -378,14 +378,18 @@ Phase 8 is still in development. Completed checkpoints include:
   memberships, and issues audited hash-only sessions
 - a dormant primary PostgreSQL runtime built from the same validated server
   configuration, with bounded database waits and one owned process lifecycle
+- an immutable request database binding that keeps local requests on the local
+  session factory and configured requests on the owned primary runtime
 
 Authentication is not enabled, and shared mode remains blocked. No
 authentication route or UI calls this coordinator, no protected request
-resolves a browser session, and server mode still fails startup. HTTP auth and
-cookie wiring, authenticated request context, user administration, scaling,
-PostgreSQL disaster recovery, and production hardening are still planned. The
-current local and PostgreSQL Compose profiles remain unchanged and create none
-of the dormant primary-database, limiter, provider, or authentication runtimes.
+resolves a browser session, and configured protected routes return `401`
+instead of inheriting the local owner. Server mode still fails startup. HTTP
+auth and cookie wiring, authenticated request context, background executor
+drain and shutdown, user administration, scaling, PostgreSQL disaster recovery, and
+production hardening are still planned. The current local and PostgreSQL
+Compose profiles remain unchanged and create none of the dormant
+primary-database, limiter, provider, or authentication runtimes.
 
 Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
 tests cover issuance, touch, rotation, logout, membership revocation, cleanup,

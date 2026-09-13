@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app import lab
 from app.config import get_settings
+from app.database import SessionFactory
 from app.discovery import registry
 from app.discovery.base import (
     AdapterError,
@@ -173,18 +174,16 @@ def get_run(session: Session, dockyard_id: int, run_id: int) -> DiscoveryRun | N
     )
 
 
-def submit_run(run_id: int) -> None:
+def submit_run(run_id: int, session_factory: SessionFactory) -> None:
     """Execute a run on the bounded background pool."""
-    future = _executor.submit(execute_run, run_id)
+    future = _executor.submit(execute_run, run_id, session_factory)
     _pending.add(future)
     future.add_done_callback(_pending.discard)
 
 
-def execute_run(run_id: int) -> None:
+def execute_run(run_id: int, session_factory: SessionFactory) -> None:
     """Run one allowed discovery to completion. Never raises."""
-    from app.database import SessionLocal
-
-    with SessionLocal() as session:
+    with session_factory() as session:
         run = session.get(DiscoveryRun, run_id)
         if run is None or run.status != str(RunStatus.PENDING):
             return

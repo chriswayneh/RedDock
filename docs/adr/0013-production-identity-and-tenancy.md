@@ -119,8 +119,8 @@ The dormant configured application lifespan composes one authentication
 coordinator from the process-owned provider, isolated limiter, and the engine
 owned by an exact-config primary database runtime. Login admission occurs
 before provider discovery and state creation. Callback admission occurs before
-one-use state consumption; the
-state is then burned before token exchange. A verified token must map to an
+one-use state consumption; the state is then burned before token exchange. A
+verified token must map to an
 exact pre-provisioned issuer/subject membership, locked through session
 issuance, before an audited hash-only session is created. Post-burn provider
 exchange and ID-token validation failures make a best-effort attempt to record
@@ -135,6 +135,20 @@ Migration and interrupted-work recovery share one connection behind a fixed
 PostgreSQL advisory lock before the runtime is ready. The main role still runs
 migrations and retains application-data authority. This runtime is not a
 substitute for the separately credentialed limiter role.
+
+The lifespan installs one immutable database request binding after startup.
+Local requests use the global `SessionLocal` factory only through an explicit
+local binding. Configured request database dependencies use
+`PrimaryDatabaseRuntime.session`, and each yielded session is closed. A missing
+or malformed binding produces a generic database-dependency `503` without
+falling back to ambient database state. Configured protected routes receive no
+local-owner context and return `401` until browser identity is resolved.
+
+Discovery carries the exact request session factory from submission into its
+worker. This prevents ambient database fallback, but it does not manage the
+executor lifetime. Coordinated drain or cancellation before primary-runtime
+shutdown remains required. No authentication route or UI is enabled, and
+server mode remains disabled.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
@@ -209,6 +223,9 @@ removing role change.
 - Primary database tests cover exact-config construction, effective session
   policy, bounded timeout options, serialized startup, owned session and engine
   lifecycle, and cleanup after partial startup failure.
+- Request-binding tests cover explicit local and configured selection, generic
+  failure for missing or malformed state, session closure, protected-route
+  denial without browser identity, and discovery worker factory propagation.
 - Logs and errors exclude cookies, authorization codes, client secrets, session
   tokens, and model credentials.
 - Server mode is not production-ready until PostgreSQL, migrations,

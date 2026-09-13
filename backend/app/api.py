@@ -11,7 +11,7 @@ from app import lab
 from app.authorization_dependencies import authorize_request, request_authorization
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
-from app.database import get_session
+from app.database import SessionFactory, get_session, get_session_factory
 from app.detection import registry as detection_registry
 from app.detection import runner as detection_runner
 from app.detection.base import FindingStatus, Severity
@@ -516,6 +516,7 @@ def start_discovery(
     dockyard_id: int,
     payload: DiscoveryCreate,
     session: Session = Depends(get_session),
+    session_factory: SessionFactory = Depends(get_session_factory),
 ) -> Response | DiscoveryRunRead:
     """Request a discovery run.
 
@@ -537,7 +538,7 @@ def start_discovery(
             content=jsonable_encoder(DiscoveryRunRead.model_validate(run)),
             status_code=status.HTTP_403_FORBIDDEN,
         )
-    discovery_runner.submit_run(run.id)
+    discovery_runner.submit_run(run.id, session_factory)
     return DiscoveryRunRead.model_validate(run)
 
 

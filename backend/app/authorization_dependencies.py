@@ -11,6 +11,7 @@ from app.authorization import (
     AuthorizationContext,
     AuthorizationDenied,
 )
+from app.database import database_request_binding
 
 _REQUEST_AUTHORIZATION: ContextVar[AuthorizationContext | None] = ContextVar(
     "reddock_request_authorization",
@@ -18,9 +19,13 @@ _REQUEST_AUTHORIZATION: ContextVar[AuthorizationContext | None] = ContextVar(
 )
 
 
-def current_authorization() -> AuthorizationContext | None:
-    """Resolve the explicit local owner until authenticated server mode exists."""
-    return LOCAL_AUTHORIZATION
+def current_authorization(request: Request) -> AuthorizationContext | None:
+    """Resolve local authority only for an explicitly initialized local app."""
+
+    binding = database_request_binding(request)
+    if binding is not None and binding.mode == "local":
+        return LOCAL_AUTHORIZATION
+    return None
 
 
 def request_authorization() -> AuthorizationContext:
