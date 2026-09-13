@@ -6,6 +6,15 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A dormant browser-session lifecycle built around stable families of hash-only
+  token generations. Sessions become idle after 30 minutes, activity updates
+  are throttled to once every five minutes, and bearer and CSRF credentials
+  rotate together after one hour without extending the original eight-hour
+  expiry. Logout and membership revocation cover the whole family, cleanup is
+  bounded, and request-facing operations own short isolated transactions while
+  lower-level revocation can join an identity-change transaction. PostgreSQL
+  race cases cover concurrent issuance, touch, rotation, revocation, and
+  cleanup. No route is registered and server mode remains unavailable.
 - Database-backed fixed-window throttling for future login, callback, and
   mutation routes. Atomic PostgreSQL updates enforce exact cross-worker limits,
   global-first admission bounds attacker-created client state, stored keys are

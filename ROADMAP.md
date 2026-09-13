@@ -149,10 +149,18 @@ These primitives are not an enabled authentication system:
 
 - Organizations, OIDC-keyed profiles, memberships, non-null organization
   ownership, least-privilege API enforcement, and request-scoped tenancy guards.
-- Hash-only session storage, high-entropy session issuance, expiry, targeted
-  and membership-wide revocation, and active-membership checks.
-- CSRF-hash checks, active-session limits, retention-cutoff cleanup, and
-  tenant-scoped structured security events without free-form metadata.
+- Hash-only session storage and stable session families. A session becomes idle
+  after 30 minutes, activity writes are throttled to at most once every five
+  minutes, and bearer and CSRF credentials rotate together after one hour.
+  Rotation never extends the original eight-hour absolute expiry.
+- Family-wide logout and membership revocation close rotation races. Lifecycle
+  entry points own short isolated transactions, lower-level revocation can join
+  an identity-change transaction, and inactive rows are removed in bounded
+  batches.
+- Active-session limits, tenant-scoped structured security events without
+  free-form metadata, and PostgreSQL race cases for concurrent lifecycle work.
+  The race suite covers issuance, touch, rotation, logout, membership
+  revocation, and cleanup.
 
 #### Browser boundary
 
@@ -182,9 +190,9 @@ These primitives are not an enabled authentication system:
   prove global and same-client limits, exact-window resets, and safe cleanup
   alongside refresh.
 - The next enablement checkpoint still needs mounted limiter-key provisioning
-  and a reserved limiter connection pool, session idle/touch/rotation, callback
-  and administration routes, a packaged TLS proxy, metrics, and end-to-end
-  authenticated tests.
+  and a reserved limiter connection pool, session route integration, callback
+  and administration routes, a packaged TLS proxy, metrics, PostgreSQL disaster
+  recovery exercises, and end-to-end authenticated tests.
 
 #### Automated review
 

@@ -154,6 +154,17 @@ deployment is secure.
   login route or make server mode available. Local mode configures no limiter
   key; stable mounted-key provisioning and a reserved limiter database pool
   remain server-mode release gates.
+- Dormant browser sessions use stable families of hash-only token generations.
+  A session becomes idle after 30 minutes, activity writes are limited to once
+  every five minutes, and the bearer token and CSRF proof rotate together after
+  one hour without extending the original eight-hour expiry. Logout and
+  membership revocation cover the whole family, including a retained
+  predecessor that races with rotation. Request-facing lifecycle entry points
+  own short isolated transactions, lower-level revocation can participate in a
+  wider identity-change transaction, and inactive rows are cleaned in bounded
+  batches. PostgreSQL tests cover concurrent issuance, touch, rotation, logout,
+  membership revocation, and cleanup. No session route is registered, and
+  server mode remains disabled.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - Secrets must not be committed. GitHub secret scanning and push protection check the public repository for likely credentials.

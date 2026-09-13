@@ -48,7 +48,7 @@ def _write_database(path: Path, value: str) -> None:
         engine.dispose()
     with closing(sqlite3.connect(path)) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0005_rate_limits')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0006_session_lifecycle')")
         connection.execute("CREATE TABLE state (value TEXT NOT NULL)")
         connection.execute("INSERT INTO state VALUES (?)", (value,))
         connection.execute(
@@ -370,7 +370,7 @@ def test_create_refuses_a_stamp_only_database(tmp_path: Path) -> None:
     data.mkdir()
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0005_rate_limits')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0006_session_lifecycle')")
         connection.commit()
 
     with pytest.raises(BackupError, match="schema is incomplete"):
@@ -383,6 +383,8 @@ def test_create_refuses_a_stamp_only_database(tmp_path: Path) -> None:
         ("DROP TABLE security_audit_events", "schema is incomplete"),
         ("ALTER TABLE security_audit_events DROP COLUMN request_id", "schema semantics"),
         ("DROP INDEX ix_security_audit_org_time", "schema semantics"),
+        ("DROP INDEX uq_browser_sessions_active_family", "schema semantics"),
+        ("DROP INDEX ix_browser_sessions_last_seen", "schema semantics"),
     ],
 )
 def test_create_refuses_a_database_with_an_incomplete_production_schema(
@@ -647,6 +649,25 @@ def test_verify_accepts_a_backup_created_by_an_older_release(tmp_path: Path) -> 
     _write_archive(older, manifest, members)
 
     assert verify_backup(older)["application"]["version"] == "0.7.0"
+
+
+def test_create_accepts_the_preserved_pre_session_lifecycle_revision(tmp_path: Path) -> None:
+    from alembic import command
+
+    from app.migration_runner import _config
+
+    data = _make_data(tmp_path / "data", "current")
+    engine = create_engine(f"sqlite:///{(data / 'reddock.db').resolve().as_posix()}")
+    try:
+        with engine.begin() as connection:
+            command.downgrade(_config(connection), "0005_rate_limits")
+    finally:
+        engine.dispose()
+
+    archive = tmp_path / "pre-session-lifecycle.zip"
+    create_backup(data, archive)
+
+    assert verify_backup(archive)["database"]["schema_revision"] == "0005_rate_limits"
 
 
 def test_create_rejects_missing_database_referenced_evidence(tmp_path: Path) -> None:

@@ -13,7 +13,7 @@ class MigrationError(RuntimeError):
 
 
 BASELINE_REVISION = "0001_v080"
-MIGRATION_OWNED_TABLES = frozenset({"rate_limit_buckets"})
+MIGRATION_OWNED_TABLES = frozenset({"browser_sessions", "rate_limit_buckets"})
 
 # Frozen v0.8.0 contract. A legacy database is stamped only after every released
 # table and column is present. Extra tables and columns are permitted so an

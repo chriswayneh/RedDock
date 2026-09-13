@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -84,6 +85,40 @@ class BrowserSession(Base):
     """A future server-mode session; only token and CSRF hashes are retained."""
 
     __tablename__ = "browser_sessions"
+    __table_args__ = (
+        CheckConstraint("length(token_hash) = 64", name="ck_browser_session_token_hash"),
+        CheckConstraint("length(csrf_token_hash) = 64", name="ck_browser_session_csrf_hash"),
+        CheckConstraint("length(family_hash) = 64", name="ck_browser_session_family_hash"),
+        CheckConstraint(
+            "generation BETWEEN 0 AND 16",
+            name="ck_browser_session_generation",
+        ),
+        CheckConstraint(
+            "created_at <= token_issued_at",
+            name="ck_browser_session_created_before_token",
+        ),
+        CheckConstraint(
+            "token_issued_at <= last_seen_at",
+            name="ck_browser_session_token_before_seen",
+        ),
+        CheckConstraint(
+            "last_seen_at < expires_at",
+            name="ck_browser_session_seen_before_expiry",
+        ),
+        UniqueConstraint(
+            "family_hash",
+            "generation",
+            name="uq_browser_session_family_generation",
+        ),
+        Index("ix_browser_sessions_last_seen", "last_seen_at", "id"),
+        Index(
+            "uq_browser_sessions_active_family",
+            "family_hash",
+            unique=True,
+            sqlite_where=text("replaced_at IS NULL AND revoked_at IS NULL"),
+            postgresql_where=text("replaced_at IS NULL AND revoked_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
@@ -91,12 +126,18 @@ class BrowserSession(Base):
     membership_id: Mapped[int] = mapped_column(
         ForeignKey("memberships.id", ondelete="CASCADE"), index=True, nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("(CURRENT_TIMESTAMP)")
+    )
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), index=True, nullable=False
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    family_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    token_issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    replaced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class OidcLoginAttempt(Base):

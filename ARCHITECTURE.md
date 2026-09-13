@@ -349,7 +349,7 @@ thread-safe metadata and signing-key caches for one application lifespan. The
 shipped local application creates no provider, and these dormant identity and
 session primitives do not change the current authorization boundary. Server
 mode continues to fail startup until authenticated context
-selection, route integration, session lifecycle, proxy trust, administration,
+selection, session route integration, proxy trust, administration,
 metrics, and end-to-end tenant tests are complete. Dormant login, callback, and
 mutation limits use database-serialized global and subject buckets in a separate
 short transaction. Subjects are protected with a deployment-keyed HMAC before
@@ -447,15 +447,19 @@ local organization; and makes that ownership non-null. Migration
 `0003_security_audit` adds structured, tenant-bound security-event storage without
 a free-form detail field. Migration `0004_oidc_attempts` adds only short-lived,
 one-use, browser-bound OIDC transaction state for the dormant authentication
-boundary. Migration `0005_rate_limits` adds disposable keyed counters
-for future cross-worker authentication throttling. None of these migrations enables authentication or networked server
+boundary. Migration `0005_rate_limits` adds disposable keyed counters for
+future cross-worker authentication throttling. Migration
+`0006_session_lifecycle` adds stable session families, token generations,
+rotation state, and the indexes and constraints that serialize one active
+generation per family. None of these migrations enables authentication or networked server
 mode. A legacy database is completed additively, validated table by table and
 column by column, and only then stamped; an unknown shape fails startup without
 being stamped. Fresh installs create the current tables, stamp the baseline, and
 still run every data migration rather than skipping seed invariants.
 `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and
-`tests/test_postgres.py` verify old data survival, idempotency, local ownership,
-and both SQLite and PostgreSQL paths, including concurrent rate-limit updates.
+`tests/test_postgres.py` verify old data survival, idempotency,
+local ownership, and both SQLite and PostgreSQL paths, including concurrent
+rate-limit and session-lifecycle updates.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 
@@ -517,19 +521,26 @@ Minor and patch changes are grouped per ecosystem to limit review noise, while
 major changes stay isolated and every proposed update must pass the same CI and
 CodeQL controls before a human merges it.
 
-The dormant server-session primitive generates a 256-bit browser token and
-derives a separate browser-readable CSRF proof with domain-separated SHA-256.
-It persists only their SHA-256 digests. Resolution accepts exactly the
-generated URL-safe shapes, joins through one membership to its user and
-organization, and returns no context for an unknown, expired, revoked, disabled,
-or unrecognized-role record. The returned token container masks both bearer
-values from `repr`. Lifecycle operations revoke a single hashed token
-idempotently, revoke every session for a membership after an access change, and
-purge only expired or revoked rows at an explicit retention cutoff. Issuance
-locks the membership and evicts the oldest session above an eight-active-session
-cap, serializing that decision on PostgreSQL. No cookie or login route uses this
-primitive yet. Session issuance and self-revocation append their typed audit
-event before the shared transaction commits, preventing an action/event split.
+The dormant server-session primitive generates a 256-bit browser token and a
+separate browser-readable CSRF proof, then stores only their domain-separated
+SHA-256 digests. Each issued session starts a stable family whose later token
+generations keep the same eight-hour absolute expiry. A session becomes invalid
+after 30 minutes without activity. Successful use advances `last_seen_at` at
+most once every five minutes and, after one hour, atomically replaces both the
+bearer token and CSRF proof without extending that absolute expiry.
+
+Resolution accepts exactly the generated URL-safe shapes, joins through one
+membership to its user and organization, and returns no context for an unknown,
+idle, expired, revoked, replaced, disabled, or unrecognized-role record. A
+logout presented with either the current generation or its retained predecessor
+revokes the whole family, which closes the race between rotation and logout.
+Issuance, use, and logout entry points own short isolated transactions; the
+lower-level operations stage changes in the caller's transaction so membership
+changes and revocation can commit together. Cleanup removes eligible inactive
+rows in bounded batches and uses PostgreSQL row locking that does not block a
+concurrent refresh. PostgreSQL tests verify concurrent issuance, touch,
+rotation, logout, membership revocation, and cleanup. No cookie or login route
+uses this primitive yet, and server mode remains disabled.
 
 `backend/app/browser_security.py` defines the browser-facing half of that
 future boundary without activating it. One public origin is canonicalized as
