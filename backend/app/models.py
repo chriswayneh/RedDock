@@ -125,6 +125,28 @@ class OidcLoginAttempt(Base):
     )
 
 
+class RateLimitBucket(Base):
+    """Disposable cross-worker counters for future server authentication."""
+
+    __tablename__ = "rate_limit_buckets"
+    __table_args__ = (
+        CheckConstraint(
+            "action IN ('oidc.login', 'oidc.callback', 'request.mutation')",
+            name="ck_rate_limit_action",
+        ),
+        CheckConstraint("length(key_hash) = 64", name="ck_rate_limit_key_hash"),
+        CheckConstraint("attempt_count BETWEEN 1 AND 1000000", name="ck_rate_limit_attempt_count"),
+        UniqueConstraint("action", "key_hash", name="uq_rate_limit_bucket"),
+        Index("ix_rate_limit_expiry", "expires_at", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    action: Mapped[str] = mapped_column(String(48), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
 class SecurityAuditEvent(Base):
     """A tenant-bound security decision with deliberately bounded metadata."""
 
@@ -499,9 +521,7 @@ class FindingEvidence(Base):
     """
 
     __tablename__ = "finding_evidence"
-    __table_args__ = (
-        UniqueConstraint("finding_id", "observation_id", name="uq_finding_evidence"),
-    )
+    __table_args__ = (UniqueConstraint("finding_id", "observation_id", name="uq_finding_evidence"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     finding_id: Mapped[int] = mapped_column(
@@ -637,7 +657,10 @@ class FrameworkMapping(Base):
     __tablename__ = "framework_mappings"
     __table_args__ = (
         UniqueConstraint(
-            "correlation_run_id", "finding_id", "framework", "external_id",
+            "correlation_run_id",
+            "finding_id",
+            "framework",
+            "external_id",
             name="uq_framework_mapping_snapshot",
         ),
     )

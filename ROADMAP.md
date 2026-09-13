@@ -175,9 +175,16 @@ These primitives are not an enabled authentication system:
   its full lifespan. Concurrent first loads and signing-key refreshes are
   serialized, refresh backoff is shared by request threads, and shutdown closes
   the owned client. Local mode creates no provider.
-- The next enablement checkpoint still needs cross-worker database rate limits,
-  session idle/touch/rotation, callback and administration routes, a packaged
-  TLS proxy, and end-to-end tests.
+- Dormant authentication throttling is serialized in PostgreSQL across workers.
+  It admits through a global bucket before creating a client bucket, stores
+  only deployment-keyed HMACs, owns a separate transaction, groups IPv6 clients
+  by `/64`, and removes expired rows in bounded batches. Real PostgreSQL races
+  prove global and same-client limits, exact-window resets, and safe cleanup
+  alongside refresh.
+- The next enablement checkpoint still needs mounted limiter-key provisioning
+  and a reserved limiter connection pool, session idle/touch/rotation, callback
+  and administration routes, a packaged TLS proxy, metrics, and end-to-end
+  authenticated tests.
 
 #### Automated review
 

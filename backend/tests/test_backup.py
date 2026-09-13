@@ -48,7 +48,7 @@ def _write_database(path: Path, value: str) -> None:
         engine.dispose()
     with closing(sqlite3.connect(path)) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0004_oidc_attempts')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0005_rate_limits')")
         connection.execute("CREATE TABLE state (value TEXT NOT NULL)")
         connection.execute("INSERT INTO state VALUES (?)", (value,))
         connection.execute(
@@ -370,7 +370,7 @@ def test_create_refuses_a_stamp_only_database(tmp_path: Path) -> None:
     data.mkdir()
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-        connection.execute("INSERT INTO alembic_version VALUES ('0004_oidc_attempts')")
+        connection.execute("INSERT INTO alembic_version VALUES ('0005_rate_limits')")
         connection.commit()
 
     with pytest.raises(BackupError, match="schema is incomplete"):
@@ -425,8 +425,7 @@ def test_create_refuses_changed_foreign_key_behavior(tmp_path: Path) -> None:
     data = _make_data(tmp_path / "data", "current")
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         original = connection.execute(
-            "SELECT sql FROM sqlite_master "
-            "WHERE type = 'table' AND name = 'security_audit_events'"
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'security_audit_events'"
         ).fetchone()[0]
         changed = original.replace("ON DELETE RESTRICT", "ON DELETE CASCADE")
         assert changed != original
@@ -454,8 +453,7 @@ def test_create_refuses_changed_column_default(tmp_path: Path) -> None:
         assert changed != original
         connection.execute("PRAGMA writable_schema = ON")
         connection.execute(
-            "UPDATE sqlite_master SET sql = ? "
-            "WHERE type = 'table' AND name = 'organizations'",
+            "UPDATE sqlite_master SET sql = ? WHERE type = 'table' AND name = 'organizations'",
             (changed,),
         )
         schema_version = connection.execute("PRAGMA schema_version").fetchone()[0]
@@ -470,8 +468,7 @@ def test_create_refuses_unexpected_database_trigger(tmp_path: Path) -> None:
     data = _make_data(tmp_path / "data", "current")
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         connection.execute(
-            "CREATE TRIGGER unexpected_state_write AFTER INSERT ON state "
-            "BEGIN SELECT 1; END"
+            "CREATE TRIGGER unexpected_state_write AFTER INSERT ON state BEGIN SELECT 1; END"
         )
         connection.commit()
 
@@ -538,9 +535,7 @@ def test_create_refuses_foreign_key_corruption(tmp_path: Path) -> None:
     data = _make_data(tmp_path / "data", "current")
     with closing(sqlite3.connect(data / "reddock.db")) as connection:
         connection.execute("CREATE TABLE parent (id INTEGER PRIMARY KEY)")
-        connection.execute(
-            "CREATE TABLE child (parent_id INTEGER REFERENCES parent(id))"
-        )
+        connection.execute("CREATE TABLE child (parent_id INTEGER REFERENCES parent(id))")
         connection.execute("INSERT INTO child VALUES (99)")
         connection.commit()
 

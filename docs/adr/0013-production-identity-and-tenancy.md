@@ -41,6 +41,11 @@ Server mode will fail startup unless every mandatory control is configured:
 - Server-side sessions stored as hashes, with rotation, expiry, revocation, and
   logout. A stolen database must not contain reusable bearer sessions.
 - Origin and CSRF enforcement for state-changing browser requests.
+- Database-serialized global and subject rate limits before authentication and
+  protected mutations. Limiter decisions own separate transactions, and raw
+  client and identity values are protected with a stable, mounted,
+  deployment-owned HMAC key shared by every worker. Limiter transactions use a
+  reserved connection pool so request work cannot starve the decision path.
 - No public self-signup. An owner/admin provisions membership and OIDC
   issuer/subject identity through an explicit bootstrap process.
 
@@ -49,10 +54,18 @@ public origin cannot silently leave the local unauthenticated API enabled.
 
 The first ingress checkpoint keeps server mode blocked while defining the
 proxy contract. The application server does not interpret forwarding headers
-implicitly. A dedicated middleware will accept one canonical forwarded client,
+implicitly. A dedicated middleware accepts one canonical forwarded client,
 Host, and HTTPS scheme only when the immediate peer is in the deployment-owned
 proxy allowlist. Alternate `Forwarded` syntax, duplicate values, and multi-hop
 lists are rejected.
+
+Rate-limit buckets use finite code-owned action names and domain-separated,
+deployment-keyed HMAC subject keys. PostgreSQL conflict updates serialize
+concurrent workers. A global bucket is consumed first, so a globally denied
+request cannot create an attacker-selected subject row. Each decision uses a
+separate short transaction so it cannot commit or roll back protected caller
+state. These counters are short-lived operational state, not tenant records,
+and do not enable any route by themselves.
 
 ## Ownership model
 

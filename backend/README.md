@@ -38,6 +38,7 @@ app/reporting/      deterministic reports, evidence manifests, and DockPack expo
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
 app/oidc.py         dormant OIDC protocol and identity-resolution boundary
+app/rate_limits.py  dormant cross-worker authentication throttling
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
 app/browser_security.py exact HTTPS origin and secure session-cookie contract
 app/response_security.py uniform response headers and API no-store policy
@@ -163,11 +164,25 @@ shares signing-key refresh backoff across its request threads, and closes the
 owned client at shutdown. No auth router is registered and the current request
 authorization still always selects the reserved local owner.
 
-Before server mode can be enabled, pending-login and request rate limits must be
-database-enforced across workers, and browser sessions need a reviewed
-idle-expiry/touch/rotation policy. A packaged TLS proxy, callback/error routes,
-administration, and end-to-end PostgreSQL concurrency tests remain release
-blockers.
+The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
+exact fixed-window decision. A mandatory global bucket is consumed before any
+client bucket, limiting attacker-created rows. Client addresses are normalized
+from trusted ingress, IPv6 is grouped by `/64`, and only deployment-keyed HMACs
+are stored. The limiter owns a short transaction so a decision cannot commit or
+roll back caller state. Cleanup is bounded. SQLite supports deterministic unit
+tests, while CI proves global and same-client contention, reset behavior, and
+cleanup alongside refresh on PostgreSQL.
+Local mode configures no limiter key and calls no limiter. The future server
+factory must load one stable mounted key shared by every worker and provide a
+dedicated limiter connection pool before it can register a protected route.
+That separate pool prevents authenticated request transactions from occupying
+every connection needed to make the security decision.
+
+Before server mode can be enabled, mounted limiter-key provisioning, its
+reserved database pool, and a reviewed browser-session
+idle-expiry/touch/rotation policy are still required. A packaged TLS proxy,
+callback/error routes, administration, metrics, and authenticated end-to-end
+tests remain release blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
 explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one

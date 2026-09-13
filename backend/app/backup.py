@@ -67,8 +67,9 @@ _SCHEMA_REVISIONS = {
     "0002_identity",
     "0003_security_audit",
     "0004_oidc_attempts",
+    "0005_rate_limits",
 }
-_CURRENT_SCHEMA_REVISION = "0004_oidc_attempts"
+_CURRENT_SCHEMA_REVISION = "0005_rate_limits"
 
 
 class BackupError(RuntimeError):

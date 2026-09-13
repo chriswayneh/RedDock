@@ -364,10 +364,14 @@ Phase 8 is still in development. Completed checkpoints include:
   interpretation disabled
 - a dormant application-owned OIDC provider cache with concurrent discovery
   and signing-key refreshes serialized per process
+- dormant database-backed authentication throttling with keyed client buckets,
+  isolated transactions, global-first admission, bounded cleanup, and
+  PostgreSQL concurrency proof
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
-routes, user administration, scaling, PostgreSQL disaster recovery, and
-production deployment hardening are still planned. See the
+routes, mounted limiter-key provisioning, a reserved limiter connection pool,
+session lifecycle, user administration, scaling, PostgreSQL disaster recovery,
+and production deployment hardening are still planned. See the
 [roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security

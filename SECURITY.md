@@ -144,6 +144,16 @@ deployment is secure.
   cannot stampede initial loads or key refreshes. They retain no provider token
   or profile claim and resolve only a pre-provisioned issuer/subject identity.
   No authentication route is registered, and server mode still fails startup.
+- Future authentication throttling uses atomic database updates shared across
+  workers. A global bucket is checked before any client bucket, counters stop at
+  their fixed limit, client and identity values are protected by a
+  deployment-keyed HMAC, IPv6 clients share a `/64` bucket, and expired-state
+  cleanup is bounded. Each decision owns its database transaction. PostgreSQL
+  concurrency tests verify global and same-client admission, exact reset, and
+  cleanup-versus-refresh behavior. These dormant primitives do not expose a
+  login route or make server mode available. Local mode configures no limiter
+  key; stable mounted-key provisioning and a reserved limiter database pool
+  remain server-mode release gates.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - Secrets must not be committed. GitHub secret scanning and push protection check the public repository for likely credentials.
