@@ -47,6 +47,13 @@ Server mode will fail startup unless every mandatory control is configured:
 Mixed or incomplete configurations are rejected. In particular, setting a
 public origin cannot silently leave the local unauthenticated API enabled.
 
+The first ingress checkpoint keeps server mode blocked while defining the
+proxy contract. The application server does not interpret forwarding headers
+implicitly. A dedicated middleware will accept one canonical forwarded client,
+Host, and HTTPS scheme only when the immediate peer is in the deployment-owned
+proxy allowlist. Alternate `Forwarded` syntax, duplicate values, and multi-hop
+lists are rejected.
+
 ## Ownership model
 
 Phase 8 adds:

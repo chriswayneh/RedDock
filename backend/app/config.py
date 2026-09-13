@@ -1,6 +1,7 @@
 import os
 import re
 from functools import lru_cache
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
@@ -21,6 +22,7 @@ _SERVER_IDENTITY_VARIABLES = (
     "REDDOCK_OIDC_CLIENT_SECRET_FILE",
     "REDDOCK_OIDC_ENDPOINT_ORIGINS",
     "REDDOCK_SERVER_ORGANIZATION_SLUG",
+    "REDDOCK_TRUSTED_PROXY_CIDRS",
 )
 
 
@@ -54,9 +56,7 @@ def _provider_secret() -> SecretStr | None:
     direct = os.getenv("REDDOCK_LLM_API_KEY") or None
     from_file = _read_secret_file("REDDOCK_LLM_API_KEY_FILE")
     if direct and from_file:
-        raise ConfigurationError(
-            "Set only one of REDDOCK_LLM_API_KEY and REDDOCK_LLM_API_KEY_FILE"
-        )
+        raise ConfigurationError("Set only one of REDDOCK_LLM_API_KEY and REDDOCK_LLM_API_KEY_FILE")
     value = from_file or direct
     return SecretStr(value) if value else None
 
@@ -163,6 +163,7 @@ class DormantServerIdentityConfig(BaseModel):
     database_name: str
     database_user: str
     database_password: SecretStr
+    trusted_proxy_cidrs: tuple[str, ...] = ()
 
 
 def dormant_server_identity_config() -> DormantServerIdentityConfig:
@@ -187,8 +188,10 @@ def dormant_server_identity_config() -> DormantServerIdentityConfig:
             "and forbids REDDOCK_DATABASE_URL"
         )
     client_id = str(configured["REDDOCK_OIDC_CLIENT_ID"])
-    if not 1 <= len(client_id) <= 255 or client_id != client_id.strip() or any(
-        ord(character) < 0x20 for character in client_id
+    if (
+        not 1 <= len(client_id) <= 255
+        or client_id != client_id.strip()
+        or any(ord(character) < 0x20 for character in client_id)
     ):
         raise ConfigurationError("REDDOCK_OIDC_CLIENT_ID must be bounded non-control text")
     organization_slug = str(configured["REDDOCK_SERVER_ORGANIZATION_SLUG"])
@@ -219,6 +222,34 @@ def dormant_server_identity_config() -> DormantServerIdentityConfig:
         raise ConfigurationError(
             "REDDOCK_OIDC_ENDPOINT_ORIGINS must include the configured issuer origin"
         )
+    proxy_values = str(configured["REDDOCK_TRUSTED_PROXY_CIDRS"]).split(",")
+    if not 1 <= len(proxy_values) <= 16 or any(not item for item in proxy_values):
+        raise ConfigurationError("REDDOCK_TRUSTED_PROXY_CIDRS must contain 1 to 16 entries")
+    trusted_proxy_cidrs: list[str] = []
+    for item in proxy_values:
+        if item != item.strip() or any(character.isspace() for character in item):
+            raise ConfigurationError(
+                "REDDOCK_TRUSTED_PROXY_CIDRS must use comma-separated canonical addresses or CIDRs"
+            )
+        try:
+            if "/" in item:
+                network = ip_network(item, strict=True)
+                canonical = str(network)
+            else:
+                address = ip_address(item)
+                canonical = f"{address}/{address.max_prefixlen}"
+        except ValueError as error:
+            raise ConfigurationError(
+                "REDDOCK_TRUSTED_PROXY_CIDRS contains an invalid address or CIDR"
+            ) from error
+        network = ip_network(canonical)
+        if network.num_addresses > 65_536:
+            raise ConfigurationError(
+                "REDDOCK_TRUSTED_PROXY_CIDRS entries must trust at most 65536 addresses"
+            )
+        trusted_proxy_cidrs.append(canonical)
+    if len(set(trusted_proxy_cidrs)) != len(trusted_proxy_cidrs):
+        raise ConfigurationError("REDDOCK_TRUSTED_PROXY_CIDRS must not contain duplicates")
     return DormantServerIdentityConfig(
         public_origin=_canonical_https_url(
             str(configured["REDDOCK_PUBLIC_ORIGIN"]),
@@ -230,6 +261,7 @@ def dormant_server_identity_config() -> DormantServerIdentityConfig:
         oidc_client_secret=SecretStr(client_secret),
         oidc_endpoint_origins=endpoint_origins,
         organization_slug=organization_slug,
+        trusted_proxy_cidrs=tuple(trusted_proxy_cidrs),
         **database,
     )
 

@@ -93,6 +93,11 @@ sign-in, SSO, and shared-user access are not available yet.
   also stops another website from starting a validation through your browser,
   tightens what the RedDock page is allowed to load, and removes container
   privileges the application never uses.
+- **A defined future ingress boundary:** server-mode proxy addresses must be
+  explicitly configured. The dormant middleware accepts one exact HTTPS
+  forwarding hop, rejects duplicate or conflicting proxy headers, and leaves
+  local mode unchanged. The application server no longer interprets proxy
+  headers implicitly.
 - **Accurate repeat discovery:** an explicitly closed or filtered Nmap port
   updates the matching known service while an unscanned port remains unchanged.
   Exact compact port lists are retained as evidence; count-only summaries never
@@ -151,6 +156,10 @@ These primitives are not an enabled authentication system:
 
 #### Browser boundary
 
+- A dormant trusted-ingress middleware that accepts forwarded request metadata
+  only from configured proxy addresses, requires one canonical client address,
+  exact public Host, and HTTPS scheme, and rejects alternate or multi-hop
+  forwarding forms. Uvicorn proxy-header interpretation is explicitly off.
 - Dormant exact-HTTPS-origin checks and host-bound secure session-cookie policy.
 - A request verifier requiring both exact Origin and CSRF proof for mutations,
   with ambiguous duplicate credentials rejected.
@@ -164,7 +173,7 @@ These primitives are not an enabled authentication system:
   sign-in or `server` mode.
 - The next enablement checkpoint still needs application-scoped provider/JWKS
   caching, cross-worker database rate limits, session idle/touch/rotation,
-  callback and administration routes, TLS proxy trust, and end-to-end tests.
+  callback and administration routes, a packaged TLS proxy, and end-to-end tests.
 
 #### Automated review
 
