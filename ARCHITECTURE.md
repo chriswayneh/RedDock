@@ -354,8 +354,21 @@ metrics, and end-to-end tenant tests are complete. Dormant login, callback, and
 mutation limits use database-serialized global and subject buckets in a separate
 short transaction. Subjects are protected with a deployment-keyed HMAC before
 storage, and a denied global request never creates a new attacker-selected
-client row. Future server integration must reserve a separate limiter connection
-pool so request transactions cannot starve this decision path.
+client row. One future server process owns a single limiter capability that
+pairs its mounted HMAC key with a separate, prewarmed two-connection PostgreSQL
+pool. The main pool is capped at 15 connections, making the application budget
+17 per process plus operational headroom. Checkout, connection, statement, and
+lock waits are bounded so an unavailable decision fails closed. Real PostgreSQL
+tests fill the main and limiter pools independently and show that neither can
+borrow the other's capacity.
+
+The mounted key must contain exactly 64 lowercase hexadecimal characters and is
+available only to the future server runtime. All workers use the same key.
+Rotation requires stopping every worker, replacing the shared secret, and
+restarting them together so mixed keys cannot split counters. Local mode and
+the current Compose profiles create no limiter resource. A separate
+least-privilege database role for the limiter remains required before routes or
+server mode can be enabled.
 
 ## Trust boundaries
 

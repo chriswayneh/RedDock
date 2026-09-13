@@ -189,10 +189,15 @@ These primitives are not an enabled authentication system:
   by `/64`, and removes expired rows in bounded batches. Real PostgreSQL races
   prove global and same-client limits, exact-window resets, and safe cleanup
   alongside refresh.
-- The next enablement checkpoint still needs mounted limiter-key provisioning
-  and a reserved limiter connection pool, session route integration, callback
-  and administration routes, a packaged TLS proxy, metrics, PostgreSQL disaster
-  recovery exercises, and end-to-end authenticated tests.
+- One process-owned limiter capability now loads a server-only mounted key with
+  exactly 64 lowercase hexadecimal characters and owns an isolated, prewarmed
+  two-connection pool with bounded failure times. The main pool is capped at 15
+  connections, making the application budget 17 per process plus operational
+  headroom. Real PostgreSQL tests exercise isolation while either pool is full.
+- The next enablement checkpoint still needs a separate least-privilege limiter
+  database role, session and limiter route integration, callback and
+  administration routes, a packaged TLS proxy, metrics, PostgreSQL disaster
+  recovery exercises, capacity planning, and end-to-end authenticated tests.
 
 #### Automated review
 

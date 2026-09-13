@@ -9,14 +9,15 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
-from app.config import DormantServerIdentityConfig, get_settings
+from app.config import DormantServerRuntimeConfig, get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
-from app.database import SessionLocal, initialize_database
+from app.database import SessionLocal, create_rate_limiter_runtime, initialize_database
 from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
 from app.oidc import OidcProvider
+from app.rate_limits import RateLimiterRuntime
 from app.reporting.runner import recover_interrupted_runs as recover_interrupted_reports
 from app.response_security import ResponseSecurityMiddleware
 from app.validation.runner import recover_interrupted_runs as recover_interrupted_validations
@@ -27,11 +28,14 @@ logger = logging.getLogger("reddock")
 
 
 def build_lifespan(
-    oidc_config: DormantServerIdentityConfig | None = None,
+    server_config: DormantServerRuntimeConfig | None = None,
     *,
-    provider_factory: Callable[[DormantServerIdentityConfig], OidcProvider] = OidcProvider,
+    provider_factory: Callable[[DormantServerRuntimeConfig], OidcProvider] = OidcProvider,
+    limiter_factory: Callable[
+        [DormantServerRuntimeConfig], RateLimiterRuntime
+    ] = create_rate_limiter_runtime,
 ):
-    """Own one future OIDC provider per application process and lifespan."""
+    """Own future server resources once per application process and lifespan."""
 
     @asynccontextmanager
     async def managed_lifespan(application: FastAPI):
@@ -62,15 +66,24 @@ def build_lifespan(
         if validations:
             logger.warning("Marked %s validation run(s) as interrupted by restart", validations)
 
-        provider = provider_factory(oidc_config) if oidc_config is not None else None
-        if provider is not None:
-            application.state.oidc_provider = provider
+        provider = None
+        rate_limiter = None
         try:
+            if server_config is not None:
+                rate_limiter = limiter_factory(server_config)
+                application.state.rate_limiter = rate_limiter
+                provider = provider_factory(server_config)
+                application.state.oidc_provider = provider
             yield
         finally:
-            if provider is not None:
-                del application.state.oidc_provider
-                provider.close()
+            try:
+                if provider is not None:
+                    del application.state.oidc_provider
+                    provider.close()
+            finally:
+                if rate_limiter is not None:
+                    del application.state.rate_limiter
+                    rate_limiter.close()
 
     return managed_lifespan
 

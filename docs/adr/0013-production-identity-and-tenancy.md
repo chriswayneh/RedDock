@@ -47,7 +47,8 @@ Server mode will fail startup unless every mandatory control is configured:
   protected mutations. Limiter decisions own separate transactions, and raw
   client and identity values are protected with a stable, mounted,
   deployment-owned HMAC key shared by every worker. Limiter transactions use a
-  reserved connection pool so request work cannot starve the decision path.
+  reserved connection pool so request work cannot starve the decision path. A
+  separate least-privilege database role remains required before server mode.
 - No public self-signup. An owner/admin provisions membership and OIDC
   issuer/subject identity through an explicit bootstrap process.
 
@@ -68,6 +69,20 @@ request cannot create an attacker-selected subject row. Each decision uses a
 separate short transaction so it cannot commit or roll back protected caller
 state. These counters are short-lived operational state, not tenant records,
 and do not enable any route by themselves.
+
+The dormant runtime accepts only a mounted key containing exactly 64 lowercase
+hexadecimal characters. One process-owned capability keeps its decoded key
+paired with an isolated, prewarmed two-connection pool. The main pool is capped
+at 15 connections, producing a 17-connection application budget per process
+plus operational headroom. Checkout, connection, statement, and lock waits are
+bounded, and failure to make a durable decision denies the request. Real
+PostgreSQL tests fill each pool in turn and confirm isolation.
+
+All workers must share the same key. Rotation requires a full stop, one shared
+secret replacement, and a coordinated restart because mixed keys would split
+counters. Local mode and the current Compose profiles neither load the key nor
+create the capability. No protected route uses it, and server mode remains
+disabled.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the

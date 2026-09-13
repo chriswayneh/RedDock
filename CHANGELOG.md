@@ -6,6 +6,15 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A dormant, process-owned limiter capability that reads one server-only mounted
+  key in canonical 64-character lowercase hexadecimal form and keeps it paired
+  with an isolated, prewarmed two-connection PostgreSQL pool. Bounded checkout,
+  connection, statement, and lock waits fail closed. The main pool is capped at
+  15 connections, giving a 17-connection application budget per process plus
+  operational headroom. Real PostgreSQL tests fill either pool and confirm that
+  the other remains available. Local mode and current Compose profiles remain
+  unchanged, routes and server mode stay disabled, and a separate
+  least-privilege limiter database role is still required.
 - A dormant browser-session lifecycle built around stable families of hash-only
   token generations. Sessions become idle after 30 minutes, activity updates
   are throttled to once every five minutes, and bearer and CSRF credentials

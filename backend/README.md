@@ -173,16 +173,25 @@ roll back caller state. Cleanup is bounded. SQLite supports deterministic unit
 tests, while CI proves global and same-client contention, reset behavior, and
 cleanup alongside refresh on PostgreSQL.
 Local mode configures no limiter key and calls no limiter. The future server
-factory must load one stable mounted key shared by every worker and provide a
-dedicated limiter connection pool before it can register a protected route.
-That separate pool prevents authenticated request transactions from occupying
-every connection needed to make the security decision.
+runtime now requires a mounted key containing exactly 64 lowercase hexadecimal
+characters, decoded to 32 bytes and kept out of representations and errors. One
+process-owned capability keeps that key paired with an isolated, prewarmed
+two-connection pool. PostgreSQL connect, checkout, statement, and lock waits are
+bounded, and an unavailable limiter fails closed. The main pool can use at most
+15 connections and the limiter pool 2, for 17 per process plus operational
+headroom. Real PostgreSQL tests fill either pool and confirm that the other
+remains usable.
 
-Before server mode can be enabled, mounted limiter-key provisioning, its
-reserved database pool, and a reviewed browser-session
-idle-expiry/touch/rotation policy are still required. A packaged TLS proxy,
-callback/error routes, administration, metrics, and authenticated end-to-end
-tests remain release blockers.
+Every worker must read the same server-only key. It must not be rotated through
+a rolling restart because mixed keys would split counters. Rotation requires a
+full stop, one shared-secret replacement, and a coordinated restart. The
+current local and PostgreSQL Compose profiles do not mount this key or create a
+limiter runtime. A separate least-privilege database role limited to the rate
+limit table and its sequence is still required for server deployment.
+
+Before server mode can be enabled, the limiter role, authenticated route wiring,
+a packaged TLS proxy, callback/error routes, administration, metrics, capacity
+planning, and authenticated end-to-end tests remain release blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
 explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one

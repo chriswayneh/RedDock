@@ -156,6 +156,8 @@ def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     client_secret.write_text("confidential-client-secret", encoding="utf-8")
     database_secret = tmp_path / "database-secret"
     database_secret.write_text("database-secret", encoding="utf-8")
+    rate_limit_key = tmp_path / "rate-limit-key"
+    rate_limit_key.write_text("ab" * 32 + "\n", encoding="utf-8")
     values = {
         "REDDOCK_PUBLIC_ORIGIN": "https://reddock.example",
         "REDDOCK_OIDC_ISSUER": "https://identity.example/realms/reddock",
@@ -169,6 +171,7 @@ def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         "REDDOCK_DATABASE_NAME": "reddock",
         "REDDOCK_DATABASE_USER": "reddock",
         "REDDOCK_DATABASE_PASSWORD_FILE": str(database_secret),
+        "REDDOCK_RATE_LIMIT_KEY_FILE": str(rate_limit_key),
     }
     monkeypatch.delenv("REDDOCK_DATABASE_URL", raising=False)
     for name, value in values.items():
@@ -179,7 +182,12 @@ def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 def test_dormant_server_identity_contract_parses_without_enabling_server(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
-    from app.config import ConfigurationError, dormant_server_identity_config, get_settings
+    from app.config import (
+        ConfigurationError,
+        dormant_server_identity_config,
+        dormant_server_runtime_config,
+        get_settings,
+    )
 
     _dormant_server_environment(tmp_path, monkeypatch)
     parsed = dormant_server_identity_config()
@@ -192,11 +200,56 @@ def test_dormant_server_identity_contract_parses_without_enabling_server(
     )
     assert parsed.trusted_proxy_cidrs == ("10.20.0.2/32", "2001:db8:20::2/128")
     assert "confidential-client-secret" not in repr(parsed)
+    runtime = dormant_server_runtime_config()
+    assert runtime.rate_limit_key.get_secret_value() == bytes.fromhex("ab" * 32)
+    assert "abababab" not in repr(runtime)
 
     monkeypatch.setenv("REDDOCK_DEPLOYMENT_MODE", "server")
     get_settings.cache_clear()
     with pytest.raises(ConfigurationError, match="not available"):
         get_settings()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "ab" * 31,
+        "ab" * 33,
+        "AB" * 32,
+        "g0" * 32,
+        "ab" * 32 + "\nextra",
+        "ab" * 31 + "\x00f0",
+        "",
+    ],
+)
+def test_dormant_server_runtime_rejects_malformed_limiter_keys(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: str,
+):
+    from app.config import ConfigurationError, dormant_server_runtime_config
+
+    values = _dormant_server_environment(tmp_path, monkeypatch)
+    key_file = Path(values["REDDOCK_RATE_LIMIT_KEY_FILE"])
+    key_file.write_text(payload, encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="REDDOCK_RATE_LIMIT_KEY_FILE") as rejected:
+        dormant_server_runtime_config()
+    if payload:
+        assert payload not in str(rejected.value)
+
+
+def test_dormant_server_runtime_requires_a_mounted_limiter_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.config import ConfigurationError, dormant_server_runtime_config
+
+    _dormant_server_environment(tmp_path, monkeypatch)
+    monkeypatch.delenv("REDDOCK_RATE_LIMIT_KEY_FILE")
+
+    with pytest.raises(ConfigurationError, match="REDDOCK_RATE_LIMIT_KEY_FILE is required"):
+        dormant_server_runtime_config()
 
 
 def test_dormant_server_identity_preserves_a_canonical_trailing_slash_issuer(
