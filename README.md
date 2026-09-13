@@ -373,12 +373,16 @@ Phase 8 is still in development. Completed checkpoints include:
 - a separately credentialed limiter database role whose bucket-scoped
   database privileges and lack of unrelated object ownership are checked at
   startup, including standalone PostgreSQL types
+- a dormant authentication coordinator that applies login and callback limits,
+  consumes browser-bound OIDC state once, resolves only pre-provisioned active
+  memberships, and issues audited hash-only sessions
 
-Authentication is not enabled, and shared mode remains blocked. Authenticated
-routes, session route integration, user administration, scaling, PostgreSQL
-disaster recovery, and production deployment hardening are still planned. The
-current local and PostgreSQL Compose profiles remain unchanged and create no
-limiter runtime or limiter role.
+Authentication is not enabled, and shared mode remains blocked. No
+authentication route or UI calls this coordinator, no protected request
+resolves a browser session, and server mode still fails startup. HTTP auth and
+cookie wiring, authenticated request context, user administration, scaling,
+PostgreSQL disaster recovery, and production hardening are still planned. The
+current local and PostgreSQL Compose profiles remain unchanged.
 Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
 tests cover issuance, touch, rotation, logout, membership revocation, cleanup,
 and limiter-pool isolation. See the [roadmap](ROADMAP.md) for the detailed

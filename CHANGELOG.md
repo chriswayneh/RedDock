@@ -6,6 +6,17 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- A dormant process-owned authentication coordinator for the future server
+  boundary. It applies durable login and callback admission, creates and
+  consumes browser-bound OIDC state once, validates the provider identity,
+  locks and resolves only a pre-provisioned membership, and issues one audited
+  hash-only session. Login limiting precedes provider work, callback state is
+  burned before token exchange, and post-burn exchange and ID-token validation
+  failures make a best-effort attempt to record bounded denial events.
+  PostgreSQL concurrency proves one callback can issue at most one session. The
+  configured dormant lifespan requires its lifecycle database engine
+  explicitly. Local mode, Compose, routes, UI, and server-mode rejection are
+  unchanged.
 - A dormant, process-owned limiter capability that reads one server-only mounted
   key in canonical 64-character lowercase hexadecimal form and keeps it paired
   with an isolated, prewarmed two-connection PostgreSQL pool. Bounded checkout,

@@ -648,6 +648,106 @@ def test_postgresql_migrations_and_crud(
                     )
                 ).scalar_one()
             assert limiter_connections == POSTGRES_LIMITER_POOL_SIZE
+
+            from urllib.parse import parse_qs, urlsplit
+
+            from app.authentication import AuthenticationFailure, AuthenticationRuntime
+            from app.models import BrowserSession, Membership, Organization, User
+            from app.oidc import VerifiedIdentity
+
+            authentication_slug = f"integration-{schema_probe_suffix}"
+            authentication_subject = f"subject-{schema_probe_suffix}"
+            authentication_config = runtime_config.model_copy(
+                update={"organization_slug": authentication_slug}
+            )
+            with app.database.SessionLocal.begin() as session:
+                organization = Organization(
+                    slug=authentication_slug,
+                    name="Authentication integration",
+                )
+                user = User(
+                    oidc_issuer=authentication_config.oidc_issuer,
+                    oidc_subject=authentication_subject,
+                    display_name="Authentication integration",
+                    status="active",
+                )
+                session.add_all([organization, user])
+                session.flush()
+                membership = Membership(
+                    organization_id=organization.id,
+                    user_id=user.id,
+                    role="operator",
+                    status="active",
+                )
+                session.add(membership)
+                session.flush()
+                authentication_membership_id = membership.id
+
+            class ConcurrentProvider:
+                def __init__(self) -> None:
+                    self.exchange_calls = 0
+
+                def discovery(self):
+                    return object()
+
+                def authorization_url(self, attempt) -> str:
+                    return f"https://identity.example/authorize?state={attempt.state}"
+
+                def exchange_code(self, *, code: str, pkce_verifier: str) -> str:
+                    assert code == "one-use-code"
+                    assert pkce_verifier
+                    self.exchange_calls += 1
+                    return "signed-id-token"
+
+                def validate_id_token(self, _token: str, *, expected_nonce_hash: str):
+                    assert len(expected_nonce_hash) == 64
+                    return VerifiedIdentity(
+                        issuer=authentication_config.oidc_issuer,
+                        subject=authentication_subject,
+                    )
+
+            concurrent_provider = ConcurrentProvider()
+            authentication_runtime = AuthenticationRuntime(
+                authentication_config,
+                concurrent_provider,
+                limiter_runtime,
+                app.database.engine,
+            )
+            authentication_time = limited_at + timedelta(minutes=5)
+            challenge = authentication_runtime.begin_login(
+                "203.0.113.40",
+                now=authentication_time,
+            )
+            state = parse_qs(urlsplit(challenge.authorization_url).query)["state"][0]
+            callback_barrier = Barrier(2)
+
+            def complete_callback():
+                callback_barrier.wait(timeout=15)
+                try:
+                    return authentication_runtime.complete_callback(
+                        "203.0.113.40",
+                        state=state,
+                        browser_token=challenge.browser_token,
+                        code="one-use-code",
+                        now=authentication_time,
+                    )
+                except AuthenticationFailure:
+                    return None
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                callback_results = list(executor.map(lambda _: complete_callback(), range(2)))
+            assert sum(result is not None for result in callback_results) == 1
+            assert concurrent_provider.exchange_calls == 1
+            with app.database.SessionLocal() as session:
+                assert (
+                    session.scalar(
+                        select(func.count(BrowserSession.id)).where(
+                            BrowserSession.membership_id == authentication_membership_id
+                        )
+                    )
+                    == 1
+                )
+            authentication_runtime.close()
         finally:
             limiter_runtime.close()
 

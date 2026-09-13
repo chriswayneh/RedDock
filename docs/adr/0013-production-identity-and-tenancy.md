@@ -115,6 +115,21 @@ rather than continuously. The main role retains migration authority, and both
 database secrets exist in one process. Database-wide capacity and consistent
 HMAC-key distribution remain separate operational gates.
 
+The dormant configured application lifespan composes one authentication
+coordinator from the process-owned provider, isolated limiter, and an explicitly
+supplied lifecycle engine. Login admission occurs before provider discovery and
+state creation. Callback admission occurs before one-use state consumption; the
+state is then burned before token exchange. A verified token must map to an
+exact pre-provisioned issuer/subject membership, locked through session
+issuance, before an audited hash-only session is created. Post-burn provider
+exchange and ID-token validation failures make a best-effort attempt to record
+bounded denial events. Expected failures are generic, with a retry interval
+only for a durable rate-limit denial. No HTTP route or UI invokes this
+coordinator, no protected request resolves its sessions, and server mode
+remains disabled. A future server composition must prove that the lifecycle
+engine matches the validated server database configuration and apply bounded
+statement and lock waits before activation.
+
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
 bearer token and CSRF proof together after one hour. Rotation preserves the
@@ -180,7 +195,11 @@ removing role change.
   memberships, revoked/expired sessions, OIDC issuer/subject confusion,
   CSRF/origin failures, and approval-time role changes.
 - PostgreSQL race coverage confirms concurrent session issuance, touch,
-  rotation, revocation, and cleanup before the lifecycle is connected to routes.
+  rotation, revocation, cleanup, and one-winner callback consumption while the
+  lifecycle and coordinator remain disconnected from routes.
+- Authentication orchestration tests cover admission order, generic failures,
+  provider outages, replay, unprovisioned identities, process lifecycle, and
+  one-winner PostgreSQL callback concurrency.
 - Logs and errors exclude cookies, authorization codes, client secrets, session
   tokens, and model credentials.
 - Server mode is not production-ready until PostgreSQL, migrations,

@@ -144,6 +144,20 @@ deployment is secure.
   cannot stampede initial loads or key refreshes. They retain no provider token
   or profile claim and resolve only a pre-provisioned issuer/subject identity.
   No authentication route is registered, and server mode still fails startup.
+- A dormant authentication coordinator composes these controls in fail-closed
+  order. A future HTTP adapter must supply the canonical client address from
+  trusted ingress. Login limiting precedes provider discovery and state
+  creation. Callback limiting precedes one-use state consumption, and the state
+  is burned before provider token exchange, preventing callback replay from
+  repeating that exchange. The matching user and membership rows are locked
+  through session issuance. Only a pre-provisioned active identity can receive
+  an audited hash-only session. Post-burn provider exchange and ID-token
+  validation failures make a best-effort attempt to record bounded denial
+  events, and expected failures reveal no provider, database, identity, or
+  session detail. No auth route or UI calls this code, and server mode
+  remains disabled. Before activation, the application must prove that the
+  explicitly supplied lifecycle engine matches the validated server database
+  configuration and must bound its statement and lock waits.
 - Future authentication throttling uses atomic database updates shared across
   workers. A global bucket is checked before any client bucket, counters stop at
   their fixed limit, client and identity values are protected by a
