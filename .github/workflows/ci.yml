@@ -257,7 +257,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install -e ".[dev]"
-      - name: Prove migrations and CRUD against PostgreSQL
+      - name: Prove migrations, rate-limit concurrency, and CRUD against PostgreSQL
         env:
           REDDOCK_TEST_POSTGRES_URL: postgresql+psycopg://reddock:integration-only@127.0.0.1:5432/reddock
         run: pytest tests/test_postgres.py

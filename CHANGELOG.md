@@ -6,6 +6,13 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- Database-backed fixed-window throttling for future login, callback, and
+  mutation routes. Atomic PostgreSQL updates enforce exact cross-worker limits,
+  global-first admission bounds attacker-created client state, stored keys are
+  deployment-keyed HMACs, decisions own isolated transactions, IPv6 clients
+  share a `/64`, and expired rows are removed in bounded batches. Real
+  PostgreSQL races verify global and same-client admission, reset behavior, and
+  cleanup alongside refresh.
 - Application-lifespan ownership for the dormant OIDC provider cache. One
   provider instance is shared by a FastAPI process, concurrent discovery and
   JWKS cache fills are serialized, refresh backoff is shared across request

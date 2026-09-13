@@ -350,7 +350,12 @@ shipped local application creates no provider, and these dormant identity and
 session primitives do not change the current authorization boundary. Server
 mode continues to fail startup until authenticated context
 selection, route integration, session lifecycle, proxy trust, administration,
-cross-worker controls, and end-to-end tenant tests are complete.
+metrics, and end-to-end tenant tests are complete. Dormant login, callback, and
+mutation limits use database-serialized global and subject buckets in a separate
+short transaction. Subjects are protected with a deployment-keyed HMAC before
+storage, and a denied global request never creates a new attacker-selected
+client row. Future server integration must reserve a separate limiter connection
+pool so request transactions cannot starve this decision path.
 
 ## Trust boundaries
 
@@ -442,14 +447,15 @@ local organization; and makes that ownership non-null. Migration
 `0003_security_audit` adds structured, tenant-bound security-event storage without
 a free-form detail field. Migration `0004_oidc_attempts` adds only short-lived,
 one-use, browser-bound OIDC transaction state for the dormant authentication
-boundary. None of these migrations enables authentication or networked server
+boundary. Migration `0005_rate_limits` adds disposable keyed counters
+for future cross-worker authentication throttling. None of these migrations enables authentication or networked server
 mode. A legacy database is completed additively, validated table by table and
 column by column, and only then stamped; an unknown shape fails startup without
 being stamped. Fresh installs create the current tables, stamp the baseline, and
 still run every data migration rather than skipping seed invariants.
 `tests/test_schema_upgrade.py`, `tests/test_migrations.py`, and
 `tests/test_postgres.py` verify old data survival, idempotency, local ownership,
-and both SQLite and PostgreSQL paths.
+and both SQLite and PostgreSQL paths, including concurrent rate-limit updates.
 
 That constraint has already shaped a decision rather than merely being stated: detection artifact hashes live on the detection run because `evidence_records.discovery_run_id` cannot be relaxed additively.
 

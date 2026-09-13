@@ -13,6 +13,7 @@ class MigrationError(RuntimeError):
 
 
 BASELINE_REVISION = "0001_v080"
+MIGRATION_OWNED_TABLES = frozenset({"rate_limit_buckets"})
 
 # Frozen v0.8.0 contract. A legacy database is stamped only after every released
 # table and column is present. Extra tables and columns are permitted so an
@@ -312,6 +313,14 @@ def _create_missing_baseline_tables(connection: Connection) -> None:
             table.create(bind=connection, checkfirst=True)
 
 
+def _create_bootstrap_tables(connection: Connection) -> None:
+    """Create the current bootstrap model except tables owned by later migrations."""
+
+    for table in Base.metadata.sorted_tables:
+        if table.name not in MIGRATION_OWNED_TABLES:
+            table.create(bind=connection, checkfirst=True)
+
+
 def _validate_legacy_baseline(connection: Connection) -> None:
     inspector = inspect(connection)
     present = set(inspector.get_table_names())
@@ -351,9 +360,10 @@ def upgrade_database(engine: Engine) -> None:
                 _validate_legacy_baseline(connection)
                 command.stamp(config, BASELINE_REVISION)
             else:
-                # Create the current model, stamp the released baseline, and run
-                # every migration so data-seeding migrations are never skipped.
-                Base.metadata.create_all(bind=connection)
+                # Bootstrap the current model except objects whose migrations must
+                # validate ownership themselves. Earlier idempotent migrations still
+                # run so their data seeding is never skipped.
+                _create_bootstrap_tables(connection)
                 command.stamp(config, BASELINE_REVISION)
 
         command.upgrade(config, "head")
