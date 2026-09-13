@@ -362,6 +362,8 @@ Phase 8 is still in development. Completed checkpoints include:
   bootstrap foundations
 - a dormant, exact one-hop trusted-proxy contract with implicit proxy-header
   interpretation disabled
+- a dormant application-owned OIDC provider cache with concurrent discovery
+  and signing-key refreshes serialized per process
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
 routes, user administration, scaling, PostgreSQL disaster recovery, and

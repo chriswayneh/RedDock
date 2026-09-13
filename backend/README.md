@@ -157,14 +157,17 @@ client uses authorization code plus PKCE,
 bounded no-redirect HTTP, one-use browser-bound database transactions, and
 asymmetric ID-token validation. It requests only `openid`, retains no provider
 profile claims or tokens, and resolves only an exact pre-provisioned
-issuer/subject membership. No auth router is registered and the current request
+issuer/subject membership. A future application process owns one provider
+instance for its lifespan, serializes concurrent discovery and JWKS cache fills,
+shares signing-key refresh backoff across its request threads, and closes the
+owned client at shutdown. No auth router is registered and the current request
 authorization still always selects the reserved local owner.
 
-Before server mode can be enabled, the provider/cache must be application
-scoped, pending-login and request rate limits must be database-enforced across
-workers, and browser sessions need a reviewed idle-expiry/touch/rotation policy.
-A packaged TLS proxy, callback/error routes, administration, and end-to-end
-PostgreSQL concurrency tests remain release blockers.
+Before server mode can be enabled, pending-login and request rate limits must be
+database-enforced across workers, and browser sessions need a reviewed
+idle-expiry/touch/rotation policy. A packaged TLS proxy, callback/error routes,
+administration, and end-to-end PostgreSQL concurrency tests remain release
+blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
 explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one

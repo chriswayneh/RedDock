@@ -6,6 +6,11 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
+- Application-lifespan ownership for the dormant OIDC provider cache. One
+  provider instance is shared by a FastAPI process, concurrent discovery and
+  JWKS cache fills are serialized, refresh backoff is shared across request
+  threads, and shutdown closes the owned HTTP client exactly once. Local mode
+  creates no provider and still exposes no sign-in routes.
 - A dormant trusted-ingress boundary for future server mode. It accepts one
   exact HTTPS forwarding hop only from explicitly configured proxy addresses,
   rejects ambiguous or conflicting forwarding headers, and records a verified

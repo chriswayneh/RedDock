@@ -139,9 +139,11 @@ deployment is secure.
   HTTPS origins, reject redirects and oversized responses, use authorization
   code with PKCE, bind one-use state to a host-only transaction cookie, and
   validate asymmetric ID-token signatures plus issuer, audience, time, and
-  nonce claims. They retain no provider token or profile claim and resolve only
-  a pre-provisioned issuer/subject identity. No authentication route is
-  registered, and server mode still fails startup.
+  nonce claims. One provider and its thread-safe metadata and signing-key cache
+  belong to one future application lifespan, so concurrent request threads
+  cannot stampede initial loads or key refreshes. They retain no provider token
+  or profile claim and resolve only a pre-provisioned issuer/subject identity.
+  No authentication route is registered, and server mode still fails startup.
 - Concurrent discovery runs and run duration are bounded; a run interrupted by a restart is marked failed rather than left active. Validation and intelligence requests are bounded per Dockyard and run synchronously only after approval. Reporting runs synchronously under a single-process lock, captures database state under an explicit consistent transaction, and removes a partial reporting directory when startup marks its interrupted run failed.
 - Detection is bounded too: the snapshot it reads, the findings a detector may return, and the evidence references a finding may carry all have limits, and an operator-supplied CVE catalogue is size- and entry-capped.
 - Secrets must not be committed. GitHub secret scanning and push protection check the public repository for likely credentials.
