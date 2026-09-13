@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from sqlalchemy import inspect
+from sqlalchemy.exc import IntegrityError
 
 
 def test_fresh_database_is_stamped_at_the_current_head(environment: Path):
@@ -18,7 +19,7 @@ def test_fresh_database_is_stamped_at_the_current_head(environment: Path):
         assert inspect(connection).has_table("rate_limit_buckets")
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0005_rate_limits"
+            == "0006_session_lifecycle"
         )
         assert (
             connection.exec_driver_sql("SELECT name FROM organizations WHERE id = 1").scalar_one()
@@ -68,7 +69,181 @@ def test_rate_limit_migration_upgrades_the_oidc_schema_in_place(environment: Pat
         assert inspect(connection).has_table("rate_limit_buckets")
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "0005_rate_limits"
+            == "0006_session_lifecycle"
+        )
+
+
+def test_session_lifecycle_migration_backfills_and_enforces_family_state(
+    environment: Path,
+):
+    import app.database
+    from app.migration_runner import _config
+
+    app.database.initialize_database()
+    with app.database.engine.begin() as connection:
+        command.downgrade(_config(connection), "0005_rate_limits")
+        legacy_columns = {column["name"]: column for column in inspect(connection).get_columns(
+            "browser_sessions"
+        )}
+        assert legacy_columns["created_at"]["nullable"] is True
+        assert "family_hash" not in legacy_columns
+        connection.exec_driver_sql(
+            """
+            INSERT INTO browser_sessions (
+                id, token_hash, csrf_token_hash, membership_id, created_at,
+                last_seen_at, expires_at, revoked_at
+            ) VALUES (
+                1, ?, ?, 1, NULL, ?, ?, NULL
+            )
+            """,
+            (
+                "a" * 64,
+                "b" * 64,
+                "2026-09-14 12:00:00",
+                "2026-09-15 12:00:00",
+            ),
+        )
+        connection.exec_driver_sql(
+            """
+            INSERT INTO browser_sessions (
+                id, token_hash, csrf_token_hash, membership_id, created_at,
+                last_seen_at, expires_at, revoked_at
+            ) VALUES (
+                2, ?, ?, 1, ?, ?, ?, NULL
+            )
+            """,
+            (
+                "e" * 64,
+                "f" * 64,
+                "2026-09-14 12:00:01",
+                "2026-09-14 12:00:00",
+                "2026-09-15 12:00:00",
+            ),
+        )
+
+    app.database.initialize_database()
+    with app.database.engine.connect() as connection:
+        assert (
+            connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
+            == "0006_session_lifecycle"
+        )
+        row = connection.exec_driver_sql(
+            """
+            SELECT token_hash, family_hash, generation, created_at,
+                   last_seen_at, token_issued_at, replaced_at
+            FROM browser_sessions WHERE id = 1
+            """
+        ).mappings().one()
+        assert row["family_hash"] == row["token_hash"] == "a" * 64
+        assert row["generation"] == 0
+        assert row["created_at"] == row["last_seen_at"] == "2026-09-14 12:00:00"
+        assert row["token_issued_at"] == row["last_seen_at"]
+        assert row["replaced_at"] is None
+        skewed = connection.exec_driver_sql(
+            """
+            SELECT created_at, last_seen_at, token_issued_at
+            FROM browser_sessions WHERE id = 2
+            """
+        ).mappings().one()
+        assert skewed["created_at"] == "2026-09-14 12:00:00"
+        assert skewed["token_issued_at"] == skewed["last_seen_at"]
+
+        columns = {column["name"]: column for column in inspect(connection).get_columns(
+            "browser_sessions"
+        )}
+        for name in ("created_at", "family_hash", "generation", "token_issued_at"):
+            assert columns[name]["nullable"] is False
+        assert columns["replaced_at"]["nullable"] is True
+        checks = {
+            constraint["name"]
+            for constraint in inspect(connection).get_check_constraints("browser_sessions")
+        }
+        assert {
+            "ck_browser_session_token_hash",
+            "ck_browser_session_csrf_hash",
+            "ck_browser_session_family_hash",
+            "ck_browser_session_generation",
+            "ck_browser_session_created_before_token",
+            "ck_browser_session_token_before_seen",
+            "ck_browser_session_seen_before_expiry",
+        } <= checks
+        unique_constraints = {
+            constraint["name"]: constraint["column_names"]
+            for constraint in inspect(connection).get_unique_constraints("browser_sessions")
+        }
+        assert unique_constraints["uq_browser_session_family_generation"] == [
+            "family_hash",
+            "generation",
+        ]
+        indexes = {
+            index["name"]: (index["column_names"], index["unique"])
+            for index in inspect(connection).get_indexes("browser_sessions")
+        }
+        assert indexes["ix_browser_sessions_last_seen"] == (["last_seen_at", "id"], 0)
+        assert indexes["uq_browser_sessions_active_family"] == (["family_hash"], 1)
+        index_sql = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' "
+            "AND name = 'uq_browser_sessions_active_family'"
+        ).scalar_one()
+        assert "WHERE replaced_at IS NULL AND revoked_at IS NULL" in index_sql
+
+    with pytest.raises(IntegrityError):
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                INSERT INTO browser_sessions (
+                    token_hash, csrf_token_hash, membership_id, created_at,
+                    last_seen_at, expires_at, revoked_at, family_hash,
+                    generation, token_issued_at, replaced_at
+                ) VALUES (?, ?, 1, ?, ?, ?, NULL, ?, 1, ?, NULL)
+                """,
+                (
+                    "c" * 64,
+                    "d" * 64,
+                    "2026-09-14 12:01:00",
+                    "2026-09-14 12:01:00",
+                    "2026-09-15 12:00:00",
+                    "a" * 64,
+                    "2026-09-14 12:01:00",
+                ),
+            )
+
+    with app.database.engine.begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE browser_sessions SET replaced_at = ? WHERE id = 1",
+            ("2026-09-14 12:01:00",),
+        )
+        connection.exec_driver_sql(
+            """
+            INSERT INTO browser_sessions (
+                token_hash, csrf_token_hash, membership_id, created_at,
+                last_seen_at, expires_at, revoked_at, family_hash,
+                generation, token_issued_at, replaced_at
+            ) VALUES (?, ?, 1, ?, ?, ?, NULL, ?, 1, ?, NULL)
+            """,
+            (
+                "c" * 64,
+                "d" * 64,
+                "2026-09-14 12:01:00",
+                "2026-09-14 12:01:00",
+                "2026-09-15 12:00:00",
+                "a" * 64,
+                "2026-09-14 12:01:00",
+            ),
+        )
+
+    with app.database.engine.begin() as connection:
+        command.downgrade(_config(connection), "0005_rate_limits")
+        downgraded_columns = {
+            column["name"]
+            for column in inspect(connection).get_columns("browser_sessions")
+        }
+        assert "replaced_at" not in downgraded_columns
+        assert (
+            connection.exec_driver_sql(
+                "SELECT revoked_at FROM browser_sessions WHERE id = 1"
+            ).scalar_one()
+            == "2026-09-14 12:01:00"
         )
 
 

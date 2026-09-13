@@ -78,11 +78,22 @@ def test_every_phase_1_table_is_created(phase_0_database: Path):
     } <= tables
     with sqlite3.connect(phase_0_database) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "0005_rate_limits",
+            "0006_session_lifecycle",
         )
         assert connection.execute(
             "SELECT organization_id FROM dockyards WHERE name = 'Existing engagement'"
         ).fetchone() == (1,)
+        browser_session_columns = {
+            row[1]: row for row in connection.execute("PRAGMA table_info(browser_sessions)")
+        }
+        assert {
+            "family_hash",
+            "generation",
+            "token_issued_at",
+            "replaced_at",
+        } <= browser_session_columns.keys()
+        for name in ("created_at", "family_hash", "generation", "token_issued_at"):
+            assert browser_session_columns[name][3] == 1
 
 
 #: The schema as released in v0.2.1, written out rather than derived, so a

@@ -353,7 +353,8 @@ Phase 8 is still in development. Completed checkpoints include:
 
 - private PostgreSQL support and migration testing
 - tenant isolation and least-privilege API enforcement
-- secure session and browser-boundary foundations
+- a dormant session lifecycle with stable session families, a 30-minute idle
+  limit, throttled activity updates, and paired bearer and CSRF rotation
 - hardened responses, readiness checks, and dependency scanning
 - complete paginated inventories, evidence lists, and run histories
 - fail-closed release automation and native AMD64/ARM64 product verification
@@ -370,8 +371,10 @@ Phase 8 is still in development. Completed checkpoints include:
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
 routes, mounted limiter-key provisioning, a reserved limiter connection pool,
-session lifecycle, user administration, scaling, PostgreSQL disaster recovery,
-and production deployment hardening are still planned. See the
+session route integration, user administration, scaling, PostgreSQL disaster
+recovery, and production deployment hardening are still planned. Session
+rotation keeps the original eight-hour absolute expiry. PostgreSQL race tests
+cover issuance, touch, rotation, logout, membership revocation, and cleanup. See the
 [roadmap](ROADMAP.md) for the detailed status.
 
 ## Contributing and Security

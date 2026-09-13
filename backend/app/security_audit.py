@@ -12,6 +12,8 @@ _BOUNDED_IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,63}")
 
 class SecurityAction(StrEnum):
     SESSION_ISSUE = "session.issue"
+    SESSION_ROTATE = "session.rotate"
+    SESSION_REPLAY = "session.replay"
     SESSION_REVOKE = "session.revoke"
     MEMBERSHIP_SESSIONS_REVOKE = "membership.sessions_revoke"
     AUTHENTICATION_DENY = "authentication.deny"

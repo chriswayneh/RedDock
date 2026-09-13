@@ -7,8 +7,9 @@ import ast
 import json
 import re
 import subprocess
-import tomllib
 from pathlib import Path
+
+import tomllib
 
 TAG_PATTERN = re.compile(
     r"v(?P<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))"

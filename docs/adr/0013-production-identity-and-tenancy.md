@@ -38,8 +38,10 @@ Server mode will fail startup unless every mandatory control is configured:
   will not store user passwords in the first server-mode release.
 - TLS termination at a trusted reverse proxy, strict proxy-header handling, and
   `Secure`, `HttpOnly`, same-site session cookies.
-- Server-side sessions stored as hashes, with rotation, expiry, revocation, and
-  logout. A stolen database must not contain reusable bearer sessions.
+- Server-side sessions stored as hashes in stable families, with a 30-minute
+  idle limit, throttled activity updates, paired bearer and CSRF rotation,
+  expiry, revocation, and logout. A stolen database must not contain reusable
+  bearer sessions.
 - Origin and CSRF enforcement for state-changing browser requests.
 - Database-serialized global and subject rate limits before authentication and
   protected mutations. Limiter decisions own separate transactions, and raw
@@ -67,6 +69,19 @@ separate short transaction so it cannot commit or roll back protected caller
 state. These counters are short-lived operational state, not tenant records,
 and do not enable any route by themselves.
 
+Session generations belong to one stable, random family. They become idle after
+30 minutes, update activity at most once every five minutes, and rotate the
+bearer token and CSRF proof together after one hour. Rotation preserves the
+original eight-hour absolute expiry. Replaced generations cannot authenticate,
+but a retained predecessor can still identify the family for logout so a
+concurrent rotation does not preserve access. Request-facing issue, use, and
+logout operations own short isolated transactions. Lower-level revocation can
+instead join an identity or membership change so both commit or roll back
+together. Cleanup is bounded, and its PostgreSQL locking must remain safe beside
+concurrent refresh. PostgreSQL tests cover issuance, touch, rotation, logout,
+membership revocation, and cleanup races. These primitives are not connected to
+routes, and server mode remains disabled.
+
 ## Ownership model
 
 Phase 8 adds:
@@ -77,7 +92,9 @@ Phase 8 adds:
   authentication checkpoint.
 - `Membership`: a user's role and status in an organization.
 - `Dockyard.organization_id`: mandatory owner for engagement state.
-- `Session`: expiring and revocable; only a token hash is retained server-side.
+- `Session`: one hash-only token generation in a stable, expiring, revocable
+  family. Rotation replaces the bearer and CSRF pair without extending the
+  family's absolute lifetime.
 - `SecurityAuditEvent`: tenant-bound structured decisions with bounded opaque
   identifiers and no free-form detail field.
 
@@ -116,6 +133,8 @@ removing role change.
 - Tests cover every role/action pair, cross-organization ID swaps, disabled
   memberships, revoked/expired sessions, OIDC issuer/subject confusion,
   CSRF/origin failures, and approval-time role changes.
+- PostgreSQL race coverage confirms concurrent session issuance, touch,
+  rotation, revocation, and cleanup before the lifecycle is connected to routes.
 - Logs and errors exclude cookies, authorization codes, client secrets, session
   tokens, and model credentials.
 - Server mode is not production-ready until PostgreSQL, migrations,
