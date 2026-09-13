@@ -158,6 +158,8 @@ def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     database_secret.write_text("database-secret", encoding="utf-8")
     rate_limit_key = tmp_path / "rate-limit-key"
     rate_limit_key.write_text("ab" * 32 + "\n", encoding="utf-8")
+    limiter_database_secret = tmp_path / "limiter-database-secret"
+    limiter_database_secret.write_text("independent-limiter-secret", encoding="utf-8")
     values = {
         "REDDOCK_PUBLIC_ORIGIN": "https://reddock.example",
         "REDDOCK_OIDC_ISSUER": "https://identity.example/realms/reddock",
@@ -172,6 +174,9 @@ def _dormant_server_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
         "REDDOCK_DATABASE_USER": "reddock",
         "REDDOCK_DATABASE_PASSWORD_FILE": str(database_secret),
         "REDDOCK_RATE_LIMIT_KEY_FILE": str(rate_limit_key),
+        "REDDOCK_RATE_LIMIT_DATABASE_USER": "reddock_limiter",
+        "REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE": str(limiter_database_secret),
+        "REDDOCK_SERVER_WORKERS": "1",
     }
     monkeypatch.delenv("REDDOCK_DATABASE_URL", raising=False)
     for name, value in values.items():
@@ -202,7 +207,13 @@ def test_dormant_server_identity_contract_parses_without_enabling_server(
     assert "confidential-client-secret" not in repr(parsed)
     runtime = dormant_server_runtime_config()
     assert runtime.rate_limit_key.get_secret_value() == bytes.fromhex("ab" * 32)
+    assert runtime.rate_limit_database_user == "reddock_limiter"
+    assert (
+        runtime.rate_limit_database_password.get_secret_value()
+        == "independent-limiter-secret"
+    )
     assert "abababab" not in repr(runtime)
+    assert "independent-limiter-secret" not in repr(runtime)
 
     monkeypatch.setenv("REDDOCK_DEPLOYMENT_MODE", "server")
     get_settings.cache_clear()
@@ -249,6 +260,65 @@ def test_dormant_server_runtime_requires_a_mounted_limiter_key(
     monkeypatch.delenv("REDDOCK_RATE_LIMIT_KEY_FILE")
 
     with pytest.raises(ConfigurationError, match="REDDOCK_RATE_LIMIT_KEY_FILE is required"):
+        dormant_server_runtime_config()
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("REDDOCK_RATE_LIMIT_DATABASE_USER", None, "requires"),
+        ("REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE", None, "requires"),
+        ("REDDOCK_RATE_LIMIT_DATABASE_USER", "reddock", "must differ"),
+        ("REDDOCK_RATE_LIMIT_DATABASE_USER", "invalid user", "is invalid"),
+    ],
+)
+def test_dormant_server_runtime_requires_a_distinct_limiter_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str | None,
+    message: str,
+):
+    from app.config import ConfigurationError, dormant_server_runtime_config
+
+    _dormant_server_environment(tmp_path, monkeypatch)
+    if value is None:
+        monkeypatch.delenv(name)
+    else:
+        monkeypatch.setenv(name, value)
+
+    with pytest.raises(ConfigurationError, match=message):
+        dormant_server_runtime_config()
+
+
+def test_dormant_server_runtime_rejects_reused_database_password(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.config import ConfigurationError, dormant_server_runtime_config
+
+    values = _dormant_server_environment(tmp_path, monkeypatch)
+    Path(values["REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE"]).write_text(
+        "database-secret", encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigurationError, match="independent credential") as error:
+        dormant_server_runtime_config()
+    assert "database-secret" not in str(error.value)
+
+
+@pytest.mark.parametrize("workers", ["", "0", "65", "one", "1.5"])
+def test_dormant_server_runtime_rejects_invalid_worker_counts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    workers: str,
+):
+    from app.config import ConfigurationError, dormant_server_runtime_config
+
+    _dormant_server_environment(tmp_path, monkeypatch)
+    monkeypatch.setenv("REDDOCK_SERVER_WORKERS", workers)
+
+    with pytest.raises(ConfigurationError, match="REDDOCK_SERVER_WORKERS"):
         dormant_server_runtime_config()
 
 

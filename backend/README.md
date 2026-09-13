@@ -186,12 +186,40 @@ Every worker must read the same server-only key. It must not be rotated through
 a rolling restart because mixed keys would split counters. Rotation requires a
 full stop, one shared-secret replacement, and a coordinated restart. The
 current local and PostgreSQL Compose profiles do not mount this key or create a
-limiter runtime. A separate least-privilege database role limited to the rate
-limit table and its sequence is still required for server deployment.
+limiter runtime.
 
-Before server mode can be enabled, the limiter role, authenticated route wiring,
-a packaged TLS proxy, callback/error routes, administration, metrics, capacity
-planning, and authenticated end-to-end tests remain release blockers.
+The dormant server contract also requires
+`REDDOCK_RATE_LIMIT_DATABASE_USER`, a mounted
+`REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE`, and `REDDOCK_SERVER_WORKERS` from
+1 through 64. The limiter login and password must both differ from the main
+application credentials. At startup, RedDock requires a direct
+`LOGIN NOINHERIT` role with a connection limit exactly twice the configured
+worker count and no memberships or elevated flags. It may connect to the
+configured database, use the `public` schema, read and change
+`rate_limit_buckets`, and use that table's sequence. It may not own objects,
+grant privileges, create database or schema objects, use temporary tables,
+receive column-level, large-object, or database-parameter grants, connect to
+other databases, run user-defined routines, or access unrelated application
+objects. Ownership of standalone PostgreSQL types, plus foreign keys, rewrite
+rules, inheritance, row-level security, and triggers involving the bucket
+table, also fails startup. The limiter connection fixes its search path to
+`pg_catalog,public`.
+
+Every process must receive the same `REDDOCK_SERVER_WORKERS` value, set to the
+actual total process count across the deployment. RedDock can verify the role
+limit against that declaration, but it cannot discover the orchestrator's
+actual process count.
+
+An operator or infrastructure tool must provision this role after migrations;
+RedDock migrations do not create or manage database logins. Rotate its password
+by stopping all workers, updating the mounted secret, and restarting them
+together. The main role still runs migrations, both passwords are present in
+one process, and the privilege check occurs at startup. Database-wide capacity
+and consistent HMAC-key distribution remain separate deployment gates.
+
+Before server mode can be enabled, authenticated route wiring, a packaged TLS
+proxy, callback/error routes, administration, metrics, capacity planning, and
+authenticated end-to-end tests remain release blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
 explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one

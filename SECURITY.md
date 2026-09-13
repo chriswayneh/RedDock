@@ -22,7 +22,7 @@ controls, not a certification or a claim that server mode is ready.
 | Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, session rotation, proxy trust, and administration remain release gates. |
 | Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current requests intentionally use the reserved local owner. Authenticated user context selection is not enabled. |
 | Target and model access | DockGuard authorizes target contact. Detectors and reports have no network capability. Model advice receives only a separately approved packet and no tools. | RedDock enforces declared scope but cannot establish the operator's legal or contractual authority. |
-| Process and secrets | The application runs non-root with all Linux capabilities dropped and `no-new-privileges`. Database credentials use mounted secret files. | PostgreSQL support does not enable authenticated shared use. Sidecars retain only the capabilities required by their upstream startup paths. |
+| Process and secrets | The application runs non-root with all Linux capabilities dropped and `no-new-privileges`. Database credentials use mounted secret files. The dormant limiter uses a separately credentialed PostgreSQL role whose narrow privileges are checked at startup. | PostgreSQL support does not enable authenticated shared use. The main role still runs migrations, and both database secrets exist in one process. Sidecars retain only the capabilities required by their upstream startup paths. |
 | Retained data | Tenant keys, path confinement, bounded reads, SHA-256 evidence checks, and private backup modes protect application workflows. | Operators still control host access, backup custody, secret rotation, and disaster-recovery policy. |
 
 For operators, the safe rule is simple: use the default loopback Compose
@@ -160,8 +160,24 @@ deployment is secure.
   17 connections plus operational headroom. PostgreSQL tests fill each pool in
   turn and verify that the other remains usable. Local mode and the current
   Compose profiles load no limiter key. Every worker must use the same key, and
-  rotation requires a full stop rather than a rolling restart. A separate
-  least-privilege limiter database role remains a server-mode release gate.
+  rotation requires a full stop rather than a rolling restart. The server
+  contract requires a distinct `REDDOCK_RATE_LIMIT_DATABASE_USER` and mounted
+  `REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE`; reuse of either application
+  credential is rejected. Startup accepts only a direct `LOGIN NOINHERIT` role
+  with a connection limit exactly twice `REDDOCK_SERVER_WORKERS`, no
+  memberships or elevated flags, database `CONNECT`, `public` schema `USAGE`,
+  bucket `SELECT`/`INSERT`/`UPDATE`/`DELETE`, and sequence `USAGE`. It rejects
+  ownership, grant options, column-level grants, object creation, temporary
+  access, other database access, large-object access, database parameter
+  grants, role-level settings, user-defined routine execution, standalone type
+  ownership, bucket policies or triggers, foreign keys, rewrite rules,
+  inheritance, and unrelated object access. The
+  connection fixes its search path to `pg_catalog,public`. Operators provision
+  the role outside
+  migrations and rotate its password with a coordinated stop and restart. This
+  is a startup-time check, not continuous database policy monitoring. The main
+  role still runs migrations, both secrets exist in one process, and
+  database-wide capacity and shared HMAC-key enforcement remain separate gates.
 - Dormant browser sessions use stable families of hash-only token generations.
   A session becomes idle after 30 minutes, activity writes are limited to once
   every five minutes, and the bearer token and CSRF proof rotate together after

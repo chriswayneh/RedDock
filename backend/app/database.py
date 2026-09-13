@@ -3,7 +3,7 @@ from contextlib import ExitStack
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL, Engine
+from sqlalchemy.engine import URL, Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -18,6 +18,276 @@ POSTGRES_LIMITER_POOL_TIMEOUT_SECONDS = 2
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 5
 POSTGRES_LIMITER_STATEMENT_TIMEOUT_MS = 2_000
 POSTGRES_LIMITER_LOCK_TIMEOUT_MS = 1_000
+
+
+def _limiter_privileges_are_exact(
+    connection: Connection,
+    *,
+    expected_role: str,
+    expected_database: str,
+    expected_connections: int,
+) -> bool:
+    """Verify the effective PostgreSQL identity, required access, and exclusions."""
+
+    if connection.dialect.name != "postgresql":
+        return True
+    statement = text(
+        """
+        SELECT
+            current_user = :expected_role
+            AND session_user = :expected_role
+            AND current_database() = :expected_database
+            AND role.rolcanlogin
+            AND NOT role.rolinherit
+            AND NOT role.rolsuper
+            AND NOT role.rolcreatedb
+            AND NOT role.rolcreaterole
+            AND NOT role.rolreplication
+            AND NOT role.rolbypassrls
+            AND role.rolconfig IS NULL
+            AND role.rolconnlimit = :expected_connections
+            AND NOT EXISTS (
+                SELECT 1 FROM pg_auth_members membership
+                WHERE membership.member = role.oid
+            )
+            AND has_database_privilege(current_user, current_database(), 'CONNECT')
+            AND NOT has_database_privilege(current_user, current_database(), 'CREATE')
+            AND NOT has_database_privilege(current_user, current_database(), 'TEMPORARY')
+            AND NOT has_database_privilege(
+                current_user, current_database(), 'CONNECT WITH GRANT OPTION'
+            )
+            AND database.datdba <> role.oid
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_database other_database
+                WHERE other_database.datname <> current_database()
+                  AND (
+                      other_database.datdba = role.oid
+                      OR has_database_privilege(current_user, other_database.oid, 'CREATE')
+                      OR (
+                          other_database.datallowconn
+                          AND (
+                              has_database_privilege(
+                                  current_user, other_database.oid, 'CONNECT'
+                              )
+                              OR has_database_privilege(
+                                  current_user, other_database.oid, 'TEMPORARY'
+                              )
+                          )
+                      )
+                  )
+            )
+            AND has_schema_privilege(current_user, 'public', 'USAGE')
+            AND NOT has_schema_privilege(current_user, 'public', 'CREATE')
+            AND NOT has_schema_privilege(current_user, 'public', 'USAGE WITH GRANT OPTION')
+            AND namespace.nspowner <> role.oid
+            AND has_table_privilege(current_user, 'public.rate_limit_buckets', 'SELECT')
+            AND has_table_privilege(current_user, 'public.rate_limit_buckets', 'INSERT')
+            AND has_table_privilege(current_user, 'public.rate_limit_buckets', 'UPDATE')
+            AND has_table_privilege(current_user, 'public.rate_limit_buckets', 'DELETE')
+            AND NOT has_table_privilege(current_user, 'public.rate_limit_buckets', 'TRUNCATE')
+            AND NOT has_table_privilege(current_user, 'public.rate_limit_buckets', 'REFERENCES')
+            AND NOT has_table_privilege(current_user, 'public.rate_limit_buckets', 'TRIGGER')
+            AND NOT has_table_privilege(current_user, 'public.rate_limit_buckets', 'MAINTAIN')
+            AND NOT has_table_privilege(
+                current_user, 'public.rate_limit_buckets', 'SELECT WITH GRANT OPTION'
+            )
+            AND NOT has_table_privilege(
+                current_user, 'public.rate_limit_buckets', 'INSERT WITH GRANT OPTION'
+            )
+            AND NOT has_table_privilege(
+                current_user, 'public.rate_limit_buckets', 'UPDATE WITH GRANT OPTION'
+            )
+            AND NOT has_table_privilege(
+                current_user, 'public.rate_limit_buckets', 'DELETE WITH GRANT OPTION'
+            )
+            AND NOT has_any_column_privilege(
+                current_user, 'public.rate_limit_buckets', 'SELECT WITH GRANT OPTION'
+            )
+            AND NOT has_any_column_privilege(
+                current_user, 'public.rate_limit_buckets', 'INSERT WITH GRANT OPTION'
+            )
+            AND NOT has_any_column_privilege(
+                current_user, 'public.rate_limit_buckets', 'UPDATE WITH GRANT OPTION'
+            )
+            AND NOT has_any_column_privilege(
+                current_user, 'public.rate_limit_buckets', 'REFERENCES WITH GRANT OPTION'
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_attribute attribute
+                WHERE attribute.attrelid = bucket.oid
+                  AND attribute.attacl IS NOT NULL
+            )
+            AND bucket.relowner <> role.oid
+            AND NOT bucket.relrowsecurity
+            AND NOT bucket.relforcerowsecurity
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_trigger bucket_trigger
+                WHERE bucket_trigger.tgrelid = bucket.oid
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint relationship
+                WHERE relationship.contype = 'f'
+                  AND (
+                      relationship.conrelid = bucket.oid
+                      OR relationship.confrelid = bucket.oid
+                  )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_rewrite rewrite
+                WHERE rewrite.ev_class = bucket.oid
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_inherits inheritance
+                WHERE inheritance.inhrelid = bucket.oid
+                   OR inheritance.inhparent = bucket.oid
+            )
+            AND has_sequence_privilege(
+                current_user, 'public.rate_limit_buckets_id_seq', 'USAGE'
+            )
+            AND NOT has_sequence_privilege(
+                current_user, 'public.rate_limit_buckets_id_seq', 'SELECT'
+            )
+            AND NOT has_sequence_privilege(
+                current_user, 'public.rate_limit_buckets_id_seq', 'UPDATE'
+            )
+            AND NOT has_sequence_privilege(
+                current_user,
+                'public.rate_limit_buckets_id_seq',
+                'USAGE WITH GRANT OPTION'
+            )
+            AND sequence.relowner <> role.oid
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_class object
+                JOIN pg_namespace object_namespace
+                    ON object_namespace.oid = object.relnamespace
+                WHERE object_namespace.nspname NOT LIKE 'pg_%'
+                  AND object_namespace.nspname <> 'information_schema'
+                  AND object.oid NOT IN (bucket.oid, sequence.oid)
+                  AND (
+                      object.relowner = role.oid
+                      OR (
+                          object.relkind IN ('r', 'p', 'v', 'm', 'f')
+                          AND (
+                              has_table_privilege(current_user, object.oid, 'SELECT')
+                              OR has_table_privilege(current_user, object.oid, 'INSERT')
+                              OR has_table_privilege(current_user, object.oid, 'UPDATE')
+                              OR has_table_privilege(current_user, object.oid, 'DELETE')
+                              OR has_table_privilege(current_user, object.oid, 'TRUNCATE')
+                              OR has_table_privilege(current_user, object.oid, 'REFERENCES')
+                              OR has_table_privilege(current_user, object.oid, 'TRIGGER')
+                              OR has_table_privilege(current_user, object.oid, 'MAINTAIN')
+                              OR has_any_column_privilege(current_user, object.oid, 'SELECT')
+                              OR has_any_column_privilege(current_user, object.oid, 'INSERT')
+                              OR has_any_column_privilege(current_user, object.oid, 'UPDATE')
+                              OR has_any_column_privilege(current_user, object.oid, 'REFERENCES')
+                          )
+                      )
+                      OR (
+                          object.relkind = 'S'
+                          AND (
+                              has_sequence_privilege(current_user, object.oid, 'USAGE')
+                              OR has_sequence_privilege(current_user, object.oid, 'SELECT')
+                              OR has_sequence_privilege(current_user, object.oid, 'UPDATE')
+                          )
+                      )
+                  )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_namespace other_namespace
+                WHERE other_namespace.nspname NOT LIKE 'pg_%'
+                  AND other_namespace.nspname NOT IN ('information_schema', 'public')
+                  AND (
+                      other_namespace.nspowner = role.oid
+                      OR has_schema_privilege(current_user, other_namespace.oid, 'USAGE')
+                      OR has_schema_privilege(current_user, other_namespace.oid, 'CREATE')
+                   )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_type owned_type
+                WHERE owned_type.typowner = role.oid
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_proc routine
+                JOIN pg_namespace routine_namespace
+                    ON routine_namespace.oid = routine.pronamespace
+                WHERE routine_namespace.nspname NOT LIKE 'pg_%'
+                  AND routine_namespace.nspname <> 'information_schema'
+                  AND (
+                      routine.proowner = role.oid
+                      OR has_function_privilege(current_user, routine.oid, 'EXECUTE')
+                  )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_largeobject_metadata large_object
+                WHERE large_object.lomowner = role.oid
+                   OR EXISTS (
+                       SELECT 1
+                       FROM aclexplode(large_object.lomacl) access
+                       WHERE access.grantee IN (0, role.oid)
+                         AND access.privilege_type IN ('SELECT', 'UPDATE')
+                   )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_parameter_acl parameter
+                WHERE has_parameter_privilege(current_user, parameter.parname, 'SET')
+                   OR has_parameter_privilege(
+                       current_user, parameter.parname, 'ALTER SYSTEM'
+                   )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_tablespace tablespace
+                WHERE tablespace.spcowner = role.oid
+                   OR has_tablespace_privilege(
+                       current_user, tablespace.oid, 'CREATE'
+                   )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_foreign_data_wrapper wrapper
+                WHERE wrapper.fdwowner = role.oid
+                   OR has_foreign_data_wrapper_privilege(
+                       current_user, wrapper.oid, 'USAGE'
+                   )
+            )
+            AND NOT EXISTS (
+                SELECT 1
+                FROM pg_foreign_server server
+                WHERE server.srvowner = role.oid
+                   OR has_server_privilege(current_user, server.oid, 'USAGE')
+            )
+        FROM pg_roles role
+        JOIN pg_database database ON database.datname = current_database()
+        JOIN pg_namespace namespace ON namespace.nspname = 'public'
+        JOIN pg_class bucket ON bucket.oid = 'public.rate_limit_buckets'::regclass
+        JOIN pg_class sequence
+            ON sequence.oid = 'public.rate_limit_buckets_id_seq'::regclass
+        WHERE role.rolname = current_user
+        """
+    )
+    return (
+        connection.execute(
+            statement,
+            {
+                "expected_role": expected_role,
+                "expected_database": expected_database,
+                "expected_connections": expected_connections,
+            },
+        ).scalar_one()
+        is True
+    )
 
 
 def _connect_args(database_url: str | URL) -> dict:
@@ -85,8 +355,8 @@ def create_rate_limiter_runtime(config: DormantServerRuntimeConfig):
         raise ValueError("validated dormant server runtime configuration is required")
     url = URL.create(
         "postgresql+psycopg",
-        username=config.database_user,
-        password=config.database_password.get_secret_value(),
+        username=config.rate_limit_database_user,
+        password=config.rate_limit_database_password.get_secret_value(),
         host=config.database_host,
         port=config.database_port,
         database=config.database_name,
@@ -99,12 +369,14 @@ def create_rate_limiter_runtime(config: DormantServerRuntimeConfig):
             pool_timeout=POSTGRES_LIMITER_POOL_TIMEOUT_SECONDS,
             pool_pre_ping=True,
             isolation_level="READ COMMITTED",
+            execution_options={"schema_translate_map": {None: "public"}},
             connect_args={
                 "connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS,
                 "application_name": "reddock-limiter",
                 "options": (
                     f"-c statement_timeout={POSTGRES_LIMITER_STATEMENT_TIMEOUT_MS} "
-                    f"-c lock_timeout={POSTGRES_LIMITER_LOCK_TIMEOUT_MS}"
+                    f"-c lock_timeout={POSTGRES_LIMITER_LOCK_TIMEOUT_MS} "
+                    "-c search_path=pg_catalog,public"
                 ),
             },
         )
@@ -122,22 +394,23 @@ def create_rate_limiter_runtime(config: DormantServerRuntimeConfig):
             ]
             for connection in connections:
                 connection.execute(text("SELECT 1"))
-                connection.execute(text("SELECT id FROM rate_limit_buckets WHERE false"))
-                if connection.dialect.name == "postgresql":
-                    permissions_ready = connection.execute(
-                        text(
-                            "SELECT "
-                            "has_table_privilege(current_user, 'rate_limit_buckets', 'SELECT') "
-                            "AND has_table_privilege(current_user, 'rate_limit_buckets', 'INSERT') "
-                            "AND has_table_privilege(current_user, 'rate_limit_buckets', 'UPDATE') "
-                            "AND has_table_privilege(current_user, 'rate_limit_buckets', 'DELETE') "
-                            "AND has_sequence_privilege("
-                            "current_user, pg_get_serial_sequence('rate_limit_buckets', 'id'), "
-                            "'USAGE')"
-                        )
-                    ).scalar_one()
-                    if permissions_ready is not True:
-                        raise RateLimitUnavailable("durable rate limiter is unavailable")
+                bucket_table = (
+                    "public.rate_limit_buckets"
+                    if connection.dialect.name == "postgresql"
+                    else "rate_limit_buckets"
+                )
+                connection.execute(
+                    text(f"SELECT id FROM {bucket_table} WHERE false")
+                )
+                if not _limiter_privileges_are_exact(
+                    connection,
+                    expected_role=config.rate_limit_database_user,
+                    expected_database=config.database_name,
+                    expected_connections=(
+                        POSTGRES_LIMITER_POOL_SIZE * config.server_workers
+                    ),
+                ):
+                    raise RateLimitUnavailable("durable rate limiter is unavailable")
     except RateLimitUnavailable:
         runtime.close()
         raise

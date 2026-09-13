@@ -6,10 +6,13 @@ from uuid import uuid4
 
 import pytest
 from alembic import command
-from sqlalchemy import delete, func, inspect, select
+from sqlalchemy import create_engine, delete, func, inspect, select, text
+from sqlalchemy.exc import SQLAlchemyError
 
 
-def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatch):
+def test_postgresql_migrations_and_crud(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+):
     url = os.getenv("REDDOCK_TEST_POSTGRES_URL")
     if not url:
         pytest.skip("REDDOCK_TEST_POSTGRES_URL is not configured")
@@ -255,7 +258,6 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
         from time import monotonic
 
         from pydantic import SecretBytes, SecretStr
-        from sqlalchemy import text
         from sqlalchemy.engine import make_url
 
         from app.config import DormantServerRuntimeConfig
@@ -267,6 +269,111 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
         )
 
         parsed_url = make_url(url)
+        limiter_role = f"reddock_limiter_{uuid4().hex[:12]}"
+        limiter_password = "independent-integration-limiter-secret"
+        probe_function = f"reddock_limiter_probe_{uuid4().hex[:12]}"
+        schema_probe_suffix = uuid4().hex[:12]
+        foreign_key_probe = f"reddock_limiter_fk_{schema_probe_suffix}"
+        inheritance_probe = f"reddock_limiter_inherit_{schema_probe_suffix}"
+        rewrite_probe = f"reddock_limiter_rule_{schema_probe_suffix}"
+        type_probe = f"reddock_limiter_type_{schema_probe_suffix}"
+        created_large_objects: list[int] = []
+        database_identifier = app.database.engine.dialect.identifier_preparer.quote_identifier(
+            parsed_url.database or "reddock"
+        )
+        with app.database.engine.begin() as connection:
+            raw_connection = connection.connection.driver_connection
+            from psycopg import sql
+
+            with raw_connection.cursor() as cursor:
+                cursor.execute(
+                    sql.SQL(
+                        "CREATE ROLE {} LOGIN PASSWORD {} CONNECTION LIMIT 4 "
+                        "NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                        "NOREPLICATION NOBYPASSRLS"
+                    ).format(sql.Identifier(limiter_role), sql.Literal(limiter_password))
+                )
+
+        def cleanup_limiter_role() -> None:
+            cleanup_engine = create_engine(url)
+            try:
+                with cleanup_engine.begin() as connection:
+                    connection.exec_driver_sql(
+                        f"DROP RULE IF EXISTS {rewrite_probe} "
+                        "ON public.rate_limit_buckets"
+                    )
+                    connection.exec_driver_sql(
+                        f"DROP TABLE IF EXISTS public.{foreign_key_probe} CASCADE"
+                    )
+                    connection.exec_driver_sql(
+                        f"DROP TABLE IF EXISTS public.{inheritance_probe} CASCADE"
+                    )
+                    connection.exec_driver_sql(
+                        f"DROP TYPE IF EXISTS public.{type_probe} CASCADE"
+                    )
+                    connection.exec_driver_sql(
+                        f"DROP FUNCTION IF EXISTS public.{probe_function}()"
+                    )
+                    for large_object_oid in created_large_objects:
+                        connection.execute(
+                            text(
+                                "SELECT lo_unlink(:oid) WHERE EXISTS ("
+                                "SELECT 1 FROM pg_largeobject_metadata WHERE oid = :oid)"
+                            ),
+                            {"oid": large_object_oid},
+                        )
+                    role_exists = connection.execute(
+                        text("SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :role)"),
+                        {"role": limiter_role},
+                    ).scalar_one()
+                    if role_exists:
+                        connection.exec_driver_sql(
+                            f"REVOKE ALL PRIVILEGES ON DATABASE postgres FROM {limiter_role}"
+                        )
+                        connection.exec_driver_sql(
+                            f"REVOKE ALL PRIVILEGES ON DATABASE template1 FROM {limiter_role}"
+                        )
+                        connection.exec_driver_sql(
+                            "REVOKE SET, ALTER SYSTEM ON PARAMETER statement_timeout "
+                            f"FROM {limiter_role}"
+                        )
+                        connection.execute(
+                            text(
+                                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                                "WHERE usename = :role AND pid <> pg_backend_pid()"
+                            ),
+                            {"role": limiter_role},
+                        )
+                        connection.exec_driver_sql(f"DROP OWNED BY {limiter_role}")
+                        connection.exec_driver_sql(f"DROP ROLE {limiter_role}")
+            finally:
+                cleanup_engine.dispose()
+
+        request.addfinalizer(cleanup_limiter_role)
+
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE CONNECT, TEMPORARY ON DATABASE {database_identifier} FROM PUBLIC"
+            )
+            connection.exec_driver_sql(
+                "REVOKE CONNECT, TEMPORARY ON DATABASE postgres FROM PUBLIC"
+            )
+            connection.exec_driver_sql(
+                "REVOKE CONNECT, TEMPORARY ON DATABASE template1 FROM PUBLIC"
+            )
+            connection.exec_driver_sql(
+                f"GRANT CONNECT ON DATABASE {database_identifier} TO {limiter_role}"
+            )
+            connection.exec_driver_sql("REVOKE ALL ON SCHEMA public FROM PUBLIC")
+            connection.exec_driver_sql(f"GRANT USAGE ON SCHEMA public TO {limiter_role}")
+            connection.exec_driver_sql(
+                "GRANT SELECT, INSERT, UPDATE, DELETE ON public.rate_limit_buckets "
+                f"TO {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                "GRANT USAGE ON SEQUENCE public.rate_limit_buckets_id_seq "
+                f"TO {limiter_role}"
+            )
         runtime_config = DormantServerRuntimeConfig(
             public_origin="https://reddock.example",
             oidc_issuer="https://identity.example/realms/reddock",
@@ -280,9 +387,171 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
             database_user=parsed_url.username or "reddock",
             database_password=SecretStr(parsed_url.password or ""),
             rate_limit_key=SecretBytes(bytes.fromhex("ab" * 32)),
+            rate_limit_database_user=limiter_role,
+            rate_limit_database_password=SecretStr(limiter_password),
+            server_workers=2,
         )
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE DELETE ON public.rate_limit_buckets FROM {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as missing_grant:
+            create_rate_limiter_runtime(runtime_config)
+        assert missing_grant.value.__cause__ is None
+        assert limiter_password not in str(missing_grant.value)
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"GRANT DELETE ON public.rate_limit_buckets TO {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                f"GRANT SELECT ON public.organizations TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as excess_grant:
+            create_rate_limiter_runtime(runtime_config)
+        assert excess_grant.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE SELECT ON public.organizations FROM {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                f"GRANT SELECT(id) ON public.organizations TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as column_grant:
+            create_rate_limiter_runtime(runtime_config)
+        assert column_grant.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE SELECT(id) ON public.organizations FROM {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                f"GRANT CONNECT ON DATABASE template1 TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as other_database:
+            create_rate_limiter_runtime(runtime_config)
+        assert other_database.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE CONNECT ON DATABASE template1 FROM {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                f"CREATE FUNCTION public.{probe_function}() RETURNS integer "
+                "LANGUAGE sql SECURITY DEFINER AS 'SELECT 1'"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as executable_routine:
+            create_rate_limiter_runtime(runtime_config)
+        assert executable_routine.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"DROP FUNCTION public.{probe_function}()"
+            )
+            large_object_oid = connection.execute(text("SELECT lo_create(0)")).scalar_one()
+            created_large_objects.append(large_object_oid)
+            connection.exec_driver_sql(
+                f"GRANT SELECT ON LARGE OBJECT {large_object_oid} TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as large_object_access:
+            create_rate_limiter_runtime(runtime_config)
+        assert large_object_access.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.execute(text("SELECT lo_unlink(:oid)"), {"oid": large_object_oid})
+            created_large_objects.remove(large_object_oid)
+            connection.exec_driver_sql(
+                f"GRANT SET ON PARAMETER statement_timeout TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as parameter_access:
+            create_rate_limiter_runtime(runtime_config)
+        assert parameter_access.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"REVOKE SET ON PARAMETER statement_timeout FROM {limiter_role}"
+            )
+            connection.exec_driver_sql(
+                f"CREATE TABLE public.{foreign_key_probe} ("
+                "bucket_id integer REFERENCES public.rate_limit_buckets(id) "
+                "ON DELETE CASCADE)"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as foreign_key:
+            create_rate_limiter_runtime(runtime_config)
+        assert foreign_key.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP TABLE public.{foreign_key_probe}")
+            connection.exec_driver_sql(
+                f"CREATE RULE {rewrite_probe} AS ON DELETE "
+                "TO public.rate_limit_buckets DO ALSO NOTHING"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as rewrite_rule:
+            create_rate_limiter_runtime(runtime_config)
+        assert rewrite_rule.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(
+                f"DROP RULE {rewrite_probe} ON public.rate_limit_buckets"
+            )
+            connection.exec_driver_sql(
+                f"CREATE TABLE public.{inheritance_probe} () "
+                "INHERITS (public.rate_limit_buckets)"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as inheritance:
+            create_rate_limiter_runtime(runtime_config)
+        assert inheritance.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP TABLE public.{inheritance_probe}")
+            connection.exec_driver_sql(
+                f"CREATE TYPE public.{type_probe} AS ENUM ('blocked')"
+            )
+            connection.exec_driver_sql(
+                f"ALTER TYPE public.{type_probe} OWNER TO {limiter_role}"
+            )
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as type_ownership:
+            create_rate_limiter_runtime(runtime_config)
+        assert type_ownership.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(f"DROP TYPE public.{type_probe}")
+            connection.exec_driver_sql(f"ALTER ROLE {limiter_role} CONNECTION LIMIT 5")
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as wrong_pool_budget:
+            create_rate_limiter_runtime(runtime_config)
+        assert wrong_pool_budget.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(f"ALTER ROLE {limiter_role} CONNECTION LIMIT 4")
+            connection.exec_driver_sql(f"ALTER ROLE {limiter_role} SUPERUSER")
+        with pytest.raises(RateLimitUnavailable, match="unavailable") as elevated_role:
+            create_rate_limiter_runtime(runtime_config)
+        assert elevated_role.value.__cause__ is None
+        with app.database.engine.begin() as connection:
+            connection.exec_driver_sql(f"ALTER ROLE {limiter_role} NOSUPERUSER")
+
         limiter_runtime = create_rate_limiter_runtime(runtime_config)
         try:
+            limiter_engine = limiter_runtime._RateLimiterRuntime__engine
+            second_worker_runtime = create_rate_limiter_runtime(runtime_config)
+            try:
+                with app.database.engine.connect() as primary_connection:
+                    assert (
+                        primary_connection.execute(
+                            text(
+                                "SELECT count(*) FROM pg_stat_activity "
+                                "WHERE application_name = 'reddock-limiter'"
+                            )
+                        ).scalar_one()
+                        == 2 * POSTGRES_LIMITER_POOL_SIZE
+                    )
+                with pytest.raises(RateLimitUnavailable, match="unavailable") as third_worker:
+                    create_rate_limiter_runtime(runtime_config)
+                assert third_worker.value.__cause__ is None
+            finally:
+                second_worker_runtime.close()
+
+            with limiter_engine.connect() as limiter_connection:
+                assert limiter_connection.execute(text("SELECT current_user")).scalar_one() == (
+                    limiter_role
+                )
+                with pytest.raises(SQLAlchemyError):
+                    limiter_connection.execute(text("SELECT id FROM public.organizations"))
+                limiter_connection.rollback()
+            with app.database.engine.connect() as primary_connection:
+                assert primary_connection.execute(text("SELECT current_user")).scalar_one() == (
+                    parsed_url.username
+                )
+
             isolated_plan = RateLimitPlan(
                 action=RateLimitedAction.OIDC_LOGIN,
                 global_rule=RateLimitRule(100, timedelta(minutes=1)),
@@ -300,7 +569,6 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
                     now=limited_at + timedelta(minutes=3),
                 ).allowed
 
-            limiter_engine = limiter_runtime._RateLimiterRuntime__engine
             with ExitStack() as held_limiter:
                 for _ in range(POSTGRES_LIMITER_POOL_SIZE):
                     held_limiter.enter_context(limiter_engine.connect())

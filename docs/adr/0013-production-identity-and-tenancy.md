@@ -48,7 +48,8 @@ Server mode will fail startup unless every mandatory control is configured:
   client and identity values are protected with a stable, mounted,
   deployment-owned HMAC key shared by every worker. Limiter transactions use a
   reserved connection pool so request work cannot starve the decision path. A
-  separate least-privilege database role remains required before server mode.
+  separate database login and password restrict the limiter to its exact
+  bucket operations.
 - No public self-signup. An owner/admin provisions membership and OIDC
   issuer/subject identity through an explicit bootstrap process.
 
@@ -83,6 +84,36 @@ secret replacement, and a coordinated restart because mixed keys would split
 counters. Local mode and the current Compose profiles neither load the key nor
 create the capability. No protected route uses it, and server mode remains
 disabled.
+
+The dormant server runtime requires `REDDOCK_RATE_LIMIT_DATABASE_USER` and a
+mounted `REDDOCK_RATE_LIMIT_DATABASE_PASSWORD_FILE`. The username and password
+must each differ from the application database credentials. Limiter
+connections use the dedicated login and fix their search path to
+`pg_catalog,public`.
+
+Startup verifies a direct `LOGIN NOINHERIT` role with a connection limit exactly
+twice `REDDOCK_SERVER_WORKERS`, no memberships or elevated flags, and only:
+
+- database `CONNECT`;
+- `public` schema `USAGE`;
+- bucket `SELECT`/`INSERT`/`UPDATE`/`DELETE`; and
+- bucket-sequence `USAGE`.
+
+Ownership, grant options, column-level grants, database or schema creation,
+temporary access, other databases, large objects, database parameter grants,
+role-level settings, user-defined routines, standalone PostgreSQL type
+ownership, bucket policies or triggers, foreign keys, rewrite rules,
+inheritance, and unrelated application objects are rejected. Every process
+must receive the same worker count, set to the actual
+deployment-wide total; RedDock cannot discover the orchestrator's process count.
+
+Deployment operators provision this role after the main application role runs
+migrations. RedDock migrations do not create or manage PostgreSQL logins. Role
+password rotation requires stopping all workers, changing the database role and
+mounted secret together, and restarting every worker. The check runs at startup
+rather than continuously. The main role retains migration authority, and both
+database secrets exist in one process. Database-wide capacity and consistent
+HMAC-key distribution remain separate operational gates.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the

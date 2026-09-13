@@ -70,7 +70,7 @@ flowchart LR
 - The operator's authority to contact a target and the invariant that active
   operations never widen declared Dockyard scope.
 - Deployment configuration, provider credentials, lab gates, database and
-  evidence locations, and extension manifests.
+  limiter credentials and HMAC key, evidence locations, and extension manifests.
 - Future identities, organization memberships, roles, sessions, tenant
   ownership, and attributable audit history.
 - Build and release integrity.
@@ -110,6 +110,10 @@ flowchart LR
 8. **Future user to organization.** Every tenant lookup and mutation proves
    active membership and permission server-side. Numeric IDs alone grant no
    access, and hidden UI controls are not authorization controls.
+9. **Application to limiter database capability.** A separate PostgreSQL login
+   is limited to bucket operations. Its identity and effective privileges are
+   checked at startup, and its connection uses a fixed `pg_catalog,public`
+   search path. The main database role retains migration authority.
 
 ### Assumptions and unknowns
 
@@ -139,6 +143,7 @@ flowchart LR
 | P1 | **Design hypothesis:** a future browser or CSRF token is stolen, fixed, replayed, or survives role revocation | Authenticated cookie routes exist; account impersonation or unauthorized mutation | A 256-bit session token plus a separately presented, domain-separated derived CSRF proof; only hashes are stored. Controls also include strict token shape, eight-hour expiry, targeted and membership-wide revocation, active user/membership checks, constant-time CSRF digest comparison, an eight-active-session cap, inactive-record cleanup, atomic issue/logout audit events, exact HTTPS origin matching, a host-bound `Secure`/`HttpOnly`/`SameSite=Lax` cookie contract, and rejection of duplicate credentials. | Wire the verifier and rotation into OIDC routes and audit remaining privileged flows before enabling server mode | `backend/app/session_auth.py`, `backend/app/browser_security.py`, `backend/tests/test_session_auth.py`, `backend/tests/test_browser_security.py` |
 | P1 | A future audit call records a credential, attacker text, or another tenant's actor | Authentication or administration emits security events; sensitive log disclosure or misleading attribution | The event API has typed actions/outcomes, no free-form detail, bounded opaque identifiers, an actor/organization equality check, organization-scoped reads, and fixed read limits; session issue/logout events share the action transaction | Connect the remaining privileged flows; define retention and restricted export before server mode | `backend/app/security_audit.py:10-80`, `backend/app/session_auth.py:99-117`, `backend/app/session_auth.py:205-216`, `backend/tests/test_security_audit.py:14-70` |
 | P1 | A low-role future user invokes approval or export actions | Future session resolution supplies an incorrect context; active contact, model disclosure, or evidence export | The complete route manifest is enforced; unknown roles and inactive principals are denied; negative viewer tests cover sensitive actions; server mode is rejected | Bind authenticated actor/organization to approvals and audit, then exercise every role in server-mode integration tests | `backend/app/authorization.py:15-193`, `backend/app/authorization_dependencies.py:36-70`, `backend/tests/test_authorization_enforcement.py:24-63` |
+| P1 | A compromised limiter path gains broad database authority | Future server process compromise or incorrect PostgreSQL grants; tenant data disclosure or schema mutation | Separate non-inheriting login and password; startup rejects memberships, elevated flags, ownership including standalone PostgreSQL types, grant options, column access, object creation, temporary access, or unrelated object access | Provision the role outside migrations, monitor grants independently, and rotate its password through a coordinated restart | `backend/app/config.py`, `backend/app/database.py`, `backend/tests/test_postgres.py` |
 | P2 | Oversized results, dense state, or concurrent provider fetches exhaust shared resources | High-volume authorized inputs or future sign-in traffic; availability loss | Fixed run, response, snapshot, edge, and export bounds; one application-owned OIDC cache serializes provider fetches; isolated, database-serialized, global-first throttling bounds cross-worker admission and stored keyed client buckets | Add metrics and wire throttling before any auth route; keep PostgreSQL global, subject, reset, and cleanup race coverage | `backend/app/oidc.py`, `backend/app/rate_limits.py`, `backend/tests/test_postgres.py`, `backend/app/intelligence/providers.py:92-99` |
 | P2 | Build dependency or workflow compromise changes a release | Upstream or maintainer compromise | Pinned actions and base digests; read-only workflow token | Add SBOM/provenance, signed releases, dependency review, protected environments | `.github/workflows/ci.yml:7-8`, `.github/workflows/ci.yml:17-18`, `Dockerfile:1-8` |
 | P2 | A DockPack is shared too broadly | Operator mishandles an explicit export | Explicit, bounded, integrity-verifiable download | Document classification/retention; restrict and audit exports in server mode | `backend/app/api.py:643-652`, `backend/app/reporting/runner.py:243-265` |
