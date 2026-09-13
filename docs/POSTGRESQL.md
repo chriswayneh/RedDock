@@ -43,6 +43,10 @@ represented inside RedDock as a masked secret, and SQLAlchemy constructs the
 connection URL without logging it. An empty, oversized, multiline, missing, or
 symlinked secret file fails startup.
 
+This local validation profile does not mount a rate-limit key or create a
+limiter runtime. Those are server-only controls, and server mode remains
+disabled.
+
 ## Combine PostgreSQL and local AI
 
 The database and model overlays compose independently:
@@ -82,10 +86,35 @@ These component settings take precedence over the legacy
 URL remains available for development and CI, but managed deployments should
 mount the password secret instead.
 
+## Future server connection budget
+
+The dormant server runtime accepts `REDDOCK_RATE_LIMIT_KEY_FILE` only when the
+file contains exactly 64 lowercase hexadecimal characters. It decodes those
+characters to a 32-byte key, masks the value, and keeps it paired with one
+process-owned limiter capability. Every worker must mount the same key. Do not
+rotate it through a rolling restart because mixed keys split rate-limit
+counters. Stop all workers, replace the shared secret, and restart them
+together.
+
+Each process can use up to 15 main database connections and reserves 2 more in
+an isolated, prewarmed limiter pool. PostgreSQL therefore needs at least 17
+connections per process plus headroom for migrations, administration,
+monitoring, and recovery. Pool checkout, database connection, statement, and
+lock waits are bounded; if a trustworthy limiter decision cannot be completed,
+the request is denied. Real PostgreSQL tests fill each pool and confirm that the
+other remains usable.
+
+The current runtime uses the configured application database credentials to
+build this dormant capability. A production server still needs a separate
+least-privilege role with only the schema, table, and sequence access required
+for `rate_limit_buckets`. This role, capacity planning, and route integration
+remain release gates.
+
 This profile is a validation milestone, not the final production topology.
 Tenant ownership, the reviewed role-permission contract, backup tooling, and
-cross-worker rate-limit tests now exist. OIDC route integration, session
-lifecycle, route enforcement, TLS proxy configuration, metrics, disaster
-recovery drills, and authenticated end-to-end tests remain mandatory. Setting
-`REDDOCK_DEPLOYMENT_MODE=server` is explicitly rejected until those controls are
-implemented; PostgreSQL configuration can never silently enable shared mode.
+cross-worker rate-limit and pool-isolation tests now exist. OIDC and session
+route integration, a least-privilege limiter role, TLS proxy configuration,
+metrics, disaster recovery drills, and authenticated end-to-end tests remain
+mandatory. Setting `REDDOCK_DEPLOYMENT_MODE=server` is explicitly rejected until
+those controls are implemented; PostgreSQL configuration can never silently
+enable shared mode.

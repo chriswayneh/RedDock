@@ -29,6 +29,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
         "REDDOCK_OIDC_ISSUER",
         "REDDOCK_OIDC_CLIENT_ID",
         "REDDOCK_OIDC_CLIENT_SECRET_FILE",
+        "REDDOCK_RATE_LIMIT_KEY_FILE",
         "REDDOCK_OIDC_ENDPOINT_ORIGINS",
         "REDDOCK_SERVER_ORGANIZATION_SLUG",
         "REDDOCK_TRUSTED_PROXY_CIDRS",

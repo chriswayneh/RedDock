@@ -4,7 +4,8 @@ The shipped local application does not call this module. Future server routes
 must consume the verified client address produced by TrustedIngressMiddleware,
 never a forwarding header supplied directly by a client. Server integration
 must provide a dedicated Engine whose connection pool is reserved for limiter
-transactions so request work cannot starve the security decision.
+transactions so request work cannot occupy that process-local capacity. The
+deployment must also reserve aggregate PostgreSQL capacity for every worker.
 """
 
 import re
@@ -46,6 +47,42 @@ class RateLimitScope(StrEnum):
 
 class RateLimitUnavailable(RuntimeError):
     """The durable limiter could not make a trustworthy decision."""
+
+
+class RateLimiterRuntime:
+    """One process-owned limiter capability that keeps its Engine and key paired."""
+
+    def __init__(self, engine: Engine, key: "RateLimitKey") -> None:
+        if not isinstance(engine, Engine) or not isinstance(key, RateLimitKey):
+            raise ValueError("a dedicated limiter engine and rate-limit key are required")
+        self.__engine = engine
+        self.__key = key
+        self.__closed = False
+
+    def __repr__(self) -> str:
+        return f"RateLimiterRuntime(closed={self.__closed})"
+
+    def enforce(
+        self,
+        plan: "RateLimitPlan",
+        *,
+        subject: "RateLimitSubject",
+        now: datetime | None = None,
+    ) -> "RateLimitDecision":
+        if self.__closed:
+            raise RateLimitUnavailable("durable rate limiter is unavailable")
+        return enforce_rate_limit(
+            self.__engine,
+            plan,
+            subject=subject,
+            key=self.__key,
+            now=now,
+        )
+
+    def close(self) -> None:
+        if not self.__closed:
+            self.__closed = True
+            self.__engine.dispose()
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,8 +365,8 @@ def enforce_rate_limit(
             except RateLimitUnavailable:
                 limiter_session.rollback()
                 raise
-            except SQLAlchemyError as error:
+            except SQLAlchemyError:
                 limiter_session.rollback()
-                raise RateLimitUnavailable("durable rate limiter is unavailable") from error
-    except SQLAlchemyError as error:
-        raise RateLimitUnavailable("durable rate limiter is unavailable") from error
+                raise RateLimitUnavailable("durable rate limiter is unavailable") from None
+    except SQLAlchemyError:
+        raise RateLimitUnavailable("durable rate limiter is unavailable") from None

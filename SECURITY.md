@@ -151,9 +151,17 @@ deployment is secure.
   cleanup is bounded. Each decision owns its database transaction. PostgreSQL
   concurrency tests verify global and same-client admission, exact reset, and
   cleanup-versus-refresh behavior. These dormant primitives do not expose a
-  login route or make server mode available. Local mode configures no limiter
-  key; stable mounted-key provisioning and a reserved limiter database pool
-  remain server-mode release gates.
+  login route or make server mode available. A future server process loads one
+  canonical mounted key containing exactly 64 lowercase hexadecimal characters
+  and keeps it paired with a process-owned limiter capability. The capability
+  owns two isolated, prewarmed PostgreSQL connections with bounded checkout,
+  connect, statement, and lock waits; uncertainty or database failure denies
+  the request. The main pool is capped at 15 connections, so each process needs
+  17 connections plus operational headroom. PostgreSQL tests fill each pool in
+  turn and verify that the other remains usable. Local mode and the current
+  Compose profiles load no limiter key. Every worker must use the same key, and
+  rotation requires a full stop rather than a rolling restart. A separate
+  least-privilege limiter database role remains a server-mode release gate.
 - Dormant browser sessions use stable families of hash-only token generations.
   A session becomes idle after 30 minutes, activity writes are limited to once
   every five minutes, and the bearer token and CSRF proof rotate together after

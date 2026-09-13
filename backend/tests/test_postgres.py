@@ -119,6 +119,7 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
             RateLimitKey,
             RateLimitPlan,
             RateLimitRule,
+            RateLimitUnavailable,
             client_subject,
             enforce_rate_limit,
             purge_expired_rate_limit_buckets,
@@ -249,6 +250,138 @@ def test_postgresql_migrations_and_crud(tmp_path, monkeypatch: pytest.MonkeyPatc
             assert len(rows) == 2
             assert all(row.expires_at == limited_at + timedelta(minutes=2) for row in rows)
             assert sorted(row.attempt_count for row in rows) == [1, 1]
+
+        from contextlib import ExitStack
+        from time import monotonic
+
+        from pydantic import SecretBytes, SecretStr
+        from sqlalchemy import text
+        from sqlalchemy.engine import make_url
+
+        from app.config import DormantServerRuntimeConfig
+        from app.database import (
+            POSTGRES_APPLICATION_MAX_OVERFLOW,
+            POSTGRES_APPLICATION_POOL_SIZE,
+            POSTGRES_LIMITER_POOL_SIZE,
+            create_rate_limiter_runtime,
+        )
+
+        parsed_url = make_url(url)
+        runtime_config = DormantServerRuntimeConfig(
+            public_origin="https://reddock.example",
+            oidc_issuer="https://identity.example/realms/reddock",
+            oidc_client_id="reddock",
+            oidc_client_secret=SecretStr("integration-client-secret"),
+            oidc_endpoint_origins=("https://identity.example",),
+            organization_slug="integration-team",
+            database_host=parsed_url.host or "127.0.0.1",
+            database_port=parsed_url.port or 5432,
+            database_name=parsed_url.database or "reddock",
+            database_user=parsed_url.username or "reddock",
+            database_password=SecretStr(parsed_url.password or ""),
+            rate_limit_key=SecretBytes(bytes.fromhex("ab" * 32)),
+        )
+        limiter_runtime = create_rate_limiter_runtime(runtime_config)
+        try:
+            isolated_plan = RateLimitPlan(
+                action=RateLimitedAction.OIDC_LOGIN,
+                global_rule=RateLimitRule(100, timedelta(minutes=1)),
+                subject_rule=RateLimitRule(10, timedelta(minutes=1)),
+            )
+            primary_capacity = (
+                POSTGRES_APPLICATION_POOL_SIZE + POSTGRES_APPLICATION_MAX_OVERFLOW
+            )
+            with ExitStack() as held_primary:
+                for _ in range(primary_capacity):
+                    held_primary.enter_context(app.database.engine.connect())
+                assert limiter_runtime.enforce(
+                    isolated_plan,
+                    subject=client_subject("203.0.113.30"),
+                    now=limited_at + timedelta(minutes=3),
+                ).allowed
+
+            limiter_engine = limiter_runtime._RateLimiterRuntime__engine
+            with ExitStack() as held_limiter:
+                for _ in range(POSTGRES_LIMITER_POOL_SIZE):
+                    held_limiter.enter_context(limiter_engine.connect())
+                with app.database.engine.connect() as primary_connection:
+                    bucket_count_before = primary_connection.execute(
+                        text("SELECT count(*) FROM rate_limit_buckets")
+                    ).scalar_one()
+                started = monotonic()
+                with pytest.raises(RateLimitUnavailable, match="unavailable"):
+                    limiter_runtime.enforce(
+                        isolated_plan,
+                        subject=client_subject("203.0.113.31"),
+                        now=limited_at + timedelta(minutes=3),
+                    )
+                assert monotonic() - started < 4
+                with app.database.engine.connect() as primary_connection:
+                    assert primary_connection.execute(text("SELECT 1")).scalar_one() == 1
+                    assert (
+                        primary_connection.execute(
+                            text("SELECT count(*) FROM rate_limit_buckets")
+                        ).scalar_one()
+                        == bucket_count_before
+                    )
+
+            assert limiter_runtime.enforce(
+                isolated_plan,
+                subject=client_subject("203.0.113.31"),
+                now=limited_at + timedelta(minutes=3),
+            ).allowed
+
+            with app.database.engine.connect() as primary_connection:
+                bucket_state_before_lock = primary_connection.execute(
+                    text(
+                        "SELECT id, attempt_count FROM rate_limit_buckets "
+                        "WHERE action = 'oidc.login' ORDER BY id"
+                    )
+                ).all()
+            with app.database.engine.connect() as lock_connection:
+                lock_transaction = lock_connection.begin()
+                lock_connection.execute(
+                    text(
+                        "SELECT id FROM rate_limit_buckets "
+                        "WHERE action = 'oidc.login' FOR UPDATE"
+                    )
+                ).all()
+                started = monotonic()
+                with pytest.raises(RateLimitUnavailable, match="unavailable") as error:
+                    limiter_runtime.enforce(
+                        isolated_plan,
+                        subject=client_subject("203.0.113.32"),
+                        now=limited_at + timedelta(minutes=3),
+                    )
+                assert error.value.__cause__ is None
+                assert monotonic() - started < 4
+                lock_transaction.rollback()
+
+            with app.database.engine.connect() as primary_connection:
+                assert (
+                    primary_connection.execute(
+                        text(
+                            "SELECT id, attempt_count FROM rate_limit_buckets "
+                            "WHERE action = 'oidc.login' ORDER BY id"
+                        )
+                    ).all()
+                    == bucket_state_before_lock
+                )
+            assert limiter_runtime.enforce(
+                isolated_plan,
+                subject=client_subject("203.0.113.32"),
+                now=limited_at + timedelta(minutes=3),
+            ).allowed
+            with app.database.engine.connect() as primary_connection:
+                limiter_connections = primary_connection.execute(
+                    text(
+                        "SELECT count(*) FROM pg_stat_activity "
+                        "WHERE application_name = 'reddock-limiter'"
+                    )
+                ).scalar_one()
+            assert limiter_connections == POSTGRES_LIMITER_POOL_SIZE
+        finally:
+            limiter_runtime.close()
 
         from app.models import BrowserSession, Membership
         from app.session_auth import (

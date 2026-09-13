@@ -368,14 +368,18 @@ Phase 8 is still in development. Completed checkpoints include:
 - dormant database-backed authentication throttling with keyed client buckets,
   isolated transactions, global-first admission, bounded cleanup, and
   PostgreSQL concurrency proof
+- a dormant process-owned limiter runtime that loads one canonical mounted key
+  and reserves two prewarmed PostgreSQL connections outside the request pool
 
 Authentication is not enabled, and shared mode remains blocked. Authenticated
-routes, mounted limiter-key provisioning, a reserved limiter connection pool,
-session route integration, user administration, scaling, PostgreSQL disaster
-recovery, and production deployment hardening are still planned. Session
-rotation keeps the original eight-hour absolute expiry. PostgreSQL race tests
-cover issuance, touch, rotation, logout, membership revocation, and cleanup. See the
-[roadmap](ROADMAP.md) for the detailed status.
+routes, a separate least-privilege limiter database role, session route
+integration, user administration, scaling, PostgreSQL disaster recovery, and
+production deployment hardening are still planned. The current local and
+PostgreSQL Compose profiles remain unchanged and create no limiter runtime.
+Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
+tests cover issuance, touch, rotation, logout, membership revocation, cleanup,
+and limiter-pool isolation. See the [roadmap](ROADMAP.md) for the detailed
+status.
 
 ## Contributing and Security
 

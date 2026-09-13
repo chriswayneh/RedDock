@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretBytes, SecretStr
 
 from app.targets import TargetKind, normalize_target
 
@@ -24,6 +24,8 @@ _SERVER_IDENTITY_VARIABLES = (
     "REDDOCK_SERVER_ORGANIZATION_SLUG",
     "REDDOCK_TRUSTED_PROXY_CIDRS",
 )
+_SERVER_ONLY_VARIABLES = (*_SERVER_IDENTITY_VARIABLES, "REDDOCK_RATE_LIMIT_KEY_FILE")
+_RATE_LIMIT_KEY = re.compile(r"[0-9a-f]{64}")
 
 
 class ConfigurationError(RuntimeError):
@@ -35,11 +37,18 @@ def _read_secret_file(variable: str) -> str | None:
     if not configured:
         return None
     path = Path(configured)
-    if path.is_symlink() or not path.is_file():
-        raise ConfigurationError(f"{variable} must name a regular, non-symlink secret file")
-    if path.stat().st_size > _MAX_SECRET_BYTES:
-        raise ConfigurationError(f"{variable} exceeds the {_MAX_SECRET_BYTES}-byte limit")
-    payload = path.read_bytes()
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ConfigurationError(
+                f"{variable} must name a regular, non-symlink secret file"
+            )
+        if path.stat().st_size > _MAX_SECRET_BYTES:
+            raise ConfigurationError(f"{variable} exceeds the {_MAX_SECRET_BYTES}-byte limit")
+        payload = path.read_bytes()
+    except ConfigurationError:
+        raise
+    except OSError:
+        raise ConfigurationError(f"{variable} could not be read safely") from None
     if not payload or b"\x00" in payload:
         raise ConfigurationError(f"{variable} must contain a non-empty text secret")
     try:
@@ -166,6 +175,12 @@ class DormantServerIdentityConfig(BaseModel):
     trusted_proxy_cidrs: tuple[str, ...] = ()
 
 
+class DormantServerRuntimeConfig(DormantServerIdentityConfig):
+    """Complete future process configuration, including masked limiter material."""
+
+    rate_limit_key: SecretBytes = Field(min_length=32, max_length=32)
+
+
 def dormant_server_identity_config() -> DormantServerIdentityConfig:
     """Parse the complete future server contract without enabling it."""
     configured = {name: os.getenv(name) for name in _SERVER_IDENTITY_VARIABLES}
@@ -266,22 +281,39 @@ def dormant_server_identity_config() -> DormantServerIdentityConfig:
     )
 
 
+def dormant_server_runtime_config() -> DormantServerRuntimeConfig:
+    """Parse the complete future server runtime contract without enabling it."""
+
+    identity = dormant_server_identity_config()
+    encoded_key = _read_secret_file("REDDOCK_RATE_LIMIT_KEY_FILE")
+    if encoded_key is None:
+        raise ConfigurationError("REDDOCK_RATE_LIMIT_KEY_FILE is required")
+    if not _RATE_LIMIT_KEY.fullmatch(encoded_key):
+        raise ConfigurationError(
+            "REDDOCK_RATE_LIMIT_KEY_FILE must contain exactly 64 lowercase hexadecimal characters"
+        )
+    return DormantServerRuntimeConfig(
+        **identity.model_dump(),
+        rate_limit_key=SecretBytes(bytes.fromhex(encoded_key)),
+    )
+
+
 def _deployment_mode() -> Literal["local"]:
     mode = os.getenv("REDDOCK_DEPLOYMENT_MODE", "local").strip().lower()
     if mode == "server":
         try:
-            dormant_server_identity_config()
+            dormant_server_runtime_config()
         except ConfigurationError as error:
             raise ConfigurationError(
                 f"REDDOCK_DEPLOYMENT_MODE=server configuration is invalid: {error}"
             ) from error
         raise ConfigurationError(
-            "REDDOCK_DEPLOYMENT_MODE=server is not available until OIDC, sessions, "
-            "route authorization, exact origins, and trusted proxy settings are implemented"
+            "REDDOCK_DEPLOYMENT_MODE=server is not available until OIDC, limiter, sessions, "
+            "route authorization, exact origins, and trusted proxy settings are integrated"
         )
     if mode != "local":
         raise ConfigurationError("REDDOCK_DEPLOYMENT_MODE must be 'local'")
-    configured_server_values = [name for name in _SERVER_IDENTITY_VARIABLES if os.getenv(name)]
+    configured_server_values = [name for name in _SERVER_ONLY_VARIABLES if os.getenv(name)]
     if configured_server_values:
         raise ConfigurationError(
             "Server-only identity configuration requires the not-yet-available authenticated "

@@ -3,11 +3,13 @@ from hashlib import sha256
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.schema import DropTable
 
 from app.models import RateLimitBucket
 from app.rate_limits import (
     RateLimitedAction,
+    RateLimiterRuntime,
     RateLimitKey,
     RateLimitPlan,
     RateLimitRule,
@@ -160,6 +162,28 @@ def test_database_errors_roll_back_and_fail_closed(session):
     assert not session.in_transaction()
 
 
+def test_subject_failure_rolls_back_the_global_bucket(session, monkeypatch):
+    import app.rate_limits
+
+    original_consume = app.rate_limits._consume
+    calls = 0
+
+    def fail_after_global(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise SQLAlchemyError("synthetic subject failure")
+        return original_consume(*args, **kwargs)
+
+    monkeypatch.setattr(app.rate_limits, "_consume", fail_after_global)
+
+    with pytest.raises(RateLimitUnavailable, match="unavailable") as error:
+        _enforce(session, _plan(), subject=client_subject("192.0.2.42"))
+
+    assert error.value.__cause__ is None
+    assert session.scalar(select(func.count()).select_from(RateLimitBucket)) == 0
+
+
 def test_limiter_transaction_cannot_commit_unrelated_caller_state(session):
     from sqlalchemy.orm import Session
 
@@ -214,3 +238,15 @@ def test_rate_limit_configuration_is_bounded_and_code_owned():
         )
     with pytest.raises(ValueError):
         RateLimitPlan(RateLimitedAction.OIDC_LOGIN, "global", "subject")
+
+
+def test_runtime_keeps_the_key_and_engine_paired_and_closes_idempotently(session):
+    runtime = RateLimiterRuntime(session.get_bind(), KEY)
+    assert repr(runtime) == "RateLimiterRuntime(closed=False)"
+    assert runtime.enforce(_plan(), subject=client_subject("192.0.2.50"), now=NOW).allowed
+
+    runtime.close()
+    runtime.close()
+    assert repr(runtime) == "RateLimiterRuntime(closed=True)"
+    with pytest.raises(RateLimitUnavailable, match="unavailable"):
+        runtime.enforce(_plan(), subject=client_subject("192.0.2.50"), now=NOW)
