@@ -192,6 +192,22 @@ ready. The main role still runs migrations and accesses normal application
 data. This is lifecycle and availability hardening, not a least-privilege
 replacement for the separate limiter role.
 
+The lifespan also installs one immutable request database binding. Local
+requests use the existing global `SessionLocal` factory only through an
+explicit local binding. A configured request uses
+`PrimaryDatabaseRuntime.session`, and each yielded session is closed after the
+request. A missing or malformed binding returns a generic `503` rather than
+falling back to another database when the database dependency is reached.
+Configured protected routes return `401`
+rather than receiving the reserved local owner until browser identity wiring is
+complete.
+
+Discovery carries the exact request session factory from submission into its
+worker, so configured work cannot fall back to ambient `SessionLocal`. This
+binds the database capability but does not solve background executor shutdown.
+Draining or cancelling in-flight work before the primary runtime closes remains
+a server-mode gate.
+
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
 client bucket, limiting attacker-created rows. Client addresses are normalized
@@ -239,9 +255,10 @@ limit against that declaration, but it cannot discover the orchestrator's
 actual process count.
 
 Before server mode can be enabled, HTTP sign-in, callback, logout, cookie, and
-error handling; authenticated request context; a packaged TLS proxy;
-administration; metrics; capacity planning; and authenticated end-to-end tests
-remain release blockers.
+error handling; browser session resolution and authenticated request context;
+a packaged TLS proxy;
+administration; metrics; background executor lifecycle and drain; capacity
+planning; and authenticated end-to-end tests remain release blockers.
 
 An operator or infrastructure tool must provision this role after migrations;
 RedDock migrations do not create or manage database logins. Rotate its password

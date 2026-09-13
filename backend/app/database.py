@@ -1,7 +1,10 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Annotated, Literal
 
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Connection, Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -23,6 +26,29 @@ POSTGRES_LIMITER_POOL_TIMEOUT_SECONDS = 2
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 5
 POSTGRES_LIMITER_STATEMENT_TIMEOUT_MS = 2_000
 POSTGRES_LIMITER_LOCK_TIMEOUT_MS = 1_000
+DATABASE_REQUEST_BINDING_STATE = "database_request_binding"
+SessionFactory = Callable[[], Session]
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseRequestBinding:
+    """One immutable app-owned request database capability."""
+
+    mode: Literal["local", "server"]
+    session_factory: SessionFactory
+
+
+def database_request_binding(request: Request) -> DatabaseRequestBinding | None:
+    """Validate the complete app-owned request binding as one capability."""
+
+    binding = getattr(request.app.state, DATABASE_REQUEST_BINDING_STATE, None)
+    if (
+        not isinstance(binding, DatabaseRequestBinding)
+        or binding.mode not in {"local", "server"}
+        or not callable(binding.session_factory)
+    ):
+        return None
+    return binding
 
 
 def _limiter_privileges_are_exact(
@@ -667,8 +693,28 @@ def create_rate_limiter_runtime(config: DormantServerRuntimeConfig):
 configure_engine()
 
 
-def get_session() -> Iterator[Session]:
-    session = SessionLocal()
+def get_session_factory(request: Request) -> SessionFactory:
+    """Return the session capability explicitly installed by this app lifespan."""
+
+    binding = database_request_binding(request)
+    if binding is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        )
+    return binding.session_factory
+
+
+def get_session(
+    session_factory: Annotated[SessionFactory, Depends(get_session_factory)],
+) -> Iterator[Session]:
+    try:
+        session = session_factory()
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable",
+        ) from None
     try:
         yield session
     finally:

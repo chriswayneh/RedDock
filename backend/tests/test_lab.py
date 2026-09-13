@@ -117,7 +117,11 @@ def test_lab_discovery_needs_both_gates_and_denial_is_a_run(
 ):
     add_scope(dockyard_id, "127.0.0.1")
     submitted: list[int] = []
-    monkeypatch.setattr(runner_module, "submit_run", submitted.append)
+    monkeypatch.setattr(
+        runner_module,
+        "submit_run",
+        lambda run_id, _session_factory: submitted.append(run_id),
+    )
 
     denied = client.post(
         f"/api/dockyards/{dockyard_id}/discoveries",
@@ -246,7 +250,9 @@ def test_execution_refuses_when_a_name_changes_to_multiple_hosts(
         (("192.0.2.10",), ("192.0.2.10", "192.0.2.11"))
     )
     monkeypatch.setattr(runner_module, "system_resolver", lambda _hostname: next(resolutions))
-    monkeypatch.setattr(runner_module, "submit_run", lambda _run_id: None)
+    monkeypatch.setattr(
+        runner_module, "submit_run", lambda _run_id, _session_factory: None
+    )
     created = client.post(
         f"/api/dockyards/{dockyard_id}/discoveries",
         json={
@@ -260,7 +266,9 @@ def test_execution_refuses_when_a_name_changes_to_multiple_hosts(
         raise AssertionError("multi-address lab target reached the adapter")
 
     monkeypatch.setattr(NmapAdapter, "run", should_not_run)
-    runner_module.execute_run(created["id"])
+    from app.database import SessionLocal
+
+    runner_module.execute_run(created["id"], SessionLocal)
 
     run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{created['id']}").json()
     assert run["status"] == "denied"
@@ -283,7 +291,11 @@ def test_execution_rechecks_revocation_before_adapter_runs(
     add_scope(dockyard_id, "127.0.0.1")
     authorization = _authorize(client, dockyard_id).json()
     submitted: list[int] = []
-    monkeypatch.setattr(runner_module, "submit_run", submitted.append)
+    monkeypatch.setattr(
+        runner_module,
+        "submit_run",
+        lambda run_id, _session_factory: submitted.append(run_id),
+    )
     created = client.post(
         f"/api/dockyards/{dockyard_id}/discoveries",
         json={
@@ -302,7 +314,9 @@ def test_execution_rechecks_revocation_before_adapter_runs(
         raise AssertionError("revoked lab capability reached the adapter")
 
     monkeypatch.setattr(NmapAdapter, "run", should_not_run)
-    runner_module.execute_run(created["id"])
+    from app.database import SessionLocal
+
+    runner_module.execute_run(created["id"], SessionLocal)
     run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{created['id']}").json()
     assert run["status"] == "denied"
     assert run["decision"] == "denied_policy"

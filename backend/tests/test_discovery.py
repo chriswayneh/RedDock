@@ -373,13 +373,17 @@ def test_scope_removed_between_request_and_execution_denies_the_run(
     stub = StubAdapter()
     monkeypatch.setattr(registry, "get_adapter", lambda name: stub if name == stub.name else None)
     # Hold the run at pending so the scope can change before it executes.
-    monkeypatch.setattr(discovery_runner, "submit_run", lambda run_id: None)
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory: None
+    )
     entry = add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")
     assert accepted.status_code == 202
 
     client.delete(f"/api/dockyards/{dockyard_id}/scope/{entry['id']}")
-    discovery_runner.execute_run(accepted.json()["id"])
+    from app.database import SessionLocal
+
+    discovery_runner.execute_run(accepted.json()["id"], SessionLocal)
 
     run = client.get(
         f"/api/dockyards/{dockyard_id}/discoveries/{accepted.json()['id']}"
@@ -419,7 +423,9 @@ def test_interrupted_runs_are_marked_rather_than_left_active(
     monkeypatch: pytest.MonkeyPatch,
     add_scope,
 ):
-    monkeypatch.setattr(discovery_runner, "submit_run", lambda run_id: None)
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory: None
+    )
     add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")
 

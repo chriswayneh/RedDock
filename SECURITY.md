@@ -19,7 +19,7 @@ controls, not a certification or a claim that server mode is ready.
 | Boundary | Implemented control | Current limit or pending gate |
 | --- | --- | --- |
 | Network ingress | The supported package binds to loopback, accepts only documented Host values, keeps sidecars private, and exposes no CORS trust expansion. | Local mode has no sign-in. Do not publish it to a LAN, proxy, or the internet. |
-| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, session rotation, proxy trust, and administration remain release gates. |
+| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, cookie handling, browser session resolution, proxy trust, and administration remain release gates. |
 | Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current requests intentionally use the reserved local owner. Authenticated user context selection is not enabled. |
 | Target and model access | DockGuard authorizes target contact. Detectors and reports have no network capability. Model advice receives only a separately approved packet and no tools. | RedDock enforces declared scope but cannot establish the operator's legal or contractual authority. |
 | Process and secrets | The application runs non-root with all Linux capabilities dropped and `no-new-privileges`. Database credentials use mounted secret files. The dormant limiter uses a separately credentialed PostgreSQL role whose narrow privileges are checked at startup. | PostgreSQL support does not enable authenticated shared use. The main role still runs migrations, and both database secrets exist in one process. Sidecars retain only the capabilities required by their upstream startup paths. |
@@ -163,6 +163,16 @@ deployment is secure.
   the owned engine. This does not narrow the main role, which still runs
   migrations and accesses application data. It does not enable a route, UI, or
   server mode.
+- One immutable lifespan binding selects the database session factory for each
+  request. Local requests use global `SessionLocal` only through an explicit
+  local binding. Configured requests use `PrimaryDatabaseRuntime.session`; a
+  missing or malformed binding makes the database dependency produce a generic
+  `503` rather than an ambient fallback, and every yielded session is closed.
+  Configured protected routes receive no local-owner context and return `401`
+  until browser identity resolution is connected. Discovery carries the exact
+  request factory into its worker instead of importing `SessionLocal`. Executor
+  drain or cancellation before primary-runtime shutdown remains unfinished.
+  None of this enables an auth route, UI, or server mode.
 - Future authentication throttling uses atomic database updates shared across
   workers. A global bucket is checked before any client bucket, counters stop at
   their fixed limit, client and identity values are protected by a

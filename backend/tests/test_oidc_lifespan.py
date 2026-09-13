@@ -6,8 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import SecretBytes, SecretStr
 from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from app.config import DormantServerRuntimeConfig
+from app.database import DATABASE_REQUEST_BINDING_STATE
 from app.main import build_lifespan, create_app
 
 
@@ -73,6 +75,9 @@ class FakePrimaryDatabase:
     def startup_session(self):
         self.startup_calls += 1
         yield self.startup_session_value
+
+    def session(self) -> Session:
+        return Session(self.engine)
 
     def close(self) -> None:
         self.close_calls += 1
@@ -148,6 +153,7 @@ def test_configured_lifespan_owns_exactly_one_provider_per_application(
             assert not hasattr(application.state, "rate_limiter")
         assert not hasattr(application.state, "authentication_runtime")
         assert not hasattr(application.state, "primary_database_runtime")
+        assert not hasattr(application.state, DATABASE_REQUEST_BINDING_STATE)
 
     assert len(primary_factory.created) == 2
     assert len(created) == 2
