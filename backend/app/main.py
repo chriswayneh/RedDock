@@ -6,9 +6,11 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.engine import Engine
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
+from app.authentication import AuthenticationRuntime, create_authentication_runtime
 from app.config import DormantServerRuntimeConfig, get_settings
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import SessionLocal, create_rate_limiter_runtime, initialize_database
@@ -34,8 +36,16 @@ def build_lifespan(
     limiter_factory: Callable[
         [DormantServerRuntimeConfig], RateLimiterRuntime
     ] = create_rate_limiter_runtime,
+    authentication_factory: Callable[
+        [DormantServerRuntimeConfig, OidcProvider, RateLimiterRuntime, Engine],
+        AuthenticationRuntime,
+    ] = create_authentication_runtime,
+    lifecycle_engine: Engine | None = None,
 ):
     """Own future server resources once per application process and lifespan."""
+
+    if server_config is not None and not isinstance(lifecycle_engine, Engine):
+        raise ValueError("an explicit server lifecycle engine is required")
 
     @asynccontextmanager
     async def managed_lifespan(application: FastAPI):
@@ -68,22 +78,31 @@ def build_lifespan(
 
         provider = None
         rate_limiter = None
+        authentication_runtime = None
         try:
             if server_config is not None:
                 rate_limiter = limiter_factory(server_config)
-                application.state.rate_limiter = rate_limiter
                 provider = provider_factory(server_config)
-                application.state.oidc_provider = provider
+                authentication_runtime = authentication_factory(
+                    server_config,
+                    provider,
+                    rate_limiter,
+                    lifecycle_engine,
+                )
+                application.state.authentication_runtime = authentication_runtime
             yield
         finally:
             try:
-                if provider is not None:
-                    del application.state.oidc_provider
-                    provider.close()
+                if authentication_runtime is not None:
+                    del application.state.authentication_runtime
+                    authentication_runtime.close()
             finally:
-                if rate_limiter is not None:
-                    del application.state.rate_limiter
-                    rate_limiter.close()
+                try:
+                    if provider is not None:
+                        provider.close()
+                finally:
+                    if rate_limiter is not None:
+                        rate_limiter.close()
 
     return managed_lifespan
 

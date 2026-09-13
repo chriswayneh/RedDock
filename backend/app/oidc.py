@@ -702,6 +702,7 @@ def resolve_verified_identity(
                 Membership.status == "active",
             )
             .limit(2)
+            .with_for_update(of=(User, Membership))
         )
     )
     if len(rows) != 1:

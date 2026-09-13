@@ -105,9 +105,9 @@ sign-in, SSO, and shared-user access are not available yet.
 
 ### Foundations built but not enabled
 
-Supporting code exists for organizations, user profiles, role-based permissions,
-and secure browser sessions. These pieces still need to be connected into a
-complete, tested sign-in and administration experience.
+Core sign-in pieces now connect behind a dormant process-owned coordinator.
+They are not registered as HTTP routes and still need a complete, tested
+sign-in, request-authentication, logout, and administration experience.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
@@ -183,6 +183,11 @@ These primitives are not an enabled authentication system:
   its full lifespan. Concurrent first loads and signing-key refreshes are
   serialized, refresh backoff is shared by request threads, and shutdown closes
   the owned client. Local mode creates no provider.
+- A dormant authentication coordinator now orders login and callback limits,
+  one-use browser state, provider validation, pre-provisioned identity
+  resolution, and audited hash-only session issuance. PostgreSQL concurrency
+  proves that one callback state can issue at most one session. No route or UI
+  calls it.
 - Dormant authentication throttling is serialized in PostgreSQL across workers.
   It admits through a global bucket before creating a client bucket, stores
   only deployment-keyed HMACs, owns a separate transaction, groups IPv6 clients
@@ -200,10 +205,10 @@ These primitives are not an enabled authentication system:
   It receives only database connect, `public` schema usage, bucket-table
   changes, and sequence usage. Operators provision and rotate it outside
   RedDock migrations.
-- The next enablement checkpoint still needs session and limiter route
-  integration, callback and
-  administration routes, a packaged TLS proxy, metrics, PostgreSQL disaster
-  recovery exercises, capacity planning, and end-to-end authenticated tests.
+- The next enablement checkpoint still needs HTTP sign-in, callback, logout,
+  cookie, and error handling; authenticated request context; administration; a
+  packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; bounded
+  main-database waits; capacity planning; and end-to-end authenticated tests.
 
 #### Automated review
 

@@ -37,6 +37,7 @@ app/intelligence/   approval-gated, provider-neutral advice over reviewed eviden
 app/reporting/      deterministic reports, evidence manifests, and DockPack exports
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
+app/authentication.py dormant login and callback coordinator; no HTTP routes
 app/oidc.py         dormant OIDC protocol and identity-resolution boundary
 app/rate_limits.py  dormant cross-worker authentication throttling
 app/session_auth.py  hash-only browser-session issuance and resolution primitive
@@ -123,9 +124,9 @@ to one named permission, a test rejects unclassified routes, and the API router
 enforces the manifest against an explicit local owner. Negative tests prove a
 viewer cannot mutate state, read raw evidence, approve model disclosure, or
 export a DockPack. These controls are not authentication: the only supported
-runtime mode remains the account-free loopback `local` mode, and requesting
-`server` mode fails startup until OIDC sessions and tenant-scoped context
-resolution are complete.
+runtime remains account-free loopback `local` mode, and `server` mode fails startup
+until the dormant coordinator is connected to reviewed HTTP routes, browser
+cookies, and request-scoped session context.
 
 The dormant session primitive issues a 256-bit browser token and derives a
 separate browser-readable CSRF proof using domain-separated SHA-256. It
@@ -163,6 +164,20 @@ instance for its lifespan, serializes concurrent discovery and JWKS cache fills,
 shares signing-key refresh backoff across its request threads, and closes the
 owned client at shutdown. No auth router is registered and the current request
 authorization still always selects the reserved local owner.
+
+The dormant configured lifespan composes the provider, limiter, and an
+explicitly supplied lifecycle database engine behind one process-owned
+authentication coordinator. Login admission happens before provider discovery
+or stored state. Callback admission happens before the one-use state is
+consumed, and that state is burned before token exchange. A verified,
+pre-provisioned identity may receive one audited hash-only session. Provider
+exchange and token-validation failures make a best-effort attempt to record a
+bounded, typed denial event. Expected failures return one generic
+authentication error; only a
+durable rate-limit denial may carry a retry interval. This coordinator has no
+route or UI and does not authenticate current requests. A future server
+composition must prove that its lifecycle engine was built from the same
+validated database configuration before any route can be enabled.
 
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
@@ -210,16 +225,17 @@ actual total process count across the deployment. RedDock can verify the role
 limit against that declaration, but it cannot discover the orchestrator's
 actual process count.
 
+Before server mode can be enabled, HTTP sign-in, callback, logout, cookie, and
+error handling; authenticated request context; a packaged TLS proxy;
+administration; metrics; capacity planning; bounded main-database lock and
+statement waits; and authenticated end-to-end tests remain release blockers.
+
 An operator or infrastructure tool must provision this role after migrations;
 RedDock migrations do not create or manage database logins. Rotate its password
 by stopping all workers, updating the mounted secret, and restarting them
 together. The main role still runs migrations, both passwords are present in
 one process, and the privilege check occurs at startup. Database-wide capacity
 and consistent HMAC-key distribution remain separate deployment gates.
-
-Before server mode can be enabled, authenticated route wiring, a packaged TLS
-proxy, callback/error routes, administration, metrics, capacity planning, and
-authenticated end-to-end tests remain release blockers.
 
 The dormant first-owner bootstrap requires RedDock to be stopped and an
 explicit `--confirm-offline` acknowledgement. On PostgreSQL it acquires one
