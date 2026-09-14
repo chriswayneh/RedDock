@@ -4,6 +4,14 @@ All notable changes to RedDock are documented here.
 
 ## Unreleased
 
+### Documentation
+
+- Publish a versioned roadmap from the Phase 8 completion checkpoint through
+  vulnerability intelligence, expanded safe assessment, credentialed checks,
+  and evidence-based validation. Keep brute force, exploit payloads, and evasion
+  outside the standard runtime unless a separately isolated research track
+  passes its own security, legal, and abuse-risk review.
+
 ### Fixed
 
 - Resolve each architecture-specific image digest from the immutable published

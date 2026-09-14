@@ -28,6 +28,12 @@ RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light ver
 
 It does not test UDP, credentials, exploitability, response bodies, NSE scripts, brute force, payloads, or evasion. It ships no CVE feed. An optional local catalogue can associate an exact reported product and version with CVE identifiers, but that association is not proof that the service is affected.
 
+The [versioned roadmap](ROADMAP.md#planned-releases) plans locally cached
+vulnerability intelligence first, followed by bounded UDP and web observation,
+reviewed non-intrusive service checks, least-privilege credentialed checks, and
+fixed evidence-based validation. Intrusive capabilities are not planned for the
+standard RedDock runtime.
+
 ### Current boundary
 
 - **Local only.** The supported Compose package publishes one host-loopback port. Do not expose it to a LAN, public tunnel, proxy, or the internet.
@@ -355,6 +361,18 @@ The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its 
 ### Phase 8 progress
 
 Phase 8 remains in development. Current work tightens the local operator boundary, separates API ingress from optional sidecars, caps resource use, and improves first-run clarity. Dormant identity, session, OIDC, and tenant foundations remain disabled. There is no sign-in route, no supported server mode, and no shared-user deployment. See the [roadmap](ROADMAP.md#phase-8-production-polish) for technical checkpoints and remaining gates.
+
+### What comes next
+
+- **v0.9.0:** complete the guided, authenticated, recoverable Phase 8 operating
+  foundation.
+- **v1.0.0:** establish a stable support, compatibility, and upgrade baseline.
+- **v1.1.0 through v1.4.0:** add provenance-rich vulnerability intelligence,
+  bounded safe assessment, credentialed checks, and evidence-based validation.
+
+Each capability keeps scope enforcement, least privilege, explicit approval,
+bounded execution, and retained evidence. The complete acceptance gates and
+security boundaries are in the [planned releases](ROADMAP.md#planned-releases).
 
 ## Contributing and Security
 
