@@ -82,6 +82,8 @@ PUBLIC_ROUTES: Final = frozenset(
         ("GET", "/api/health"),
         ("GET", "/api/ready"),
         ("GET", "/api/version"),
+        ("GET", "/api/operator/status"),
+        ("POST", "/api/operator/unlock"),
     }
 )
 ROUTE_PERMISSIONS: Final = MappingProxyType(

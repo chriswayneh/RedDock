@@ -18,12 +18,13 @@ controls, not a certification or a claim that server mode is ready.
 
 | Boundary | Implemented control | Current limit or pending gate |
 | --- | --- | --- |
-| Network ingress | The supported package binds to loopback, accepts only documented Host values, keeps sidecars private, and exposes no CORS trust expansion. | Local mode has no sign-in. Do not publish it to a LAN, proxy, or the internet. |
-| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, cookie handling, browser session resolution, proxy trust, and administration remain release gates. |
-| Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current requests intentionally use the reserved local owner. Authenticated user context selection is not enabled. |
+| Network ingress | The supported Compose application listens on a Unix socket. Only the unprivileged ingress proxy receives that socket, and only the proxy publishes `127.0.0.1:8080` on the host. Optional sidecars use separate backend networks and receive no API socket. | This boundary depends on the provided Compose files. Raw container publication or adding another service to the socket volume is not supported. Do not publish RedDock to a LAN, proxy, or the internet. |
+| Local change protection | First start generates a high-entropy operator token in the data volume. Unsafe requests require the token, browser requests require one exact local Origin, and a fixed process-local throttle bounds mutation and unlock attempts. | This is an accident boundary for local changes, not user identity. Safe reads remain available through the host-loopback ingress, and the throttle is not shared across processes. |
+| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, browser session resolution, proxy trust, and administration remain release gates. |
+| Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current local requests use the reserved local owner. The operator token does not create a user identity, tenant, or role. |
 | Target and model access | DockGuard authorizes target contact. Detectors and reports have no network capability. Model advice receives only a separately approved packet and no tools. | RedDock enforces declared scope but cannot establish the operator's legal or contractual authority. |
-| Process and secrets | The application runs non-root with all Linux capabilities dropped and `no-new-privileges`. Database credentials use mounted secret files. The dormant limiter uses a separately credentialed PostgreSQL role whose narrow privileges are checked at startup. | PostgreSQL support does not enable authenticated shared use. The main role still runs migrations, and both database secrets exist in one process. Sidecars retain only the capabilities required by their upstream startup paths. |
-| Retained data | Tenant keys, path confinement, bounded reads, SHA-256 evidence checks, and private backup modes protect application workflows. | Operators still control host access, backup custody, secret rotation, and disaster-recovery policy. |
+| Process and secrets | Compose services use fixed unprivileged users, read-only root filesystems, bounded writable mounts, fixed resource limits, dropped capabilities, and `no-new-privileges`. Database credentials use mounted secret files. The dormant limiter uses a separately credentialed PostgreSQL role whose narrow privileges are checked at startup. | PostgreSQL support does not enable authenticated shared use. The main role still runs migrations, and both future server database secrets exist in one process. |
+| Retained data | Path confinement, bounded reads, SHA-256 evidence checks, and owner-only backup file modes where supported protect application workflows. | Backups and DockPacks are not encrypted. Operators still control host access, export custody, secret rotation, and disaster-recovery policy. |
 
 For operators, the safe rule is simple: use the default loopback Compose
 deployment, keep assessment scope authorized and narrow, and treat exported
@@ -48,6 +49,7 @@ deployment is secure.
 - Hostnames match exactly. There is no wildcard or subdomain expansion, and a hostname is never authorized because it resolves into an authorized network.
 - Resolution is opt-in, records the resolved addresses as evidence, and refuses when a resolved address is explicitly excluded. Adapters contact the recorded address rather than the name.
 - IPv4-mapped IPv6 DNS answers are rejected before execution so alternate address representations cannot bypass IPv4 exclusions.
+- Metadata and link-local destinations are non-overridable policy denials. This includes `169.254.0.0/16`, `100.100.100.200`, `fe80::/10`, `fd00:ec2::254`, and known metadata-service hostnames. A name that resolves to one of these addresses is denied before contact.
 
 ### Tool execution
 
@@ -58,6 +60,15 @@ deployment is secure.
 - The HTTP probe issues one request per origin, follows no redirects, reads no response body, and does not crawl, fuzz, submit forms, or test for vulnerabilities.
 - One absolute HTTP deadline spans connection, TLS, every underlying response read, and HEAD-to-GET fallback; a continuously trickling peer cannot reset the total budget.
 - HTTPS probes require TLS 1.2 or newer for both verified and certificate-observation handshakes. RedDock does not weaken its client policy to enumerate obsolete protocol support.
+- Each Dockyard retains at most 500 discovery requests, including denied attempts. Admission is serialized inside the process so concurrent requests cannot step past the cap.
+
+### Local HTTP changes
+
+- On first initialization, RedDock creates a 256-bit URL-safe operator token in the data volume with owner-only permissions and prints it to the service log. It stores only a token digest in process memory.
+- The browser exchanges the token for an HttpOnly, host-only, `SameSite=Strict` session cookie. Because the supported local UI uses HTTP, the cookie is not marked `Secure`; host loopback and the Compose ingress remain required boundaries.
+- Every unsafe local request requires exactly one operator credential. A browser Origin must be exactly `http://localhost:8080` or `http://127.0.0.1:8080`. Command-line requests may omit Origin but still need the token. CORS remains closed and mutations remain JSON-only.
+- Mutation admission is limited to 120 requests per minute per process. Token unlock attempts are limited to 10 per minute per process. These availability controls are not a database-wide or multi-process rate limit.
+- The token does not protect safe reads, identify a person, or make the service safe to publish. If its file disappears after initialization, unsafe requests return a generic failure until the original file is restored and RedDock restarts.
 
 ### Validation
 
@@ -99,7 +110,7 @@ deployment is secure.
 
 - Intelligence is disabled unless an operator supplies a provider base URL and model through deployment configuration. Provider credentials may come from a mounted secret file or the backward-compatible process variable; they are masked in settings and are never accepted by the API, stored, returned to the browser, retained as evidence, or logged.
 - Creating a run makes no provider request. It freezes and hashes the exact versioned packet from active, evidence-linked findings in the latest completed correlation; the browser displays that JSON and the destination before a separate approval note can send it.
-- Approval is bound to the provider, model, destination, local/external classification, and prompt version recorded at creation. A configuration or prompt-version change blocks the send. External endpoints require HTTPS; loopback endpoints may use HTTP only without a credential. Redirects are refused, and requests have total-time and response-size bounds.
+- Approval is bound to the provider, model, destination, local/external classification, and prompt version recorded at creation. A configuration or prompt-version change blocks the send. Only loopback addresses and the fixed internal `ollama` service are classified as local. Host gateways such as `host.docker.internal` cross the container boundary, are classified as external, and require HTTPS. Redirects are refused, and requests have total-time and response-size bounds.
 - The API accepts no arbitrary prompt, destination, target, command, tool, credential, action, or finding selection. Stored strings are explicitly treated as untrusted data in the fixed prompt.
 - Provider output must match a strict schema and may cite only finding IDs and evidence hashes in the reviewed packet. Unknown or duplicate references fail the run as a whole.
 - Output is retained, hashed advice only. It cannot alter a finding, trigger validation or discovery, invoke a tool, modify scope, or apply remediation. An operator remains responsible for reviewing both the advice and a provider's data-handling terms.
@@ -112,7 +123,7 @@ deployment is secure.
 - Assets, services, findings, finding-evidence links, validation rows, lab authorizations, lab audit events, evidence files, retained report runs, and total DockPack bytes have independent fixed bounds applied before unbounded materialization. A limit violation fails closed rather than silently omitting part of the snapshot.
 - Members use sorted names, fixed timestamps, fixed modes, canonical JSON, and uncompressed ZIP storage. The same retained state therefore produces byte-identical reports and DockPacks. A download re-hashes its retained artifact before serving it.
 - Stored text remains untrusted and is placed in delimiter-safe literal code spans before Markdown rendering, including in portable exports. Reports are evidence summaries, not HTML, executable content, vulnerability verdicts, or aggregate risk scores.
-- A DockPack can contain targets, service banners, finding details, validation and lab authorization notes, lab policy decisions, model advice, and other assessment evidence. Treat it as potentially sensitive engagement data: review it before sharing, store it with access controls, and verify its manifest before extraction.
+- A DockPack can contain targets, service banners, finding details, validation and lab authorization notes, lab policy decisions, model advice, and other assessment evidence. It is not encrypted. Treat it as engagement-confidential: review it before sharing, store or transmit it through an approved encrypted channel, and verify its manifest before extraction.
 
 ### Evidence and data
 
@@ -125,8 +136,12 @@ deployment is secure.
 
 ### Runtime
 
-- The production container runs as an unprivileged `reddock` user, with no `privileged: true`, no added capabilities, and no `network_mode: host`. Nmap therefore runs unprivileged and uses TCP connect scanning; RedDock does not request raw-socket capabilities to enable features it does not need. The RedDock service drops every Linux capability, which it can afford because it binds an unprivileged port and TCP-connect scanning needs none. Every Compose service, RedDock and the optional PostgreSQL and Ollama sidecars alike, sets `no-new-privileges`, so a process inside a container cannot acquire privilege it did not start with. The sidecars keep the capabilities their official entry points use to initialize a data directory and drop to their own unprivileged user; dropping those would stop them starting at all.
-- SQLite data and evidence are held in a named volume by default. The optional PostgreSQL profile uses a separate named volume and a private service with no host port; its password is mounted as a Compose secret. None of this state is baked into the image.
+- The Compose application runs as the unprivileged `reddock` user, drops every Linux capability, uses a read-only root filesystem, and has fixed process and memory limits. Nmap uses TCP connect scanning and receives no raw-socket capability. The ingress proxy, PostgreSQL, Ollama, and the model provisioner use explicit unprivileged users, drop every capability, use read-only root filesystems with narrow writable mounts, set `no-new-privileges`, and have fixed process and memory limits.
+- The rootless Ollama wrapper uses the new `reddock-ollama-v2` model volume. Its first start downloads the selected model again. An older root-owned model cache is not mounted or deleted automatically; removing it is an explicit operator decision after its volume has been identified.
+- The application listens on `/run/reddock-api/reddock.sock`, not a container TCP port. Only the unprivileged ingress proxy receives that socket volume and publishes `127.0.0.1:8080` on the host. Ollama and PostgreSQL use separate internal backend networks and receive no socket volume, so they cannot initiate API requests. The application retains outbound networks because authorized discovery, PostgreSQL, and optional model access require them.
+- This isolation belongs to the supported Compose package. Publishing the raw image, changing its command, sharing the socket volume, or attaching extra services to the ingress boundary requires a separate security review.
+- SQLite data, evidence, and the local operator token are held in a named volume by default. The optional PostgreSQL profile uses a separate named volume and internal network with no host port; its password is mounted as a Compose secret. None of this state is baked into the image.
+- The runtime image includes the exact Debian Nmap corresponding-source archives used for its installed Nmap package under `/usr/share/reddock-source/nmap`, together with package metadata and SHA-256 checksums. See [Nmap corresponding source](docs/NMAP_SOURCE_OFFER.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 - Inputs use Pydantic validation; unknown or malformed requests are rejected.
 - CORS is intentionally not opened because UI and API share one origin.
 - Requests are accepted only for the documented `localhost` and `127.0.0.1` Host values, preventing an arbitrary Host from using browser DNS rebinding to reach the loopback API.

@@ -20,7 +20,7 @@ from tests.phase1 import Recorder
 
 
 def test_startup_recovers_running_validations_and_preserves_pending(
-    client, dockyard_id, header_finding
+    client, dockyard_id, header_finding, monkeypatch
 ):
     from app.database import SessionLocal
     from app.main import create_app
@@ -33,8 +33,15 @@ def test_startup_recovers_running_validations_and_preserves_pending(
     with SessionLocal() as db:
         db.get(ValidationRun, interrupted).status = "running"
         db.commit()
-    # A separate application instance models a restarted process without
-    # re-entering the already-running fixture application's lifespan.
+    # Instance-lock behavior is covered separately. Bypass only that boundary
+    # here so this test can isolate recovery while the fixture app is alive.
+    class TestInstanceLock:
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "app.main.acquire_instance_lock", lambda _path: TestInstanceLock()
+    )
     with TestClient(create_app(), base_url="http://localhost"):
         with SessionLocal() as db:
             recovered = db.get(ValidationRun, interrupted)

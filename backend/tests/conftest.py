@@ -12,6 +12,7 @@ def environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pat
     """Point RedDock at a throwaway database and evidence root."""
     monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
     monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("REDDOCK_OPERATOR_TOKEN_FILE", str(tmp_path / "operator-token"))
     for name in (
         "REDDOCK_LLM_BASE_URL",
         "REDDOCK_LLM_MODEL",
@@ -57,6 +58,13 @@ def client(environment: Path) -> Iterator[TestClient]:
     import app.main
 
     with TestClient(app.main.app, base_url="http://localhost") as test_client:
+        token = (environment / "operator-token").read_text().strip()
+        response = test_client.post(
+            "/api/operator/unlock",
+            headers={"Origin": "http://localhost:8080"},
+            json={"token": token},
+        )
+        assert response.status_code == 204, response.text
         yield test_client
 
 

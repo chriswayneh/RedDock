@@ -19,6 +19,7 @@ import type {
   LabAuthorization,
   LabStatus,
   Observation,
+  OperatorStatus,
   RedPathGraph,
   ReportRun,
   EvidenceManifest,
@@ -91,6 +92,8 @@ export type DiscoveryOutcome =
   | { accepted: false; error: string };
 
 export const api = {
+  operatorStatus: () => request<OperatorStatus>("/operator/status"),
+  unlockOperator: (token: string) => post<void>("/operator/unlock", { token }),
   dashboard: () => request<DashboardSummary>("/dashboard"),
   settings: () => request<Settings>("/settings"),
   assetPage: (id: number, offset = 0) => dockyardPage<Asset>(id, "assets", offset),

@@ -84,6 +84,8 @@ def test_every_api_route_has_one_explicit_public_or_permission_decision():
         ("GET", "/api/health"),
         ("GET", "/api/ready"),
         ("GET", "/api/version"),
+        ("GET", "/api/operator/status"),
+        ("POST", "/api/operator/unlock"),
     }
 
 

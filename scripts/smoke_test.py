@@ -10,17 +10,20 @@ Usage: python scripts/smoke_test.py [base-url]
 """
 
 import json
-from hashlib import sha256
-from io import BytesIO
 import os
 import sys
 import time
 import urllib.error
 import urllib.request
+from hashlib import sha256
+from io import BytesIO
 from zipfile import ZipFile
 
 TIMEOUT = 10
 RUN_DEADLINE = 240
+OPERATOR_TOKEN = os.getenv("REDDOCK_OPERATOR_TOKEN", "")
+SCAN_TARGET = os.getenv("REDDOCK_SMOKE_TARGET", "127.0.0.1")
+HTTP_TARGET = os.getenv("REDDOCK_SMOKE_ORIGIN", "http://127.0.0.1:8080")
 LAB_ACKNOWLEDGEMENT = (
     "I confirm this Dockyard is an isolated lab that I am authorized to test."
 )
@@ -30,11 +33,14 @@ def call(
     base: str, method: str, path: str, body: dict | None = None
 ) -> tuple[int, object]:
     data = json.dumps(body).encode() if body is not None else None
+    headers = {"Content-Type": "application/json"}
+    if method not in {"GET", "HEAD", "OPTIONS"} and OPERATOR_TOKEN:
+        headers["X-RedDock-Operator-Token"] = OPERATOR_TOKEN
     request = urllib.request.Request(
         f"{base}{path}",
         data=data,
         method=method,
-        headers={"Content-Type": "application/json"},
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
@@ -66,6 +72,11 @@ def check(label: str, condition: bool, detail: object = "") -> None:
 
 
 def main(base: str) -> None:
+    check(
+        "operator token supplied without printing it",
+        bool(OPERATOR_TOKEN),
+        "set REDDOCK_OPERATOR_TOKEN from the running container",
+    )
     print(f"RedDock smoke test against {base}\n")
 
     status, health = call(base, "GET", "/api/health")
@@ -93,7 +104,7 @@ def main(base: str) -> None:
     dockyard_id = dockyard["id"]
 
     status, entry = call(
-        base, "POST", f"/api/dockyards/{dockyard_id}/scope", {"target": "127.0.0.1"}
+        base, "POST", f"/api/dockyards/{dockyard_id}/scope", {"target": SCAN_TARGET}
     )
     check("authorized scope added", status == 201, entry["value"])
 
@@ -101,6 +112,14 @@ def main(base: str) -> None:
         base, "POST", f"/api/dockyards/{dockyard_id}/scope", {"target": "0.0.0.0/0"}
     )
     check("internet-wide scope refused", status == 422, broad["detail"])
+
+    status, metadata = call(
+        base,
+        "POST",
+        f"/api/dockyards/{dockyard_id}/scope",
+        {"target": "169.254.169.254"},
+    )
+    check("cloud metadata scope refused", status == 422, metadata["detail"])
 
     status, denied = call(
         base,
@@ -118,7 +137,7 @@ def main(base: str) -> None:
         base,
         "POST",
         f"/api/dockyards/{dockyard_id}/discoveries",
-        {"target": "127.0.0.1", "adapter": "nmap", "profile": "service_discovery"},
+        {"target": SCAN_TARGET, "adapter": "nmap", "profile": "service_discovery"},
     )
     check("in-scope discovery accepted", status == 202, f"run={run['id']}")
 
@@ -161,7 +180,7 @@ def main(base: str) -> None:
         base,
         "POST",
         f"/api/dockyards/{dockyard_id}/discoveries",
-        {"target": "127.0.0.1", "adapter": "nmap", "profile": "host_discovery"},
+        {"target": SCAN_TARGET, "adapter": "nmap", "profile": "host_discovery"},
     )
     deadline = time.monotonic() + RUN_DEADLINE
     while time.monotonic() < deadline:
@@ -198,7 +217,7 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
         base,
         "POST",
         f"/api/dockyards/{dockyard_id}/scope",
-        {"target": "http://127.0.0.1:8080"},
+        {"target": HTTP_TARGET},
     )
     check("own origin authorized", status == 201, entry["value"])
 
@@ -206,7 +225,7 @@ def detection_checks(base: str, dockyard_id: int) -> list[dict]:
         base,
         "POST",
         f"/api/dockyards/{dockyard_id}/discoveries",
-        {"target": "http://127.0.0.1:8080", "adapter": "http", "profile": "http_probe"},
+        {"target": HTTP_TARGET, "adapter": "http", "profile": "http_probe"},
     )
     check("http probe accepted", status == 202, f"run={probe['id']}")
     wait_for_runs(base, dockyard_id)
@@ -332,7 +351,7 @@ def lab_checks(base: str, dockyard_id: int) -> int:
         "POST",
         f"/api/dockyards/{dockyard_id}/discoveries",
         {
-            "target": "127.0.0.1",
+            "target": SCAN_TARGET,
             "adapter": "nmap",
             "profile": "lab_extended_service_discovery",
         },

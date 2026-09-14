@@ -1,4 +1,5 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
 
@@ -240,6 +241,64 @@ def test_repeated_discovery_updates_instead_of_duplicating(
     assert assets[0]["last_seen"] >= first["last_seen"]
     # History is never rewritten: each run keeps its own observations.
     assert len(observations) == 2
+
+
+def test_discovery_history_cap_counts_denials_and_is_scoped_per_workspace(
+    client: TestClient,
+    dockyard_id: int,
+    adapter: StubAdapter,
+    add_scope,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.config import get_settings
+
+    bounded = get_settings().model_copy(update={"max_discovery_runs_per_dockyard": 2})
+    monkeypatch.setattr(discovery_runner, "get_settings", lambda: bounded)
+    add_scope(dockyard_id, "127.0.0.1")
+
+    assert start(client, dockyard_id, "127.0.0.2").status_code == 403
+    assert start(client, dockyard_id, "127.0.0.1").status_code == 202
+    capped = start(client, dockyard_id, "127.0.0.1")
+
+    assert capped.status_code == 422
+    assert "fixed discovery history limit" in capped.json()["detail"]
+    assert len(client.get(f"/api/dockyards/{dockyard_id}/discoveries").json()) == 2
+    assert len(adapter.requests) == 1
+
+    other = client.post("/api/dockyards", json={"name": "Separate Workspace"}).json()["id"]
+    add_scope(other, "127.0.0.1")
+    assert start(client, other, "127.0.0.1").status_code == 202
+
+
+def test_discovery_history_final_slot_is_process_atomic(
+    client: TestClient,
+    dockyard_id: int,
+    adapter: StubAdapter,
+    add_scope,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.config import get_settings
+    from app.database import SessionLocal
+
+    bounded = get_settings().model_copy(update={"max_discovery_runs_per_dockyard": 1})
+    monkeypatch.setattr(discovery_runner, "get_settings", lambda: bounded)
+    add_scope(dockyard_id, "127.0.0.1")
+
+    def admit() -> str:
+        with SessionLocal() as session:
+            try:
+                discovery_runner.create_run(
+                    session, dockyard_id, "127.0.0.1", adapter.name, "safe"
+                )
+            except discovery_runner.RunRejected:
+                return "capped"
+            return "admitted"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(lambda _: admit(), range(2)))
+
+    assert sorted(outcomes) == ["admitted", "capped"]
+    assert len(client.get(f"/api/dockyards/{dockyard_id}/discoveries").json()) == 1
 
 
 def test_explicit_negative_states_reconcile_only_the_ports_that_were_scanned(

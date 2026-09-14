@@ -164,5 +164,75 @@ def test_the_whole_internet_is_never_a_valid_scope_entry(value: str):
         normalize_scope_value(value)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "169.254.0.1",
+        "169.254.169.254",
+        "169.254.20.0/24",
+        "100.100.100.200",
+        "http://169.254.169.254",
+        "fe80::1",
+        "fe80::/120",
+        "http://[fd00:ec2::254]",
+        "metadata.google.internal",
+        "metadata.goog",
+        "instance-data.ec2.internal",
+    ],
+)
+def test_metadata_and_link_local_scope_is_non_overrideably_rejected(value: str):
+    with pytest.raises(ScopeRejected, match="Metadata|metadata|link-local"):
+        normalize_scope_value(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "169.254.169.254",
+        "169.254.0.0/24",
+        "http://169.254.169.254",
+        "fe80::1",
+        "fd00:ec2::254",
+        "metadata.google.internal",
+    ],
+)
+def test_existing_scope_cannot_override_metadata_or_link_local_policy(value: str):
+    evaluation = evaluate(value, include(value))
+    assert evaluation.decision is Decision.DENIED_POLICY
+    assert not evaluation.allowed
+
+
+@pytest.mark.parametrize("address", ["169.254.169.254", "fe80::1", "fd00:ec2::254"])
+def test_named_scope_cannot_reach_a_hard_denied_resolved_address(address: str):
+    evaluation = evaluate(
+        "authorized.example",
+        include("authorized.example"),
+        resolver=resolving(**{"authorized.example": (address,)}),
+    )
+    assert evaluation.decision is Decision.DENIED_POLICY
+    assert evaluation.resolved_addresses == (address,)
+
+
+def test_one_hard_denied_answer_blocks_a_mixed_dns_result():
+    evaluation = evaluate(
+        "authorized.example",
+        include("authorized.example"),
+        resolver=resolving(
+            **{"authorized.example": ("192.0.2.10", "169.254.169.254")}
+        ),
+    )
+    assert evaluation.decision is Decision.DENIED_POLICY
+    assert evaluation.resolved_addresses == ("192.0.2.10", "169.254.169.254")
+
+
+def test_malformed_resolver_answer_fails_closed():
+    evaluation = evaluate(
+        "authorized.example",
+        include("authorized.example"),
+        resolver=resolving(**{"authorized.example": ("not-an-address",)}),
+    )
+    assert evaluation.decision is Decision.DENIED_POLICY
+
+
 def test_a_slash_24_is_the_widest_accepted_ipv4_entry():
     assert normalize_scope_value("192.168.1.0/24").value == "192.168.1.0/24"

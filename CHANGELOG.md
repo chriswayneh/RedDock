@@ -2,10 +2,23 @@
 
 All notable changes to RedDock are documented here.
 
-## Unreleased: Phase 8 Production polish
+## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
 
+- A local operator-token boundary for unsafe requests. The token is generated
+  once, stored with the local data, disclosed once in startup logs, and accepted
+  through a header or a host-only HttpOnly browser cookie. Exact browser Origin
+  checks, ambiguous-credential rejection, and fixed process-local throttles
+  reduce accidental or cross-origin changes without claiming user identity.
+- A Unix-socket-only Compose application boundary behind one non-root loopback
+  ingress proxy. Optional PostgreSQL and Ollama services receive only their
+  dedicated backend networks and cannot initiate TCP requests to the API.
+- Matching Debian Nmap source archives, package metadata, license notices, and
+  checksums inside every RedDock image and as architecture-specific release
+  assets.
+- A process-lifetime data-directory lock that makes offline backup, restore, and
+  recovery commands verify that RedDock is actually stopped.
 - A dormant process-owned authentication coordinator for the future server
   boundary. It applies durable login and callback admission, creates and
   consumes browser-bound OIDC state once, validates the provider identity,
@@ -128,7 +141,7 @@ All notable changes to RedDock are documented here.
 - A source-backed threat model and accepted identity/tenancy architecture that
   preserve the loopback local workflow while requiring a separate fail-closed
   authenticated server mode
-- A private PostgreSQL 17.11 Compose profile pinned to a multi-architecture
+- An internal-network PostgreSQL 17.11 Compose profile pinned to a multi-architecture
   image digest, with SCRAM host authentication, data checksums, health-gated
   startup, and no published database port
 - Mounted secret-file configuration for PostgreSQL and model-provider
@@ -181,6 +194,17 @@ All notable changes to RedDock are documented here.
 
 ### Security
 
+- Hard-deny cloud metadata names, IPv4 and IPv6 link-local ranges, and known
+  metadata endpoints before scope admission and after DNS resolution, including
+  mixed-answer and IPv4-mapped IPv6 cases.
+- Bound retained discovery history across completed and denied runs and apply a
+  global in-process admission limit to local mutations.
+- Run RedDock, ingress, PostgreSQL, the Ollama runtime, and the Ollama model
+  initializer as fixed non-root users with dropped capabilities, read-only root
+  filesystems, no-new-privileges, bounded processes, and bounded memory. The
+  long-running Ollama service has no internet-connected network.
+- Align image frontend builds with Node 22 and classify host gateway model
+  endpoints as external destinations that require HTTPS.
 - Require state-specific recovery confirmation: prepared restores accept only
   `--confirm-rollback`, while committed restores accept only
   `--confirm-finalize` before old rollback copies are deleted.
@@ -214,8 +238,8 @@ All notable changes to RedDock are documented here.
   `no-new-privileges` on it, so the application service now matches the
   `no-new-privileges` the PostgreSQL and Ollama sidecars already set; the image
   already runs unprivileged and TCP-connect scanning needs nothing granted back.
-  The sidecars keep the capabilities their entry points need to initialize and
-  drop privileges themselves
+  The supported sidecars now use fixed non-root identities, dropped
+  capabilities, and read-only root filesystems.
 - Publish the CI smoke-test container on loopback rather than every interface,
   so a build never exposes the unauthenticated local-mode API on a runner
 - Anchor evidence artifact-name validation with `fullmatch`, so a trailing
@@ -250,7 +274,7 @@ All notable changes to RedDock are documented here.
 
 - The HTTP probe now sets an explicit TLS 1.2 minimum for both verified and
   certificate-observation handshakes; it does not negotiate TLS 1.0/1.1
-- The current unauthenticated API remains explicitly loopback-only; the new
+- The local API still has no human identity and remains explicitly loopback-only; the new
   PostgreSQL profile does not claim or enable networked server deployment
 - Partial, empty, oversized, multiline, missing, or symlinked database-secret
   inputs fail startup instead of falling back to a different database
@@ -260,8 +284,8 @@ All notable changes to RedDock are documented here.
   `server` mode, are rejected instead of widening the local trust boundary
 - Supplying a public origin in local mode also fails startup rather than
   silently exposing the account-free API under server-looking configuration
-- PostgreSQL and optional Ollama remain private Compose services without host
-  ports, and credentials do not appear in rendered service environments
+- PostgreSQL and optional Ollama remain on dedicated backend networks without
+  host ports or the API socket, and credentials do not appear in rendered service environments
 - Security headers wrap Host rejection as well as application routes, while
   static application assets retain their normal caching behavior
 

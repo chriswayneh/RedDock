@@ -38,7 +38,7 @@ jobs:
         run: |
           pip install -e ".[dev]"
           pip-audit --progress-spinner off .
-          ruff check app tests
+          ruff check app tests ../scripts/verify_release.py ../scripts/smoke_test.py
           pytest
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -58,21 +58,46 @@ jobs:
       - name: Verify the production container
         env:
           REDDOCK_EXPECT_PLUGIN: "true"
+          REDDOCK_SMOKE_TARGET: reddock-ingress
+          REDDOCK_SMOKE_ORIGIN: http://reddock-ingress:8080
         run: |
           mkdir -p "$RUNNER_TEMP/reddock-release-detectors"
           cp plugins/examples/example-server.json.example "$RUNNER_TEMP/reddock-release-detectors/example-server.json"
           docker build -t reddock:release .
-          docker run -d --name reddock-release -p 127.0.0.1:8080:8080 \
-            -e REDDOCK_LAB_MODE_ENABLED=true \
-            -e REDDOCK_DETECTOR_PLUGIN_DIR=/etc/reddock/detectors \
-            -v "$RUNNER_TEMP/reddock-release-detectors:/etc/reddock/detectors:ro" \
-            reddock:release
-          trap 'docker logs reddock-release; docker rm -f reddock-release' EXIT
+          docker run --rm --entrypoint sh reddock:release -c '
+            test -r /usr/share/doc/reddock/THIRD_PARTY_NOTICES.md &&
+            test -r /usr/share/doc/reddock/NMAP_SOURCE_OFFER.md &&
+            cd /usr/share/reddock-source/nmap && sha256sum -c SHA256SUMS &&
+            cat PACKAGE.txt && nmap --version
+          '
+          cat > "$RUNNER_TEMP/compose-release.yaml" <<YAML
+          services:
+            reddock:
+              image: reddock:release
+              pull_policy: never
+              environment:
+                REDDOCK_LAB_MODE_ENABLED: "true"
+                REDDOCK_DETECTOR_PLUGIN_DIR: /etc/reddock/detectors
+              volumes:
+                - $RUNNER_TEMP/reddock-release-detectors:/etc/reddock/detectors:ro
+          YAML
+          compose=(docker compose -p reddock-release -f compose.yaml -f "$RUNNER_TEMP/compose-release.yaml")
+          cleanup() {
+            "${compose[@]}" logs --no-color 2>&1 | sed -E \
+              's/(First-start local operator token \(shown once\):).*/\1 [REDACTED]/' || true
+            "${compose[@]}" down -v --remove-orphans || true
+          }
+          trap cleanup EXIT
+          "${compose[@]}" up -d --no-build
           for attempt in {1..12}; do
             curl --fail http://localhost:8080/api/ready && break
             if [ "$attempt" = 12 ]; then exit 1; fi
             sleep 2
           done
+          "${compose[@]}" exec -T reddock test -S /run/reddock-api/reddock.sock
+          REDDOCK_OPERATOR_TOKEN="$("${compose[@]}" exec -T reddock cat /var/lib/reddock/operator-token)"
+          echo "::add-mask::$REDDOCK_OPERATOR_TOKEN"
+          export REDDOCK_OPERATOR_TOKEN
           python3 scripts/smoke_test.py
 
   publish:
@@ -116,12 +141,36 @@ jobs:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+      - name: Extract matching Nmap source from each published architecture
+        run: |
+          set -euo pipefail
+          for architecture in amd64 arm64; do
+            source_dir="$RUNNER_TEMP/nmap-source-$architecture"
+            mkdir -p "$source_dir"
+            docker pull --platform "linux/$architecture" \
+              "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            container_id="$(docker create --platform "linux/$architecture" \
+              "${IMAGE_NAME}:${GITHUB_REF_NAME}")"
+            docker cp \
+              "$container_id:/usr/share/reddock-source/nmap/." "$source_dir/"
+            docker rm "$container_id"
+            printf 'image=%s\nplatform=linux/%s\nmanifest=%s\n' \
+              "${IMAGE_NAME}:${GITHUB_REF_NAME}" "$architecture" \
+              '${{ steps.build.outputs.digest }}' > "$source_dir/REDDOCK_IMAGE.txt"
+            tar -C "$RUNNER_TEMP" -czf \
+              "$RUNNER_TEMP/reddock-nmap-source-$architecture.tar.gz" \
+              "nmap-source-$architecture"
+          done
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_PHASE: ${{ needs.verify.outputs.phase }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          --verify-tag
-          --generate-notes
-          --title "RedDock $GITHUB_REF_NAME - $RELEASE_PHASE"
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --generate-notes \
+            --title "RedDock $GITHUB_REF_NAME - $RELEASE_PHASE" \
+            "$RUNNER_TEMP/reddock-nmap-source-amd64.tar.gz" \
+            "$RUNNER_TEMP/reddock-nmap-source-arm64.tar.gz" \
+            THIRD_PARTY_NOTICES.md \
+            docs/NMAP_SOURCE_OFFER.md

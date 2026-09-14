@@ -14,9 +14,9 @@ SPEC.loader.exec_module(verify_release)
 
 
 def test_current_release_metadata_agrees() -> None:
-    phase = verify_release.verify_files(REPOSITORY, "0.8.0")
+    phase = verify_release.verify_files(REPOSITORY, "0.8.1")
 
-    assert phase == "Phase 7 — Advanced / Lab"
+    assert phase == "Phase 8: Production hardening checkpoint"
 
 
 def test_inconsistent_release_version_is_rejected() -> None:

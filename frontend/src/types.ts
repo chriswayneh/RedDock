@@ -9,6 +9,7 @@ export type Dockyard = {
 
 export type Health = { status: string; service: string };
 export type Version = { name: string; version: string; phase: string };
+export type OperatorStatus = { available: boolean; unlocked: boolean };
 export type Settings = Version & { deployment_mode: "local"; intelligence_configured: boolean };
 export type DashboardSummary = {
   dockyard_count: number; asset_count: number; discovery_run_count: number;

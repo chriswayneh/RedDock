@@ -91,10 +91,10 @@ def get_provider() -> IntelligenceProvider | None:
         or len(settings.llm_model) > 120
     ):
         return None
-    # `ollama` is the fixed service name in the optional, private Compose
-    # bundle. It is never published on a host port. HTTP still fails closed if
-    # a credential is configured, because bearer material must not cross it.
-    local = host in {"localhost", "host.docker.internal", "ollama"}
+    # `ollama` is the fixed service name in the optional internal Compose
+    # bundle. Host gateways, including `host.docker.internal`, cross the
+    # container boundary and are classified as external destinations.
+    local = host in {"localhost", "ollama"}
     if not local:
         try:
             local = ip_address(host).is_loopback

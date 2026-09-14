@@ -1226,6 +1226,12 @@ def create_backup(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    from app.instance_lock import InstanceLockError, verify_instance_offline
+
+    try:
+        verify_instance_offline(data_dir)
+    except InstanceLockError as error:
+        raise BackupError(str(error)) from error
     if _is_link(output) or (_path_present(output) and not confirm_overwrite):
         raise BackupError(
             "Backup output already exists or is a link; choose a new name or confirm overwrite"
@@ -1474,6 +1480,12 @@ def recover_restore(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    from app.instance_lock import InstanceLockError, verify_instance_offline
+
+    try:
+        verify_instance_offline(data_dir)
+    except InstanceLockError as error:
+        raise BackupError(str(error)) from error
     marker_path = data_dir / RESTORE_MARKER
     if not _path_present(marker_path):
         return False
@@ -1578,6 +1590,12 @@ def restore_backup(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    from app.instance_lock import InstanceLockError, verify_instance_offline
+
+    try:
+        verify_instance_offline(data_dir)
+    except InstanceLockError as error:
+        raise BackupError(str(error)) from error
     if _path_present(data_dir / RESTORE_MARKER):
         raise BackupError("An incomplete restore is recorded; run recover before restoring")
     if _is_link(archive):

@@ -340,6 +340,18 @@ def test_create_requires_an_explicit_offline_confirmation(tmp_path: Path) -> Non
         backup.create_backup(data, tmp_path / "backup.zip")
 
 
+def test_create_proves_the_application_is_offline(tmp_path: Path) -> None:
+    from app.instance_lock import LOCK_NAME, acquire_instance_lock
+
+    data = _make_data(tmp_path / "data", "current")
+    running = acquire_instance_lock(data / LOCK_NAME)
+    try:
+        with pytest.raises(BackupError, match="still running"):
+            create_backup(data, tmp_path / "backup.zip")
+    finally:
+        running.close()
+
+
 def test_create_refuses_output_inside_data_directory(tmp_path: Path) -> None:
     data = _make_data(tmp_path / "data", "current")
 

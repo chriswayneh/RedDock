@@ -375,8 +375,8 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.8.0"
-    phase: str = "Phase 7 — Advanced / Lab"
+    version: str = "0.8.1"
+    phase: str = "Phase 8: Production hardening checkpoint"
     deployment_mode: Literal["local"] = "local"
     api_docs_enabled: bool = False
     database_url: str = Field(default="sqlite:///./data/reddock.db", repr=False)
@@ -386,6 +386,7 @@ class Settings(BaseModel):
     database_user: str | None = None
     database_password: SecretStr | None = None
     evidence_dir: str = "./data/evidence"
+    operator_token_file: str = "./data/operator-token"
     nmap_path: str | None = None
     # Optional, local, and off unless an operator supplies it. RedDock never
     # downloads CVE data; see app/detection/enrichment.py.
@@ -412,6 +413,7 @@ class Settings(BaseModel):
     max_scope_entries: int = 64
     max_network_addresses: int = 256  # IPv4 /24 or IPv6 /120
     max_concurrent_runs: int = 2
+    max_discovery_runs_per_dockyard: int = 500
     max_run_seconds: int = 600
     max_evidence_bytes: int = 2 * 1024 * 1024
     max_resolved_addresses: int = 4
@@ -483,6 +485,9 @@ def get_settings() -> Settings:
         database_url=database_url,
         **database_components,
         evidence_dir=os.getenv("REDDOCK_EVIDENCE_DIR", defaults.evidence_dir),
+        operator_token_file=os.getenv(
+            "REDDOCK_OPERATOR_TOKEN_FILE", defaults.operator_token_file
+        ),
         nmap_path=os.getenv("REDDOCK_NMAP_PATH") or None,
         cve_catalog_path=os.getenv("REDDOCK_CVE_CATALOG") or None,
         detector_plugin_dir=os.getenv("REDDOCK_DETECTOR_PLUGIN_DIR") or None,

@@ -7,11 +7,13 @@ hypotheses, not claims that a vulnerability has been found.
 ## Overview
 
 RedDock is an evidence-first assessment workbench for an operator authorized to
-examine a bounded set of systems. The released deployment is a local,
-single-operator application: Docker publishes the service only on host loopback,
-and the React UI and FastAPI API share one origin (`compose.yaml:5-11`,
-`backend/app/main.py:59-67`). The API is not authenticated, so the trusted OS
-account and loopback boundary are part of the released security model.
+examine a bounded set of systems. The supported development Compose package is
+a local, single-operator application. An unprivileged ingress proxy publishes
+only host loopback, and the FastAPI application listens on a Unix socket that
+only that proxy receives. Optional sidecars use separate backend networks and
+receive no API socket. The local operator token protects unsafe requests, but it
+does not identify a person or protect safe reads. The trusted OS account, host
+loopback, socket-volume membership, and token custody are part of the boundary.
 
 The browser sends structured requests to FastAPI. Active discovery passes
 through DockGuard before a fixed adapter invokes Nmap or the bounded HTTP probe.
@@ -22,14 +24,17 @@ evidence share a named volume by default (`compose.yaml:9-12`).
 
 ```mermaid
 flowchart LR
-    O[Local operator] -->|loopback, same origin| UI[React UI]
-    UI --> API[FastAPI API]
+    O[Local operator] -->|host loopback| PX[Unprivileged ingress proxy]
+    PX -->|Unix socket| API[FastAPI UI and API]
+    O -->|operator token for changes| API
     API --> DG[DockGuard]
     DG -->|normalized allowed target| A[Fixed adapters]
     A <--> T[Authorized target]
     API --> DB[(SQLite / future PostgreSQL)]
     API --> RL[(RedLedger evidence)]
     API -->|reviewed packet after approval| LLM[Optional model provider]
+    LLM -. no API socket .-> PX
+    DB -. no API socket .-> PX
     DB --> REP[Reports and DockPacks]
     RL --> REP
 ```
@@ -49,11 +54,12 @@ flowchart LR
 
 | Deployment | Resource or capability | Safe effective value | Recipients and enforcement | Evidence or unknowns |
 | --- | --- | --- | --- | --- |
-| Core Compose | HTTP API | `127.0.0.1:8080` | Local browser; loopback mapping and accepted Host names | `compose.yaml:5-7`, `backend/app/main.py:60-64`; raw public port publication is not a supported secure deployment |
+| Core Compose | HTTP API | Ingress proxy at `127.0.0.1:8080`; application on `/run/reddock-api/reddock.sock` | Local browser; only the ingress proxy receives the socket volume | `compose.yaml`, `deploy/nginx.conf`, `backend/app/compose_socket.py`; raw image publication or socket sharing is not supported |
 | Core Compose | Database | `/var/lib/reddock/reddock.db` in `reddock-data` | RedDock process; named volume and unprivileged user | `compose.yaml:8-12`, `Dockerfile:24-29` |
 | Core Compose | Evidence | `/var/lib/reddock/evidence` in `reddock-data` | RedDock and explicit export; root, regular-file, size, and digest checks | `backend/app/evidence.py:169-180`, `backend/app/reporting/runner.py:1199-1217` |
-| Local AI overlay | Model endpoint | `http://ollama:11434/v1` on private Compose network | Reviewed packet to Ollama; no host port and provider recheck | `compose.ollama.yaml:5-18`, `backend/app/intelligence/runner.py:94-108` |
-| PostgreSQL profile | Database and credential | Pinned PostgreSQL 17 on the private Compose network | RedDock and PostgreSQL receive one mounted secret; PostgreSQL has no host port | `compose.postgres.yaml:4-29`, `backend/app/config.py:18-87`, `backend/app/database.py:26-45` |
+| Local AI overlay | Model endpoint | `http://ollama:11434/v1` on an internal backend network | Reviewed packet to a rootless Ollama service; no host port or API socket, plus provider recheck | `compose.ollama.yaml`, `deploy/Dockerfile.ollama`, `backend/app/intelligence/runner.py` |
+| PostgreSQL profile | Database and credential | Pinned PostgreSQL 17 on an internal backend network | RedDock and PostgreSQL receive one mounted secret; PostgreSQL has no host port or API socket | `compose.postgres.yaml`, `backend/app/config.py`, `backend/app/database.py` |
+| Local operator boundary | Token file in `reddock-data`; host-only session cookie | Unsafe local requests only | Exact token, exact browser Origin, and process-local attempt limits; safe reads remain available through loopback | `backend/app/local_security.py`, `backend/app/authorization_dependencies.py`, `backend/app/api.py` |
 | External AI | Provider credential | `REDDOCK_LLM_API_KEY_FILE` preferred; direct environment value remains compatible | Configured HTTPS provider; bounded request and response | `backend/app/config.py:18-48`, `backend/app/intelligence/providers.py:62-98` |
 | Detector extensions | Deployment-owned manifest directory | Reviewed JSON files only | Startup loader; symlink, path, size, schema, and namespace checks | `backend/app/detector_plugins.py:66-89`, `backend/app/detector_plugins.py:111-129` |
 | Report export | DockPack derived by the server | Local operator-selected recipient after download | Hash verification, fixed paths, deterministic bounded members | `backend/app/reporting/runner.py:243-265`, `backend/app/reporting/runner.py:489-537` |
@@ -88,12 +94,13 @@ flowchart LR
 
 ### Boundaries and invariants
 
-1. **Browser to API.** Pydantic rejects unknown fields
-   (`backend/app/schemas.py:20-23`), but current routes have no identity
-   dependency (`backend/app/api.py:184-201`). Released use is local only; future
-   server mode must enforce authenticated, tenant-scoped authorization. A
-   dormant coordinator exists, but no current route calls it or resolves its
-   sessions.
+1. **Browser to API.** Pydantic rejects unknown fields. A route-wide permission
+   dependency resolves local requests to the reserved local owner, not to a
+   verified human identity. Unsafe requests additionally require the local
+   operator token, and browser mutations require one exact local Origin. Safe
+   reads do not require the token. Future server mode must enforce authenticated,
+   tenant-scoped authorization. A dormant coordinator exists, but no current
+   route calls it or resolves its sessions.
 2. **API to active capability.** DockGuard must authorize a normalized target
    immediately before contact. Operator text never becomes a command, raw flag,
    credential, or arbitrary URL.
@@ -124,12 +131,22 @@ flowchart LR
     cannot fall back to ambient local state. Discovery carries the same factory
     into its worker. The main role retains migration and application-data
     authority.
+11. **Compose ingress to application.** The application accepts HTTP through a
+    Unix socket shared only with the loopback ingress proxy. Optional sidecars
+    receive backend networks for the exact service RedDock needs but no API
+    socket. Sharing that volume or replacing the Compose command changes the
+    security boundary.
 
 ### Assumptions and unknowns
 
-- v0.8.x runs through the documented loopback Compose mapping. Trusted Host
+- The security-updated Compose layout is development work after v0.8.0 and is
+  not yet represented by an immutable release tag. The next release must pin
+  first-run instructions to the reviewed layout.
+- Host loopback applies to the ingress proxy's host publish. Trusted Host
   middleware validates the Host header, not the remote peer; it does not make a
-  publicly bound container safe.
+  publicly bound raw container safe. Unix-socket isolation prevents optional
+  sidecars from initiating API requests only while socket-volume membership
+  remains restricted.
 - DockGuard enforces declared scope but cannot prove the operator's legal
   entitlement to declare it.
 - Host, Docker daemon, trusted mounted configuration, and volume compromise are
@@ -142,11 +159,12 @@ flowchart LR
 
 | Priority | Scenario and capability gain | Prerequisites and impact | Existing controls | Mitigation | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| P0 | **Hypothesis:** a remote user reaches the unauthenticated API and creates scope, starts discovery, or downloads evidence | Non-loopback publication or proxy forwarding a permitted Host; unauthorized target contact and disclosure | Supported Compose binds loopback | Keep local mode loopback-only; server mode fails startup without auth, tenant scoping, PostgreSQL, exact origins, and TLS proxy settings | `compose.yaml:5-7`, `backend/app/main.py:60-64`, `backend/app/api.py:184-201` |
+| P0 | **Hypothesis:** an untrusted process reaches the local API and creates scope, starts discovery, or downloads evidence | Unsafe raw-image publication, changed proxy binding, shared socket volume, or compromised trusted host account; unauthorized target contact or disclosure | Supported Compose publishes only host loopback, gives the API socket only to its ingress proxy, and requires the operator token plus an exact browser Origin for changes | Keep socket membership narrow, keep the host publish on loopback, protect token custody, and keep server mode disabled until authenticated ingress is complete | `compose.yaml`, `deploy/nginx.conf`, `backend/app/compose_socket.py`, `backend/app/local_security.py` |
+| P1 | A local operator token is stolen from logs, the data volume, or the browser process | Trusted-host or Docker access; unauthorized local changes | Token file has owner-only permissions, the runtime retains only a digest, browser storage uses an HttpOnly host-only cookie, and attempts are bounded per process | Treat host and Docker access as privileged, never publish the token, and rotate only through a deliberate recovery procedure | `backend/app/local_security.py`, `backend/app/main.py`, `backend/app/api.py` |
 | P0 | **Design hypothesis:** an authenticated user changes a numeric ID to access another organization | Future session context is misbound or a child route bypasses the Dockyard root; cross-tenant disclosure or mutation | Dockyard loaders derive organization from request context; all Dockyard routes statically reach that root; two-tenant and every-GET runtime tests return 404 across organizations; server mode is rejected | Resolve context from a verified session and add runtime IDOR matrices for mutating routes before server mode | `backend/app/services.py:10-39`, `backend/tests/test_tenancy.py:65-119`, `backend/tests/test_tenancy_contract.py:15-55` |
 | P1 | Authorized hostname resolution widens contact to an excluded address | Opt-in DNS with mixed/rebound results; unauthorized contact | Narrow address bounds and separate hostname/network semantics | Preserve recorded resolution and immediate pre-execution evaluation; test rebinding and mixed results | `backend/app/config.py:143-148`, `backend/app/dockguard.py:239-259` |
 | P1 | Target strings become shell flags or executable rendered content | Contact with attacker-controlled authorized target; execution or stored injection | Fixed argv with `shell=False`, typed UI, literal report rendering | Preserve adapter contract and add hostile-string browser/report tests | `backend/app/discovery/nmap.py:162-169`, `backend/app/schemas.py:20-23` |
-| P1 | A changed model endpoint receives data different from the approved destination | Intelligence configured and approved; unintended disclosure | Provider identity recheck, HTTPS for external endpoints, bounded packet | Add secret-file credentials and per-organization provider policy; audit the destination | `backend/app/intelligence/runner.py:77-108`, `backend/app/intelligence/providers.py:50-98` |
+| P1 | A changed model endpoint receives data different from the approved destination | Intelligence configured and approved; unintended disclosure | Provider identity recheck, HTTPS for external endpoints, bounded packet; only loopback and the internal `ollama` service classify as local, while `host.docker.internal` classifies as external | Add per-organization provider policy and preserve explicit destination review | `backend/app/intelligence/runner.py`, `backend/app/intelligence/providers.py` |
 | P1 | Malicious model output misleads an operator or attacks a renderer | Enabled provider controls JSON response | Strict schema, packet references, no tools or mutation | Preserve text rendering and advice labeling; adversarial renderer tests | `backend/app/intelligence/runner.py:37-51`, `backend/app/intelligence/runner.py:394-427` |
 | P1 | Altered database paths export arbitrary files or false evidence | Database state modified without equal filesystem authority | Root/regular-file/size/digest verification | Preserve controls across PostgreSQL and tenancy; never accept export paths from API | `backend/app/reporting/runner.py:1199-1217`, `backend/app/evidence.py:169-180` |
 | P1 | A valid but deceptive detector manifest creates misleading findings | Deployment owner installs unreviewed JSON | Data-only schema, bounds, content-addressed provenance | Require human review; allowlist or sign manifests in managed deployments | `backend/app/detector_plugins.py:66-89`, `backend/app/detector_plugins.py:111-129` |
@@ -156,7 +174,7 @@ flowchart LR
 | P1 | A compromised limiter path gains broad database authority | Future server process compromise or incorrect PostgreSQL grants; tenant data disclosure or schema mutation | Separate non-inheriting login and password; startup rejects memberships, elevated flags, ownership including standalone PostgreSQL types, grant options, column access, object creation, temporary access, or unrelated object access | Provision the role outside migrations, monitor grants independently, and rotate its password through a coordinated restart | `backend/app/config.py`, `backend/app/database.py`, `backend/tests/test_postgres.py` |
 | P2 | Oversized results, dense state, or concurrent provider fetches exhaust shared resources | High-volume authorized inputs or future sign-in traffic; availability loss | Fixed run, response, snapshot, edge, and export bounds; one application-owned OIDC cache serializes provider fetches; isolated, database-serialized, global-first throttling bounds cross-worker admission and stored keyed client buckets; the process-owned primary database runtime bounds database waits; request and discovery worker sessions use its exact factory without ambient fallback | Add metrics and expose the already throttled coordinator only through a reviewed auth adapter; drain or cancel background work before runtime shutdown; validate database-wide capacity; preserve PostgreSQL global, subject, reset, cleanup, and one-use callback race coverage | `backend/app/authentication.py`, `backend/app/database.py`, `backend/app/discovery/runner.py`, `backend/app/oidc.py`, `backend/app/rate_limits.py`, `backend/tests/test_authentication.py`, `backend/tests/test_discovery.py`, `backend/tests/test_postgres.py`, `backend/app/intelligence/providers.py:92-99` |
 | P2 | Build dependency or workflow compromise changes a release | Upstream or maintainer compromise | Pinned actions and base digests; read-only workflow token | Add SBOM/provenance, signed releases, dependency review, protected environments | `.github/workflows/ci.yml:7-8`, `.github/workflows/ci.yml:17-18`, `Dockerfile:1-8` |
-| P2 | A DockPack is shared too broadly | Operator mishandles an explicit export | Explicit, bounded, integrity-verifiable download | Document classification/retention; restrict and audit exports in server mode | `backend/app/api.py:643-652`, `backend/app/reporting/runner.py:243-265` |
+| P2 | A DockPack is shared too broadly | Operator mishandles an explicit, unencrypted export | Explicit, bounded, integrity-verifiable download and documented engagement-confidential handling | Store and transmit it through an approved encrypted channel; add an in-product warning, then restrict and audit exports before server mode | `docs/GETTING_STARTED.md`, `backend/app/api.py`, `backend/app/reporting/runner.py` |
 
 ## Severity calibration
 

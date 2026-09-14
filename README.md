@@ -12,42 +12,59 @@ RedDock is a local security workbench for controlled checks, evidence-backed inv
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-7%20Advanced%20%2F%20Lab-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/phase-8%20Production%20hardening-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.8.0](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.0), Phase 7 Advanced / Lab
+**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), Phase 8 Production hardening checkpoint
 
-**A personal open-source project by [Chris Hickman](https://github.com/chriswayneh), built with help from OpenAI Codex and Claude Code.**
-
-**Phase 7 is complete:** separately gated lab controls, data-only detector plugins, and portable policy provenance are published and security-reviewed.
-
-[Start Here](docs/GETTING_STARTED.md) · [What It Does](#what-it-does) · [Screenshots](#screenshots) · [Why I Am Building It](#why-i-am-building-it) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
+[Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 </div>
 
 ---
 
-## What This Is
+## What it checks today
 
-RedDock is a local security workbench for giving a small set of authorized systems a controlled check, then turning the results into an organized inventory, explainable findings, and downloadable reports with supporting evidence.
+RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make one bodyless HTTP-origin probe. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
 
-RedDock keeps more than an alert list. It helps answer four practical questions: **What did it check? What did it find? What evidence supports the result? What can I save or share?**
+It does not test UDP, credentials, exploitability, response bodies, NSE scripts, brute force, payloads, or evasion. It ships no CVE feed. An optional local catalogue can associate an exact reported product and version with CVE identifiers, but that association is not proof that the service is affected.
 
-I keep it open source under the MIT license so other curious builders and security practitioners can run it, inspect it, and learn from it. It is not a hosted service. The normal package needs no AI account or model. Optional AI gives advice only after you review what will be sent.
+### Current boundary
 
-**Current boundary:** RedDock is a single-operator, local-only application. Phase 7 is released; Phase 8 production work is unfinished. It is not yet a shared service with working sign-in, SSO, or role-based user access. Do not expose it to the internet or use it as proof that a system is secure. See the [remaining work](ROADMAP.md#phase-8-production-polish).
+- **Local only.** The supported Compose package publishes one host-loopback port. Do not expose it to a LAN, public tunnel, proxy, or the internet.
+- **No user login.** The local package uses an operator token to protect changes, but that token is an accident boundary, not identity, SSO, or shared-user access.
+- **Not a certification.** Findings describe what narrow checks observed and concluded. A clean result does not prove a target is secure.
+- **AI has no tools.** AI is optional and receives only a packet the operator reviews and approves. It cannot scan, change findings, or apply remediation.
 
-## What It Does
+## What you get
 
-| Question | What RedDock does |
+| Question | RedDock's answer |
 | --- | --- |
-| What is there? | An inventory of hosts and services observed during controlled discovery. |
-| What deserves a closer look? | Rule-based findings with separate severity and confidence, linked to the observations behind them. |
-| Can I check that again? | An explicitly approved recheck for eligible HTTP security-header findings. This is not unrestricted attack execution. |
-| How do these results connect? | A clickable RedPath graph explaining the relationships supported by stored evidence. |
-| What can I save or share? | Plain-language and technical reports, plus a DockPack ZIP containing reports and verified supporting files. |
-| Who stays in control? | You define the allowed targets. The server checks that boundary before target contact; AI cannot run tools or change findings. |
+| What did it check? | Authorized scope, completed discovery runs, and retained observations show which focused checks ran. |
+| What did it find? | Rule-based findings keep severity separate from confidence and link back to what was observed. |
+| What supports the result? | SHA-256-hashed evidence and named detector rules provide a traceable record. |
+| What can I save or share? | Technical and plain-language reports, plus an unencrypted DockPack containing verified supporting files. |
 
-**Try it without checking anyone else's systems:** follow the [first-run guide](docs/GETTING_STARTED.md) to assess RedDock's own local web service, then generate a report. No coding or AI setup is needed, but you will need Docker and a few terminal commands.
+<div align="center">
+
+<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings list showing severity and status filters, complete counts, and readable first-seen and last-seen dates" width="900"></a>
+
+<sub>Each finding explains the conclusion, its severity and confidence, and the evidence behind it.</sub>
+
+</div>
+
+## Start the stable release
+
+For an authorized local evaluation, start from the immutable reviewed tag:
+
+```bash
+git clone --branch v0.8.1 --depth 1 https://github.com/chriswayneh/RedDock.git
+cd RedDock
+docker compose up --build
+```
+
+Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. The token is generated once and stored in the `reddock-data` volume. If its file is removed after initialization, RedDock refuses changes instead of silently replacing it.
+
+See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local demonstration, shutdown instructions, and troubleshooting. Contributors can use `master`, which may contain unfinished work newer than the stable tag.
 
 ### Why I am building it
 
@@ -62,18 +79,9 @@ I keep the source, tests, architecture notes, and tradeoffs visible so anyone in
 
 #### Zero trust and least privilege
 
-RedDock treats each boundary as untrusted and gives each component only the
-access it needs. The table separates controls that work today from unfinished
-server-mode work. It is not a claim that RedDock is ready for shared or
-internet-facing use.
+RedDock treats browser input, target output, model output, stored paths, and archives as untrusted. DockGuard checks scope immediately before target contact, tools receive fixed arguments without a shell, and stored-data features receive no target capability. The Compose application listens on a Unix socket shared only with its loopback ingress proxy; optional Ollama and PostgreSQL services do not receive that socket. Containers run with bounded resources, read-only root filesystems where supported, dropped capabilities, and `no-new-privileges`.
 
-| Boundary | Enforced today | Not yet claimed |
-| --- | --- | --- |
-| Identity and ingress | Account-free local mode binds to loopback and restricts Host values. Requesting server mode fails startup. | There is no sign-in flow or supported networked deployment. Dormant OIDC code is not connected to routes. |
-| API authorization | Every route is classified as public or mapped to a permission, unknown roles deny access, and tenant-owned resources are loaded through organization-scoped queries. | Local requests use the reserved local owner, not an authenticated human identity. Configured protected requests return `401` until browser identity is connected. |
-| Active operations | DockGuard checks scope immediately before target contact. Tools receive fixed arguments, bounded time, and no shell. Sensitive rechecks and model disclosure require separate approval. | RedDock cannot prove that an operator was entitled to declare a target in scope. Engagement authorization remains an operator responsibility. |
-| Runtime privilege | The application container runs as a fixed non-root user, drops every Linux capability, and sets `no-new-privileges`. The dormant limiter uses a separate PostgreSQL login restricted to its bucket table and sequence, and verifies that contract at startup. | Sidecars retain the limited privileges their upstream entry points require. The main database role still owns migrations, and both database secrets exist in one process. This is not a claim of host or cluster isolation. |
-| Untrusted data | Browser input, target output, model output, archives, and retained evidence cross explicit validation, size, identity, and hash checks. | Automated checks reduce risk but are not a penetration test or security certification. |
+These are concrete controls, not a claim that RedDock is ready for shared or internet-facing use. See the [security model](SECURITY.md#zero-trust-and-least-privilege-status) and [threat model](docs/THREAT_MODEL.md).
 
 ### Technical capability reference
 
@@ -101,7 +109,7 @@ internet-facing use.
 | DockPack | Portable ZIP export with a member manifest and verified source evidence |
 | CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
 | Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |
-| Persistence | SQLite by default or private PostgreSQL 17; evidence retained in a named Docker volume |
+| Persistence | SQLite by default or PostgreSQL 17 on an internal backend network; evidence retained in a named Docker volume |
 | Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
 | Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
 | Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
@@ -112,13 +120,13 @@ internet-facing use.
 
 <div align="center">
 
-<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings list showing severity and status filters, complete counts, and readable first-seen and last-seen dates" width="900"></a>
+<a href="docs/screenshots/operator-unlock.png"><img src="docs/screenshots/operator-unlock.png" alt="RedDock first-run dashboard showing the local operator-token unlock prompt and an empty assessment workspace" width="900"></a>
 
-[Open a finding's detail view](docs/screenshots/finding-detail.png) to see its explanation and supporting evidence.
-
-<sub>Understand each issue: what was found, how serious it is, how confident the result is, and the evidence behind it.</sub>
+<sub>First run starts empty and keeps changes locked until the local operator token is entered.</sub>
 
 <br><br>
+
+[Open a finding's detail view](docs/screenshots/finding-detail.png) to see its explanation and supporting evidence.
 
 <a href="docs/screenshots/redpath.png"><img src="docs/screenshots/redpath.png" alt="RedDock RedPath view showing an evidence-linked asset and finding graph, relationship details, SHA-256 provenance, and fixed CWE mappings" width="900"></a>
 
@@ -180,27 +188,19 @@ internet-facing use.
 
 </div>
 
-## Quick Start
+## Running and packaging choices
 
-New to command-line tools? Use the [step-by-step first-run guide](docs/GETTING_STARTED.md), including a local demo, plain-English glossary, and troubleshooting.
+New to command-line tools? Use the [step-by-step first-run guide](docs/GETTING_STARTED.md), including the current development-build warning, operator unlock, local demo, plain-English glossary, and troubleshooting.
 
-You need Git and a running Docker Engine or Docker Desktop with Docker Compose. Docker runs the application in a container; you do not need to install Python, Node.js, or Nmap separately. The first build needs internet access to download dependencies.
+Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), and database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready). Swagger and the OpenAPI download are disabled by default. Developers can [enable the local API explorer](docs/GETTING_STARTED.md#optional-api-explorer).
 
-```bash
-git clone https://github.com/chriswayneh/RedDock.git
-cd RedDock
-docker compose up --build
-```
-
-Open [http://localhost:8080](http://localhost:8080). Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), and database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready). Swagger and the OpenAPI download are disabled by default. Developers can [enable the local API explorer](docs/GETTING_STARTED.md#optional-api-explorer).
-
-Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds both the SQLite database and retained evidence and survives normal container recreation; use `docker compose down -v` only when you deliberately want to erase local data.
+Stop the application with `docker compose down`. In the default profile, the `reddock-data` volume holds the SQLite database, retained evidence, and local operator token. It survives normal container recreation. Use `docker compose down -v` only when you deliberately want to erase local data.
 
 Protect that volume with the [offline SQLite backup, verification, restore, and
 recovery procedure](docs/BACKUP_RESTORE.md). Backups contain sensitive assessment
 evidence and are not encrypted.
 
-> **Use Compose, and do not publish port 8080 beyond loopback.** The command above binds `127.0.0.1:8080`. Local mode has no sign-in, so anything that can reach the API can add scope and start discovery runs. Publishing the port yourself, such as with `docker run -p 8080:8080`, a `0.0.0.0` bind, or a proxy forwarding a permitted `Host`, exposes that unauthenticated API to your network and is not a supported deployment.
+> **Use Compose, and do not publish port 8080 beyond loopback.** The ingress proxy binds `127.0.0.1:8080`, and only that proxy receives the application's Unix socket. The local operator token protects changes but is not user authentication and does not protect safe reads. Publishing the raw image or proxy, sharing the socket volume, or attaching another service to the ingress boundary is not supported.
 
 ### Optional intelligence provider
 
@@ -209,7 +209,7 @@ RedDock ships in two supported Compose shapes:
 | Package | Command | Model behavior |
 | --- | --- | --- |
 | Core | `docker compose up --build` | No LLM runtime or weights; every non-intelligence feature works and Intelligence reports that it is disabled |
-| Local AI bundle | `docker compose -f compose.yaml -f compose.ollama.yaml up --build` | Starts a private Ollama sidecar and downloads Qwen3.5 4B into a named local volume on first use |
+| Local AI bundle | `docker compose -f compose.yaml -f compose.ollama.yaml up --build` | Builds the fixed rootless Ollama wrapper on an internal backend network and downloads Qwen3.5 4B into a named local volume on first use |
 
 The core/no-LLM package remains the secure default because running discovery,
 detection, validation, correlation, reporting, and DockPack export never
@@ -217,20 +217,26 @@ requires a model. The optional bundle packages the runtime and provisioning
 workflow, not 3.4 GB of model weights inside the RedDock image or Git history.
 It is not exposed on a host port. Set `REDDOCK_LLM_MODEL` to another Ollama model
 before startup, or configure any compatible local or cloud provider instead.
+The rootless bundle uses a new `reddock-ollama-v2` volume, so its first start
+downloads the selected model again. An older root-owned cache is left untouched;
+remove that old volume only after you identify it and decide it is no longer needed.
+Only loopback addresses and the internal `ollama` service are classified as local
+model destinations. `host.docker.internal` crosses into the host, is classified
+as external, and therefore requires HTTPS.
 See [Local and configurable AI](docs/LOCAL_AI.md) for provider overrides,
 data-boundary rules, storage, first-run behavior, and the approval flow.
 On systems with Make, `make up` and `make up-ai` are equivalent shortcuts.
 
 ### Optional PostgreSQL
 
-Set a strong `REDDOCK_POSTGRES_PASSWORD` for the Compose invocation, then run:
+Place a strong password in the ignored file `runtime/secrets/reddock-postgres-password`, then run:
 
 ```bash
 docker compose -f compose.yaml -f compose.postgres.yaml up --build
 ```
 
-This keeps RedDock on `127.0.0.1:8080`, adds a pinned private PostgreSQL 17
-service with no host port, and mounts the password into both containers as a
+This keeps the ingress proxy on `127.0.0.1:8080`, adds a pinned PostgreSQL 17
+service on an internal backend network with no host port, and mounts the password into both containers as a
 Compose secret. It validates the database path for Phase 8; it does not enable
 the future authenticated server mode. The PostgreSQL and Ollama overlays can be
 combined. See [Optional PostgreSQL](docs/POSTGRESQL.md) for safe password entry,
@@ -270,7 +276,7 @@ flowchart TB
   Guard -->|denied| Audit[Recorded denial]
   Guard -->|allowed| Adapter[Discovery adapter]
   Adapter --> Normalize[Assets · Services · Observations]
-  Normalize --> Database[(SQLite or private PostgreSQL)]
+  Normalize --> Database[(SQLite or PostgreSQL)]
   Adapter --> Evidence[(Hashed evidence)]
   API --> Detect[Detector]
   Database --> Detect
@@ -298,7 +304,7 @@ flowchart TB
 
 Discovery and the tightly bounded validation recheck are the only paths that touch a target, and both pass DockGuard immediately before contact. Detection, correlation, and reporting read only stored state. Intelligence may contact only the configured model provider after the operator reviews the exact retained packet and records a separate approval. It receives no target or tool capability. A validation or intelligence request alone makes no network contact, and reporting never does.
 
-The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. The default profile has no reverse proxy, separate frontend service, queue, or remote dependency; the optional PostgreSQL and Ollama profiles add only private Compose services. Discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, adapter and detector boundaries, and trust boundaries.
+The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. In Compose, that process listens only on a Unix socket. A small unprivileged ingress proxy owns the host-loopback TCP port and is the only service given the socket. Optional PostgreSQL and Ollama services use separate internal backend networks and receive no API socket. Discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, adapter and detector boundaries, and trust boundaries.
 
 ## Security by Design
 
@@ -333,66 +339,22 @@ docs/          Architecture decisions and project documentation
 | [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |
 | [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
 | [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
-| [PostgreSQL](docs/POSTGRESQL.md) | Private Compose profile, secret handling, and current deployment boundary |
+| [PostgreSQL](docs/POSTGRESQL.md) | Internal Compose backend, secret handling, and current deployment boundary |
 | [SQLite backup and restore](docs/BACKUP_RESTORE.md) | Offline verified backups, rollback-safe restore, and interrupted-restore recovery |
 | [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
 | [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
 | [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
 | [Changelog](CHANGELOG.md) | Release history |
 | [DockPack format](docs/DOCKPACK.md) | Portable report and evidence package layout and verification |
+| [Nmap corresponding source](docs/NMAP_SOURCE_OFFER.md) | Locate the exact Nmap source archives carried in security-updated images |
 
 ## Project Status
 
-The current release is **v0.8.0, Phase 7 Advanced / Lab**. It includes the complete local workflow from scoped discovery through reports and DockPack exports, plus separately gated lab controls and data-only detector extensions. See the [changelog](CHANGELOG.md) for release-by-release history.
+The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
 
-### Phase 8 progress after v0.8.0
+### Phase 8 progress
 
-Phase 8 is still in development. Completed checkpoints include:
-
-- private PostgreSQL support and migration testing
-- tenant isolation and least-privilege API enforcement
-- a dormant session lifecycle with stable session families, a 30-minute idle
-  limit, throttled activity updates, and paired bearer and CSRF rotation
-- hardened responses, readiness checks, and dependency scanning
-- complete paginated inventories, evidence lists, and run histories
-- fail-closed release automation and native AMD64/ARM64 product verification
-- offline, integrity-checked SQLite backup and rollback-safe restore recovery
-- dormant, unregistered OIDC protocol validation and offline first-owner
-  bootstrap foundations
-- a dormant, exact one-hop trusted-proxy contract with implicit proxy-header
-  interpretation disabled
-- a dormant application-owned OIDC provider cache with concurrent discovery
-  and signing-key refreshes serialized per process
-- dormant database-backed authentication throttling with keyed client buckets,
-  isolated transactions, global-first admission, bounded cleanup, and
-  PostgreSQL concurrency proof
-- a dormant process-owned limiter runtime that loads one canonical mounted key
-  and reserves two prewarmed PostgreSQL connections outside the request pool
-- a separately credentialed limiter database role whose bucket-scoped
-  database privileges and lack of unrelated object ownership are checked at
-  startup, including standalone PostgreSQL types
-- a dormant authentication coordinator that applies login and callback limits,
-  consumes browser-bound OIDC state once, resolves only pre-provisioned active
-  memberships, and issues audited hash-only sessions
-- a dormant primary PostgreSQL runtime built from the same validated server
-  configuration, with bounded database waits and one owned process lifecycle
-- an immutable request database binding that keeps local requests on the local
-  session factory and configured requests on the owned primary runtime
-
-Authentication is not enabled, and shared mode remains blocked. No
-authentication route or UI calls this coordinator, no protected request
-resolves a browser session, and configured protected routes return `401`
-instead of inheriting the local owner. Server mode still fails startup. HTTP
-auth and cookie wiring, authenticated request context, background executor
-drain and shutdown, user administration, scaling, PostgreSQL disaster recovery, and
-production hardening are still planned. The current local and PostgreSQL
-Compose profiles remain unchanged and create none of the dormant
-primary-database, limiter, provider, or authentication runtimes.
-
-Session rotation keeps the original eight-hour absolute expiry. PostgreSQL race
-tests cover issuance, touch, rotation, logout, membership revocation, cleanup,
-and limiter-pool isolation. See the [roadmap](ROADMAP.md) for the detailed
-status.
+Phase 8 remains in development. Current work tightens the local operator boundary, separates API ingress from optional sidecars, caps resource use, and improves first-run clarity. Dormant identity, session, OIDC, and tenant foundations remain disabled. There is no sign-in route, no supported server mode, and no shared-user deployment. See the [roadmap](ROADMAP.md#phase-8-production-polish) for technical checkpoints and remaining gates.
 
 ## Contributing and Security
 

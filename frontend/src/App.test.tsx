@@ -378,6 +378,7 @@ function stubApi({
       if (path === "/api/dashboard") return json({ dockyard_count: 2, asset_count: assets.length * 2, discovery_run_count: 0, open_finding_count: findings.length * 2, recent_dockyards: [dockyard, { ...dockyard, id: 2, name: "Second workspace" }], recent_runs: [] });
       if (path === "/api/settings") return json({ name: "RedDock", version: "0.8.0", phase: "Phase 7", deployment_mode: "local", intelligence_configured: (providerResponse as { available: boolean }).available });
       if (path === "/api/lab/status") return json({ deployment_enabled: false, capabilities: [] });
+      if (path === "/api/operator/status") return json({ available: true, unlocked: true });
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))

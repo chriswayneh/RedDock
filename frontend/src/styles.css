@@ -100,3 +100,8 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 .findings-layout .seen-cell { white-space: normal; min-width: 155px; overflow: visible; text-overflow: clip; }
 .seen-cell > span { display: block; margin-bottom: 6px; color: #8b949e; }
 .seen-cell time { display: block; color: #c9d1d9; overflow-wrap: normal; }
+.operator-gate { align-items: end; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); margin-bottom: 20px; }
+.operator-gate h2 { margin-bottom: 8px; }
+.operator-unlock-form { display: grid; gap: 8px; }
+.operator-unlock-form label { color: #c9d1d9; font-size: 13px; font-weight: 700; }
+@media (max-width: 800px) { .operator-gate { grid-template-columns: 1fr; } }

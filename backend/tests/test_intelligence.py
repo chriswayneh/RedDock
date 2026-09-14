@@ -79,9 +79,13 @@ def test_provider_configuration_classifies_destinations_and_hides_api_key(enviro
     monkeypatch.setenv("REDDOCK_LLM_BASE_URL", "http://host.docker.internal:11434/v1")
     monkeypatch.setenv("REDDOCK_LLM_MODEL", "local-model")
     get_settings.cache_clear()
+    assert get_provider() is None
+
+    monkeypatch.setenv("REDDOCK_LLM_BASE_URL", "https://host.docker.internal:11434/v1")
+    get_settings.cache_clear()
     provider = get_provider()
     assert provider is not None
-    assert provider.sends_data_external is False
+    assert provider.sends_data_external is True
 
     monkeypatch.setenv("REDDOCK_LLM_BASE_URL", "http://ollama:11434/v1")
     get_settings.cache_clear()

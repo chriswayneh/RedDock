@@ -27,6 +27,7 @@ import type {
   Dockyard,
   EvidenceRecord,
   Health,
+  OperatorStatus,
   Version,
 } from "./types";
 
@@ -40,21 +41,24 @@ export function App() {
   const [detectors, setDetectors] = useState<Detector[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
   const [version, setVersion] = useState<Version | null>(null);
+  const [operator, setOperator] = useState<OperatorStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const selected = route.workspace ? dockyards.find((item) => item.id === contextDockyardId) : null;
 
   const refresh = useCallback(async () => {
     try {
-      const [nextHealth, nextVersion, nextDockyards, nextAdapters, nextDetectors] =
+      const [nextHealth, nextVersion, nextOperator, nextDockyards, nextAdapters, nextDetectors] =
         await Promise.all([
           api.health(),
           api.version(),
+          api.operatorStatus(),
           api.dockyards(),
           api.adapters(),
           api.detectors(),
         ]);
       setHealth(nextHealth);
       setVersion(nextVersion);
+      setOperator(nextOperator);
       setDockyards(nextDockyards);
       setAdapters(nextAdapters);
       setDetectors(nextDetectors);
@@ -134,13 +138,20 @@ export function App() {
             <h1>{page}</h1>
           </div>
           <span className="phase-pill">
-            {(version?.phase ?? "Phase 7 — Advanced / Lab").toUpperCase()}
+            {(version?.phase ?? "Phase 8: Production hardening checkpoint").toUpperCase()}
           </span>
         </header>
         {error && (
           <div className="alert" role="alert">
             {error}
           </div>
+        )}
+        {operator && !operator.unlocked && (
+          <OperatorGate
+            available={operator.available}
+            onUnlocked={() => setOperator({ available: true, unlocked: true })}
+            onError={setError}
+          />
         )}
         {route.unknown && <p role="status">That page was not found. The dashboard is shown below.</p>}
         {page === "Dashboard" && (
@@ -186,6 +197,73 @@ export function App() {
         {page === "Settings" && <SettingsPage onError={setError} />}
       </main>
     </div>
+  );
+}
+
+function OperatorGate({
+  available,
+  onUnlocked,
+  onError,
+}: {
+  available: boolean;
+  onUnlocked: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function unlock(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const token = String(new FormData(form).get("operator-token") ?? "");
+    if (!token) return;
+    setBusy(true);
+    try {
+      await api.unlockOperator(token);
+      form.reset();
+      onError(null);
+      onUnlocked();
+    } catch (problem) {
+      onError(problem instanceof Error ? problem.message : "Could not unlock local changes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!available) {
+    return (
+      <div className="alert" role="alert">
+        The local operator token file is unavailable. RedDock will refuse all changes until the
+        file is restored and the application is restarted.
+      </div>
+    );
+  }
+
+  return (
+    <section className="panel operator-gate" aria-labelledby="operator-gate-title">
+      <div>
+        <p className="eyebrow">LOCAL CHANGE PROTECTION</p>
+        <h2 id="operator-gate-title">Unlock changes for this browser session</h2>
+        <p className="hint">
+          Copy the one-time startup token from <code>docker compose logs reddock</code>. RedDock
+          keeps it in an HttpOnly, host-only session cookie and never stores it in browser storage.
+        </p>
+      </div>
+      <form className="operator-unlock-form" onSubmit={(event) => void unlock(event)}>
+        <label htmlFor="operator-token">Operator token</label>
+        <input
+          id="operator-token"
+          name="operator-token"
+          type="password"
+          autoComplete="off"
+          minLength={43}
+          maxLength={43}
+          required
+        />
+        <button className="primary-button" type="submit" disabled={busy}>
+          {busy ? "Unlocking…" : "Unlock changes"}
+        </button>
+      </form>
+    </section>
   );
 }
 

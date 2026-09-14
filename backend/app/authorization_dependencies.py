@@ -12,6 +12,14 @@ from app.authorization import (
     AuthorizationDenied,
 )
 from app.database import database_request_binding
+from app.local_security import (
+    LOCAL_OPERATOR_RUNTIME_STATE,
+    SAFE_METHODS,
+    LocalMutationDenied,
+    LocalMutationThrottled,
+    LocalOperatorRuntime,
+    LocalOperatorUnavailable,
+)
 
 _REQUEST_AUTHORIZATION: ContextVar[AuthorizationContext | None] = ContextVar(
     "reddock_request_authorization",
@@ -67,6 +75,36 @@ async def authorize_request(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permission denied",
         ) from error
+    binding = database_request_binding(request)
+    if (
+        binding is not None
+        and binding.mode == "local"
+        and request.method.upper() not in SAFE_METHODS
+    ):
+        runtime = getattr(request.app.state, LOCAL_OPERATOR_RUNTIME_STATE, None)
+        if not isinstance(runtime, LocalOperatorRuntime):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Local operator authorization unavailable",
+            )
+        try:
+            runtime.authorize_mutation(request)
+        except LocalOperatorUnavailable:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Local operator authorization unavailable",
+            ) from None
+        except LocalMutationThrottled:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Local mutation limit reached",
+                headers={"Retry-After": "60"},
+            ) from None
+        except LocalMutationDenied:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Local operator authorization required",
+            ) from None
     token = _REQUEST_AUTHORIZATION.set(authorization)
     request.state.authorization = authorization
     try:
