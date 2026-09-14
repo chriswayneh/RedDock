@@ -38,6 +38,16 @@ def _settings_strings(config_path: Path) -> tuple[str, str]:
     raise ReleaseVerificationError("Settings.version and Settings.phase must be string literals")
 
 
+def _roadmap_identifies_latest_release(roadmap: str, version: str) -> bool:
+    return bool(
+        re.search(
+            rf"^\|\s*\*\*Latest release\*\*\s*\|\s*\[`v{re.escape(version)}`\]\(",
+            roadmap,
+            re.MULTILINE,
+        )
+    )
+
+
 def verify_files(repository: Path, version: str) -> str:
     """Verify every user-visible and packaged version source; return the phase name."""
     backend = tomllib.loads(
@@ -73,7 +83,7 @@ def verify_files(repository: Path, version: str) -> str:
         raise ReleaseVerificationError(f"CHANGELOG.md has no v{version} release section")
 
     roadmap = (repository / "ROADMAP.md").read_text(encoding="utf-8")
-    if f"The latest release is **v{version}" not in roadmap:
+    if not _roadmap_identifies_latest_release(roadmap, version):
         raise ReleaseVerificationError(
             f"ROADMAP.md does not identify v{version} as the latest release"
         )

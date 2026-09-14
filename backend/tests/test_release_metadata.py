@@ -19,6 +19,16 @@ def test_current_release_metadata_agrees() -> None:
     assert phase == "Phase 8: Production hardening checkpoint"
 
 
+def test_roadmap_latest_release_row_is_version_specific() -> None:
+    roadmap = (
+        "| **Latest release** | "
+        "[`v0.8.1`](https://example.invalid/releases/tag/v0.8.1) |\n"
+    )
+
+    assert verify_release._roadmap_identifies_latest_release(roadmap, "0.8.1")
+    assert not verify_release._roadmap_identifies_latest_release(roadmap, "0.9.0")
+
+
 def test_release_source_extraction_uses_immutable_platform_digests() -> None:
     workflow = (REPOSITORY / ".github" / "workflows" / "release.yml").read_text(
         encoding="utf-8"
