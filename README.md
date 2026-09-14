@@ -4,9 +4,7 @@
 
 **Discover. Validate. Prove.**
 
-**A local security workbench I built to explore how different AI models can help create practical, evidence-driven tooling that anyone can run and inspect.**
-
-I’m building RedDock to run controlled security checks, investigate findings, and produce reports with evidence I can trace back to each result.
+RedDock is a local security workbench for controlled checks, evidence-backed investigation, and portable reporting. I built it to explore how different AI models can help create practical tooling that anyone can run and inspect.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
