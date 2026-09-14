@@ -21,11 +21,13 @@ security, migration, documentation, and end-to-end acceptance gates pass.
 | `v1.2.0` | Phase 11: Expanded safe assessment | Add bounded UDP discovery, sanitized HTTP response sampling, and a reviewed allowlist of non-intrusive service checks |
 | `v1.3.0` | Phase 12: Credentialed checks | Add least-privilege, read-only check adapters with secret references, strict redaction, RBAC, and complete audit evidence |
 | `v1.4.0` | Phase 13: Evidence-based validation | Add fixed, approval-gated validation packs that improve confidence without accepting arbitrary commands or exploit payloads |
+| `v2.0.0` | Phase 14: Controlled adversary simulation | Deliver a separately installed commercial capability pack for authorized credential auditing, exploit validation, controlled payloads, and evasion testing |
 
-Automated exploitation, brute force, payload delivery, and evasion are not on
-the standard-runtime roadmap. They may be researched later as separately
-installed lab components with stronger isolation, authorization, and audit
-requirements. See [Beyond the standard runtime](#beyond-the-standard-runtime).
+Intrusive capabilities are planned for Phase 14 as a separate commercial
+RedDock product, not as a default feature of the open-source core. This keeps
+ordinary assessment safe while giving authorized security teams a path to
+controlled adversary simulation. See
+[Phase 14](#phase-14-controlled-adversary-simulation).
 
 ## Phase 0: Foundation (complete)
 
@@ -410,14 +412,39 @@ turn RedDock into a general exploit framework.
 Completion means validation can strengthen or weaken confidence using retained
 evidence while uncertainty remains visible.
 
-## Beyond the standard runtime
+## Phase 14: Controlled adversary simulation
 
-Brute force, exploit payloads, denial-of-service checks, fuzzing, and evasion
-create materially different risk. They are not planned for the normal RedDock
-image or its default API.
+**Planned release: v2.0.0 commercial capability pack.**
 
-Any future research implementation must use a separately installed image, an
-isolated lab network, explicit deployment enablement, per-engagement approval,
-short-lived authorization, hard rate and resource limits, immutable capability
-manifests, and complete audit evidence. It must also pass a separate security,
-legal, and abuse-risk review before a version is promised.
+Phase 14 extends RedDock from safe assessment into controlled, authorized
+adversary simulation. The open-source core remains fully functional; intrusive
+capabilities ship separately under their own commercial terms, deployment
+guide, support boundary, and security review.
+
+Planned capabilities include:
+
+- Credential auditing with bounded attempts, account-lockout protection,
+  operator-supplied test identities, and protocol-specific rate limits.
+- Vetted exploitability checks that target an exact finding and produce a
+  defined proof without accepting arbitrary exploit code.
+- Controlled payload execution using signed capability packs, isolated workers,
+  strict egress controls, and documented cleanup behavior.
+- Approved evasion simulations that measure whether defensive controls detect
+  specific variations without silently expanding targets or persistence.
+- Repeatable purple-team exercises that connect the attempted technique,
+  observed control response, retained evidence, and remediation verification.
+
+The commercial pack must not share the ordinary API worker's authority. It
+requires a separately installed image, explicit deployment enablement,
+per-engagement target allowlists, role-separated approval, short-lived grants,
+hard rate and resource limits, an operator kill switch, signed immutable
+capability manifests, and complete audit evidence. Each module must document
+expected traffic, possible side effects, cleanup, and safe failure behavior.
+
+Denial-of-service testing and unrestricted user-authored payloads remain out of
+scope unless a later design can establish an acceptable technical, legal, and
+abuse-risk boundary.
+
+Completion means a customer can license, deploy, authorize, run, stop, and
+audit the commercial pack without giving it broader access than the exact
+approved engagement requires or weakening the open-source RedDock core.

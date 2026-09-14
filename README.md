@@ -31,8 +31,9 @@ It does not test UDP, credentials, exploitability, response bodies, NSE scripts,
 The [versioned roadmap](ROADMAP.md#planned-releases) plans locally cached
 vulnerability intelligence first, followed by bounded UDP and web observation,
 reviewed non-intrusive service checks, least-privilege credentialed checks, and
-fixed evidence-based validation. Intrusive capabilities are not planned for the
-standard RedDock runtime.
+fixed evidence-based validation. A later commercial capability pack is planned
+for controlled adversary simulation without enabling intrusive behavior in the
+default open-source runtime.
 
 ### Current boundary
 
@@ -369,6 +370,9 @@ Phase 8 remains in development. Current work tightens the local operator boundar
 - **v1.0.0:** establish a stable support, compatibility, and upgrade baseline.
 - **v1.1.0 through v1.4.0:** add provenance-rich vulnerability intelligence,
   bounded safe assessment, credentialed checks, and evidence-based validation.
+- **v2.0.0:** add a separately installed commercial adversary-simulation pack
+  for authorized credential auditing, exploit validation, controlled payloads,
+  and evasion exercises.
 
 Each capability keeps scope enforcement, least privilege, explicit approval,
 bounded execution, and retained evidence. The complete acceptance gates and
