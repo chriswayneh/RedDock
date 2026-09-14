@@ -145,19 +145,40 @@ jobs:
         run: |
           set -euo pipefail
           image_ref="${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
+          image_index="$(docker buildx imagetools inspect --raw "$image_ref")"
           for architecture in amd64 arm64; do
+            platform_digest="$(
+              jq -r --arg architecture "$architecture" '
+                [
+                  .manifests[]
+                  | select(
+                      .platform.os == "linux"
+                      and .platform.architecture == $architecture
+                    )
+                ]
+                | if length == 1 then .[0].digest else empty end
+              ' <<<"$image_index"
+            )"
+            if [[ ! "$platform_digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Could not resolve one immutable linux/$architecture manifest" >&2
+              exit 1
+            fi
+            platform_ref="${IMAGE_NAME}@${platform_digest}"
             source_dir="$RUNNER_TEMP/nmap-source-$architecture"
             mkdir -p "$source_dir"
-            docker pull --platform "linux/$architecture" \
-              "$image_ref"
+            docker pull "$platform_ref"
             container_id="$(docker create --platform "linux/$architecture" \
-              "$image_ref")"
-            docker cp \
-              "$container_id:/usr/share/reddock-source/nmap/." "$source_dir/"
+              "$platform_ref")"
+            docker cp "$container_id:/usr/share/reddock-source/nmap/." \
+              "$source_dir/" || {
+                docker rm -f "$container_id"
+                exit 1
+              }
             docker rm "$container_id"
-            printf 'image=%s\nplatform=linux/%s\nmanifest=%s\n' \
+            printf 'image=%s\nplatform=linux/%s\nmanifest=%s\nplatform_manifest=%s\n' \
               "$image_ref" "$architecture" \
-              '${{ steps.build.outputs.digest }}' > "$source_dir/REDDOCK_IMAGE.txt"
+              '${{ steps.build.outputs.digest }}' "$platform_digest" \
+              > "$source_dir/REDDOCK_IMAGE.txt"
             tar -C "$RUNNER_TEMP" -czf \
               "$RUNNER_TEMP/reddock-nmap-source-$architecture.tar.gz" \
               "nmap-source-$architecture"

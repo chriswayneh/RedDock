@@ -19,6 +19,21 @@ def test_current_release_metadata_agrees() -> None:
     assert phase == "Phase 8: Production hardening checkpoint"
 
 
+def test_release_source_extraction_uses_immutable_platform_digests() -> None:
+    workflow = (REPOSITORY / ".github" / "workflows" / "release.yml").read_text(
+        encoding="utf-8"
+    )
+    extraction = workflow.split(
+        "- name: Extract matching Nmap source from each published architecture",
+        maxsplit=1,
+    )[1].split("- name: Publish the GitHub release", maxsplit=1)[0]
+
+    assert "docker buildx imagetools inspect --raw" in extraction
+    assert 'docker pull "$platform_ref"' in extraction
+    assert "platform_manifest=%s" in extraction
+    assert 'docker pull --platform "linux/$architecture"' not in extraction
+
+
 def test_inconsistent_release_version_is_rejected() -> None:
     with pytest.raises(
         verify_release.ReleaseVerificationError, match="inconsistent package metadata"

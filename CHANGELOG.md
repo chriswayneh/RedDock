@@ -2,6 +2,14 @@
 
 All notable changes to RedDock are documented here.
 
+## Unreleased
+
+### Fixed
+
+- Resolve each architecture-specific image digest from the immutable published
+  index before extracting Nmap source, avoiding Docker's attempt to overwrite
+  one local parent-digest reference with a second platform.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
