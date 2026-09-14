@@ -2,7 +2,18 @@
 
 ## The short version
 
-You can already run RedDock locally, define allowed targets, collect observations, review findings, explore their connections, and export reports with evidence. AI advice is optional. [Try it step by step](docs/GETTING_STARTED.md).
+RedDock is an open-source vulnerability discovery, validation, and evidence
+platform for authorized environments. You can already run it locally, define
+allowed targets, discover services, identify a focused set of security
+weaknesses, validate supported findings, explore their connections, and export
+reports with evidence. AI advice is optional.
+[Try it step by step](docs/GETTING_STARTED.md).
+
+The long-term goal is broad, useful vulnerability coverage with evidence an
+operator can inspect and reproduce. Safety controls determine how a capability
+runs; they do not limit the platform to its current checks. Each phase expands
+coverage only after scope enforcement, least privilege, approval, evidence, and
+safe failure behavior are designed and tested.
 
 The latest release is **v0.8.1 (Phase 8 Production hardening checkpoint)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
 

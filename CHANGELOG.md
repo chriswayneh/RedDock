@@ -12,6 +12,9 @@ All notable changes to RedDock are documented here.
   adversary-simulation pack. Keep intrusive behavior out of the default
   open-source runtime and require the commercial pack to pass separate
   security, legal, and abuse-risk review.
+- Position RedDock directly as an open-source vulnerability discovery,
+  validation, and evidence platform, with the existing controlled assessment
+  workflow serving as the base for broader coverage.
 
 ### Fixed
 
