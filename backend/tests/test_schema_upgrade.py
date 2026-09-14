@@ -32,6 +32,7 @@ def phase_0_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         connection.executescript(PHASE_0_SCHEMA)
     monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{database}")
     monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("REDDOCK_OPERATOR_TOKEN_FILE", str(tmp_path / "operator-token"))
     import app.config
 
     app.config.get_settings.cache_clear()
@@ -258,6 +259,7 @@ def phase_1_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         connection.executescript(PHASE_1_DATA)
     monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{database}")
     monkeypatch.setenv("REDDOCK_EVIDENCE_DIR", str(tmp_path / "evidence"))
+    monkeypatch.setenv("REDDOCK_OPERATOR_TOKEN_FILE", str(tmp_path / "operator-token"))
     import app.config
 
     app.config.get_settings.cache_clear()
@@ -351,6 +353,15 @@ def test_phase_1_data_survives_and_phase_2_runs_on_top_of_it(phase_1_database: P
 
     app.database.initialize_database()
     with TestClient(app.main.app, base_url="http://localhost") as client:
+        token = Path(app.config.get_settings().operator_token_file).read_text().strip()
+        unlocked = client.post(
+            "/api/operator/unlock",
+            headers={"Origin": "http://localhost:8080"},
+            json={"token": token},
+        )
+        assert unlocked.status_code == 200, unlocked.text
+        client.headers["X-RedDock-Operator-CSRF"] = unlocked.json()["csrf_token"]
+        client.headers["Origin"] = "http://localhost:8080"
         assert [row["name"] for row in client.get("/api/dockyards").json()] == [
             "Existing engagement"
         ]

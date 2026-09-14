@@ -23,6 +23,19 @@ def test_local_deployment_mode_is_default(monkeypatch: pytest.MonkeyPatch):
     assert get_settings().deployment_mode == "local"
 
 
+def test_sqlite_instance_lock_root_follows_database_not_token(tmp_path: Path):
+    from app.config import Settings, local_state_directory
+
+    database = tmp_path / "state" / "reddock.db"
+    settings = Settings(
+        database_url=f"sqlite:///{database}",
+        evidence_dir=str(database.parent / "evidence"),
+        operator_token_file=str(tmp_path / "secrets" / "operator-token"),
+    )
+
+    assert local_state_directory(settings) == database.parent
+
+
 def test_public_origin_cannot_silently_widen_local_mode(monkeypatch: pytest.MonkeyPatch):
     from app.config import ConfigurationError, get_settings
 

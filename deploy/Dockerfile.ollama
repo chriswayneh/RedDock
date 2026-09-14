@@ -1,0 +1,9 @@
+FROM ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a754874ab28ba269eb2
+
+ENV HOME=/var/lib/ollama \
+    OLLAMA_MODELS=/var/lib/ollama/models
+
+RUN mkdir -p /var/lib/ollama/models \
+    && chown -R 10001:10001 /var/lib/ollama
+
+USER 10001:10001

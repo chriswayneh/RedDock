@@ -32,11 +32,12 @@ The local-AI bundle is explicit:
 docker compose -f compose.yaml -f compose.ollama.yaml up --build
 ```
 
-It starts Ollama on the private Compose network, downloads `qwen3.5:4b` on the
-first run, and stores the model in the `reddock-ollama` volume. Ollama has no
-host port, so only services on that Compose network can reach it. Later starts
-reuse the volume. The pinned Ollama image supports AMD64 and ARM64; model speed
-and memory requirements still depend on the host.
+It downloads `qwen3.5:4b` through a short-lived, non-root initializer, stores
+the model in the `reddock-ollama-v2` volume, and then starts a non-root Ollama
+service on an internal Compose network. The long-running model service has no
+host port and no internet-connected network. Later starts reuse the volume.
+CPU use is tested on AMD64 and ARM64 images. GPU access is not currently a
+supported claim. Model speed and memory requirements still depend on the host.
 
 ### Try the local model
 
@@ -57,9 +58,12 @@ To remove the containers while retaining RedDock data and model weights:
 docker compose -f compose.yaml -f compose.ollama.yaml down
 ```
 
-Removing `reddock-ollama` deletes the downloaded model and requires a new
-download. Removing `reddock-data` deletes RedDock's database and evidence; keep
-those lifecycle decisions separate.
+Removing `reddock-ollama-v2` deletes the downloaded model and requires a new
+download. The earlier root-owned `reddock-ollama` cache is not reused because
+doing so would break the non-root boundary. Docker leaves that old cache alone;
+remove it manually only after you confirm it is no longer needed. Removing
+`reddock-data` deletes RedDock's database and evidence. Keep those lifecycle
+decisions separate.
 
 ## Choose another Ollama model
 
@@ -93,10 +97,14 @@ Compose override, orchestrator secret, or other deployment configuration:
 | `REDDOCK_LLM_API_KEY_FILE` | Provider-dependent | Preferred in-container path to a mounted bearer-credential secret; mutually exclusive with the direct variable |
 
 Credentialed and non-local endpoints must use HTTPS. HTTP is accepted only for
-loopback, `host.docker.internal`, or the fixed private Compose service name
-`ollama`, and only without a credential. Redirects are refused.
+loopback or the fixed internal Compose service name `ollama`, and only without
+a credential. `host.docker.internal` crosses the container-to-host boundary,
+so RedDock classifies it as external and requires HTTPS. Redirects are refused.
 Keep secrets out of committed Compose files and shell history; use a secret
 manager where possible.
+
+`REDDOCK_LLM_API_KEY_FILE` is preferred whenever a provider needs a bearer
+credential. Mount that file read-only with owner-only host permissions.
 
 ## What the model can and cannot do
 

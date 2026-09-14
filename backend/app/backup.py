@@ -1212,6 +1212,15 @@ def verify_backup(path: Path) -> dict[str, object]:
         return _verify_backup_file(materialized)
 
 
+def _acquire_offline_lock(data_dir: Path):
+    from app.instance_lock import InstanceLockError, acquire_offline_maintenance_lock
+
+    try:
+        return acquire_offline_maintenance_lock(data_dir)
+    except InstanceLockError as error:
+        raise BackupError(str(error)) from error
+
+
 def create_backup(
     data_dir: Path,
     output: Path,
@@ -1226,6 +1235,23 @@ def create_backup(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    maintenance_lock = _acquire_offline_lock(data_dir)
+    try:
+        return _create_backup_locked(
+            data_dir,
+            output,
+            confirm_overwrite=confirm_overwrite,
+        )
+    finally:
+        maintenance_lock.close()
+
+
+def _create_backup_locked(
+    data_dir: Path,
+    output: Path,
+    *,
+    confirm_overwrite: bool,
+) -> str:
     if _is_link(output) or (_path_present(output) and not confirm_overwrite):
         raise BackupError(
             "Backup output already exists or is a link; choose a new name or confirm overwrite"
@@ -1474,6 +1500,23 @@ def recover_restore(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    maintenance_lock = _acquire_offline_lock(data_dir)
+    try:
+        return _recover_restore_locked(
+            data_dir,
+            confirm_rollback=confirm_rollback,
+            confirm_finalize=confirm_finalize,
+        )
+    finally:
+        maintenance_lock.close()
+
+
+def _recover_restore_locked(
+    data_dir: Path,
+    *,
+    confirm_rollback: bool,
+    confirm_finalize: bool,
+) -> bool:
     marker_path = data_dir / RESTORE_MARKER
     if not _path_present(marker_path):
         return False
@@ -1578,6 +1621,14 @@ def restore_backup(
     data_dir = data_dir.resolve()
     if not data_dir.is_dir():
         raise BackupError("Data directory must be a regular, non-link directory")
+    maintenance_lock = _acquire_offline_lock(data_dir)
+    try:
+        _restore_backup_locked(data_dir, archive)
+    finally:
+        maintenance_lock.close()
+
+
+def _restore_backup_locked(data_dir: Path, archive: Path) -> None:
     if _path_present(data_dir / RESTORE_MARKER):
         raise BackupError("An incomplete restore is recorded; run recover before restoring")
     if _is_link(archive):
@@ -1642,10 +1693,10 @@ def restore_backup(
                     "Restore reached committed state, but commit durability is uncertain; "
                     "keep RedDock stopped and run recover to inspect the required action"
                 ) from error
-            recover_restore(
+            _recover_restore_locked(
                 data_dir,
-                confirm_offline=True,
                 confirm_rollback=True,
+                confirm_finalize=False,
             )
         elif staging.exists():
             shutil.rmtree(staging, ignore_errors=True)

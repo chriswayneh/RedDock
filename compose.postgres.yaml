@@ -13,9 +13,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - postgres-backend
 
   postgres:
     image: postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+    user: "999:999"
     environment:
       POSTGRES_DB: reddock
       POSTGRES_USER: reddock
@@ -27,6 +30,8 @@ services:
       - reddock-postgres-password
     volumes:
       - reddock-postgres:/var/lib/postgresql/data
+    networks:
+      - postgres-backend
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reddock -d reddock"]
       interval: 5s
@@ -35,6 +40,15 @@ services:
       start_period: 10s
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=67108864,mode=1777
+      - /var/run/postgresql:rw,nosuid,nodev,size=16777216,mode=1777
+    init: true
+    pids_limit: 256
+    mem_limit: 1g
     shm_size: 128mb
     restart: unless-stopped
 
@@ -43,4 +57,8 @@ volumes:
 
 secrets:
   reddock-postgres-password:
-    environment: REDDOCK_POSTGRES_PASSWORD
+    file: ${REDDOCK_POSTGRES_PASSWORD_SOURCE:-./runtime/secrets/reddock-postgres-password}
+
+networks:
+  postgres-backend:
+    internal: true

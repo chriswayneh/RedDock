@@ -11,7 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
 from app.authentication import AuthenticationRuntime, create_authentication_runtime
-from app.config import DormantServerRuntimeConfig, get_settings
+from app.config import DormantServerRuntimeConfig, get_settings, local_state_directory
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import (
     DATABASE_REQUEST_BINDING_STATE,
@@ -25,7 +25,9 @@ from app.database import (
 from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
 from app.discovery.runner import recover_interrupted_runs
+from app.instance_lock import acquire_instance_lock
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
+from app.local_security import LOCAL_OPERATOR_RUNTIME_STATE, load_or_create_local_operator
 from app.oidc import OidcProvider
 from app.rate_limits import RateLimiterRuntime
 from app.reporting.runner import recover_interrupted_runs as recover_interrupted_reports
@@ -90,6 +92,8 @@ def build_lifespan(
         authentication_runtime = None
         request_session_factory = None
         request_capability_installed = False
+        local_operator_installed = False
+        instance_lock = None
         try:
             if server_config is not None:
                 primary_database = primary_database_factory(server_config)
@@ -108,11 +112,30 @@ def build_lifespan(
                 request_session_factory = primary_database.session
                 deployment_mode = "server"
             else:
+                settings = get_settings()
+                token_path = Path(settings.operator_token_file)
+                instance_lock = acquire_instance_lock(
+                    local_state_directory(settings) / ".reddock-instance.lock"
+                )
                 initialize_database()
                 with SessionLocal() as session:
                     # A run that was in flight when the process stopped did not finish.
                     # Recovery makes that terminal state explicit before serving traffic.
                     _recover_interrupted_work(session)
+                operator_startup = load_or_create_local_operator(
+                    token_path
+                )
+                setattr(
+                    application.state,
+                    LOCAL_OPERATOR_RUNTIME_STATE,
+                    operator_startup.runtime,
+                )
+                local_operator_installed = True
+                if operator_startup.created_token is not None:
+                    logger.warning(
+                        "First-start local operator token (shown once): %s",
+                        operator_startup.created_token,
+                    )
                 request_session_factory = SessionLocal
                 deployment_mode = "local"
             setattr(
@@ -128,22 +151,28 @@ def build_lifespan(
                     delattr(application.state, DATABASE_REQUEST_BINDING_STATE)
             finally:
                 try:
-                    if authentication_runtime is not None:
-                        del application.state.authentication_runtime
-                        authentication_runtime.close()
+                    if local_operator_installed:
+                        delattr(application.state, LOCAL_OPERATOR_RUNTIME_STATE)
                 finally:
                     try:
-                        if provider is not None:
-                            provider.close()
+                        if authentication_runtime is not None:
+                            del application.state.authentication_runtime
+                            authentication_runtime.close()
                     finally:
                         try:
-                            if rate_limiter is not None:
-                                rate_limiter.close()
+                            if provider is not None:
+                                provider.close()
                         finally:
-                            if primary_database is not None:
-                                if hasattr(application.state, "primary_database_runtime"):
-                                    del application.state.primary_database_runtime
-                                primary_database.close()
+                            try:
+                                if rate_limiter is not None:
+                                    rate_limiter.close()
+                            finally:
+                                if primary_database is not None:
+                                    if hasattr(application.state, "primary_database_runtime"):
+                                        del application.state.primary_database_runtime
+                                    primary_database.close()
+                                if instance_lock is not None:
+                                    instance_lock.close()
 
     return managed_lifespan
 

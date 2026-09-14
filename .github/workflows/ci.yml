@@ -22,7 +22,7 @@ jobs:
           python-version: "3.13"
       - run: pip install -e ".[dev]"
       - run: pip-audit --progress-spinner off .
-      - run: ruff check app tests ../scripts/verify_release.py
+      - run: ruff check app tests ../scripts/verify_release.py ../scripts/smoke_test.py
       - run: pytest
 
   frontend:
@@ -60,9 +60,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Validate core and optional local-AI Compose packages
-        env:
-          REDDOCK_POSTGRES_PASSWORD: compose-validation-only
         run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/reddock-postgres-password"
+          printf '%s' 'compose-validation-only' > "$RUNNER_TEMP/reddock-postgres-password"
+          export REDDOCK_POSTGRES_PASSWORD_SOURCE="$RUNNER_TEMP/reddock-postgres-password"
           docker compose config --quiet
           docker compose -f compose.yaml -f compose.ollama.yaml config --format json > "$RUNNER_TEMP/compose-ai.json"
           docker compose -f compose.yaml -f compose.postgres.yaml config --format json > "$RUNNER_TEMP/compose-postgres.json"
@@ -73,11 +74,26 @@ jobs:
 
           document = json.loads(Path(os.environ["RUNNER_TEMP"], "compose-ai.json").read_text())
           services = document["services"]
+          ingress = services["reddock-ingress"]
+          reddock = services["reddock"]
+          assert "ports" not in reddock
+          assert reddock["command"] == ["python", "-m", "app.compose_socket", "serve"]
+          assert reddock["read_only"] is True
+          assert reddock["cap_drop"] == ["ALL"]
+          assert ingress["ports"][0]["host_ip"] == "127.0.0.1"
+          assert ingress["ports"][0]["published"] == "8080"
+          assert ingress["read_only"] is True
+          assert ingress["cap_drop"] == ["ALL"]
           assert services["reddock"]["environment"]["REDDOCK_LLM_MODEL"] == "qwen3.5:4b"
           assert services["reddock"]["environment"]["REDDOCK_LLM_BASE_URL"] == "http://ollama:11434/v1"
           assert "ports" not in services["ollama"]
-          assert "@sha256:" in services["ollama"]["image"]
-          assert services["ollama-model"]["command"] == ["pull", "qwen3.5:4b"]
+          assert "image" not in services["ollama"]
+          assert services["ollama"]["build"]["dockerfile"] == "deploy/Dockerfile.ollama"
+          assert services["ollama"]["user"] == "10001:10001"
+          assert "ollama pull" in services["ollama-model"]["command"][0]
+          assert services["ollama"]["networks"] == {"ollama-backend": None}
+          assert services["ollama-model"]["networks"] == {"ollama-download": None}
+          assert document["networks"]["ollama-backend"]["internal"] is True
 
           postgres_document = json.loads(
               Path(os.environ["RUNNER_TEMP"], "compose-postgres.json").read_text()
@@ -88,6 +104,10 @@ jobs:
           assert postgres["environment"]["POSTGRES_PASSWORD_FILE"] == (
               "/run/secrets/reddock-postgres-password"
           )
+          assert postgres["read_only"] is True
+          assert postgres["cap_drop"] == ["ALL"]
+          assert postgres["user"] == "999:999"
+          assert postgres_document["networks"]["postgres-backend"]["internal"] is True
           reddock = postgres_document["services"]["reddock"]
           assert reddock["environment"]["REDDOCK_DATABASE_HOST"] == "postgres"
           assert reddock["environment"]["REDDOCK_DATABASE_PASSWORD_FILE"] == (
@@ -112,6 +132,7 @@ jobs:
           assert set(postgres_document["services"]) == {
               "postgres",
               "reddock",
+              "reddock-ingress",
           }, "unexpected limiter role-provisioning service"
           PY
       - run: docker build -t reddock:ci .
@@ -119,6 +140,16 @@ jobs:
         run: >-
           docker run --rm --entrypoint sh reddock:ci -c
           'test "$(id -u reddock)" = 999 && test "$(id -g reddock)" = 999'
+      - name: Verify bundled Nmap notices and corresponding source
+        run: |
+          docker run --rm --entrypoint sh reddock:ci -c '
+            test -r /usr/share/doc/reddock/LICENSE &&
+            test -r /usr/share/doc/reddock/THIRD_PARTY_NOTICES.md &&
+            test -r /usr/share/doc/reddock/NMAP_SOURCE_OFFER.md &&
+            test -s /usr/share/reddock-source/nmap/PACKAGE.txt &&
+            cd /usr/share/reddock-source/nmap && sha256sum -c SHA256SUMS &&
+            nmap --version
+          '
       - name: Validate offline SQLite maintenance and recovery
         if: matrix.architecture == 'AMD64'
         env:
@@ -233,22 +264,60 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/reddock-detectors"
           cp plugins/examples/example-server.json.example "$RUNNER_TEMP/reddock-detectors/example-server.json"
-      - name: Start the production image with Phase 7 test gates
+      - name: Start the production image through the Unix-socket ingress
         run: |
-          docker run -d --name reddock -p 127.0.0.1:8080:8080 \
-            -e REDDOCK_LAB_MODE_ENABLED=true \
-            -e REDDOCK_DETECTOR_PLUGIN_DIR=/etc/reddock/detectors \
-            -v "$RUNNER_TEMP/reddock-detectors:/etc/reddock/detectors:ro" \
-            reddock:ci
+          cat > "$RUNNER_TEMP/compose-ci.yaml" <<YAML
+          services:
+            reddock:
+              image: reddock:ci
+              pull_policy: never
+              environment:
+                REDDOCK_LAB_MODE_ENABLED: "true"
+                REDDOCK_DETECTOR_PLUGIN_DIR: /etc/reddock/detectors
+              volumes:
+                - $RUNNER_TEMP/reddock-detectors:/etc/reddock/detectors:ro
+          YAML
+          docker compose -p reddock-ci -f compose.yaml -f "$RUNNER_TEMP/compose-ci.yaml" \
+            up -d --no-build
       - name: Wait for the health endpoint
         run: for attempt in {1..12}; do curl --fail http://localhost:8080/api/health && exit 0; sleep 2; done; exit 1
+      - name: Prove the Unix-socket and sidecar boundary
+        run: |
+          compose=(docker compose -p reddock-ci -f compose.yaml -f "$RUNNER_TEMP/compose-ci.yaml")
+          "${compose[@]}" exec -T reddock python - <<'PY'
+          import socket
+          from pathlib import Path
+
+          assert Path("/run/reddock-api/reddock.sock").is_socket()
+          try:
+              socket.create_connection(("127.0.0.1", 8080), timeout=1)
+          except OSError:
+              pass
+          else:
+              raise SystemExit("RedDock unexpectedly exposes a TCP listener")
+          PY
+          if "${compose[@]}" exec -T reddock-ingress \
+            wget -qO- -T 2 http://reddock:8080/api/health; then
+            echo "A network peer unexpectedly reached the RedDock API over TCP" >&2
+            exit 1
+          fi
       - name: Full product smoke test
-        # Both discovery profiles scan the container's own loopback only.
         env:
           REDDOCK_EXPECT_PLUGIN: "true"
-        run: python3 scripts/smoke_test.py
+          REDDOCK_SMOKE_TARGET: reddock-ingress
+          REDDOCK_SMOKE_ORIGIN: http://reddock-ingress:8080
+        run: |
+          compose=(docker compose -p reddock-ci -f compose.yaml -f "$RUNNER_TEMP/compose-ci.yaml")
+          REDDOCK_OPERATOR_TOKEN="$("${compose[@]}" exec -T reddock cat /var/lib/reddock/operator-token)"
+          echo "::add-mask::$REDDOCK_OPERATOR_TOKEN"
+          export REDDOCK_OPERATOR_TOKEN
+          python3 scripts/smoke_test.py
       - if: always()
-        run: docker logs reddock
+        run: |
+          compose=(docker compose -p reddock-ci -f compose.yaml -f "$RUNNER_TEMP/compose-ci.yaml")
+          "${compose[@]}" logs --no-color 2>&1 | sed -E \
+            's/(First-start local operator token \(shown once\):).*/\1 [REDACTED]/'
+          "${compose[@]}" down -v --remove-orphans
 
   postgres:
     runs-on: ubuntu-latest

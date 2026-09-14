@@ -18,6 +18,22 @@ from app.targets import Target, TargetError, TargetKind, is_address_text, normal
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 Resolver = Callable[[str], tuple[str, ...]]
 
+_HARD_DENY_NETWORKS: tuple[IPNetwork, ...] = (
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("100.100.100.200/32"),
+    ipaddress.ip_network("fe80::/10"),
+    ipaddress.ip_network("fd00:ec2::254/128"),
+)
+_HARD_DENY_HOSTNAMES = frozenset(
+    {
+        "instance-data.ec2.internal",
+        "metadata.aliyuncs.com",
+        "metadata.goog",
+        "metadata.google",
+        "metadata.google.internal",
+    }
+)
+
 
 class ScopeRuleType(StrEnum):
     INCLUDE = "include"
@@ -69,6 +85,9 @@ class ScopeRejected(ValueError):
 def normalize_scope_value(raw: str) -> Target:
     """Normalize a scope entry and reject entries that are dangerously broad."""
     target = normalize_target(raw)
+    policy_reason = _hard_policy_reason(target)
+    if policy_reason is not None:
+        raise ScopeRejected(policy_reason)
     network = target.network()
     if network is not None and network.num_addresses > get_settings().max_network_addresses:
         raise ScopeRejected(
@@ -113,6 +132,14 @@ def evaluate(
         "normalized_target": target.value,
         "target_kind": str(target.kind),
     }
+
+    policy_reason = _hard_policy_reason(target)
+    if policy_reason is not None:
+        return Evaluation(
+            decision=Decision.DENIED_POLICY,
+            reason=policy_reason,
+            **base,
+        )
 
     if not includes:
         return Evaluation(
@@ -194,7 +221,17 @@ def _evaluate_named(
     # alternate representation rather than comparing it in a separate family
     # and silently bypassing an explicit IPv4 exclusion.
     for address in addresses:
-        if getattr(ipaddress.ip_address(address), "ipv4_mapped", None) is not None:
+        try:
+            parsed_address = ipaddress.ip_address(address)
+        except ValueError:
+            return Evaluation(
+                decision=Decision.DENIED_POLICY,
+                reason="DNS returned an invalid address",
+                matched_rule=included_by.value,
+                resolved_addresses=addresses,
+                **base,
+            )
+        if getattr(parsed_address, "ipv4_mapped", None) is not None:
             return Evaluation(
                 decision=Decision.DENIED_POLICY,
                 reason="IPv4-mapped IPv6 DNS answers are not supported",
@@ -206,6 +243,16 @@ def _evaluate_named(
     # A name is authorized by name only. Resolution exists so that an address
     # the operator deliberately excluded cannot be reached through a name that
     # happens to point at it.
+    policy_blocked = [address for address in addresses if _hard_denied_address(address)]
+    if policy_blocked:
+        return Evaluation(
+            decision=Decision.DENIED_POLICY,
+            reason=f"{target.host} resolves to a non-overridable metadata or link-local address",
+            matched_rule=included_by.value,
+            resolved_addresses=addresses,
+            **base,
+        )
+
     blocked = [address for address in addresses if _excluded_address(address, excludes)]
     if blocked:
         return Evaluation(
@@ -221,6 +268,31 @@ def _evaluate_named(
         matched_rule=included_by.value,
         resolved_addresses=addresses,
         **base,
+    )
+
+
+def _hard_policy_reason(target: Target) -> str | None:
+    if target.is_named and target.host in _HARD_DENY_HOSTNAMES:
+        return "Metadata service hostnames cannot be added to scope or contacted"
+    network = target.network()
+    if network is None:
+        return None
+    if any(
+        network.version == denied.version and network.overlaps(denied)
+        for denied in _HARD_DENY_NETWORKS
+    ):
+        return "Metadata and link-local address space cannot be added to scope or contacted"
+    return None
+
+
+def _hard_denied_address(address: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return True
+    return any(
+        parsed.version == denied.version and parsed in denied
+        for denied in _HARD_DENY_NETWORKS
     )
 
 

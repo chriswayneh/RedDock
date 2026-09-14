@@ -7,15 +7,27 @@ services:
       REDDOCK_LLM_BASE_URL: http://ollama:11434/v1
       REDDOCK_LLM_MODEL: "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"
     depends_on:
-      ollama-model:
-        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+    networks:
+      - ollama-backend
 
   ollama:
-    image: ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a754874ab28ba269eb2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.ollama
+    user: "10001:10001"
+    depends_on:
+      ollama-model:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_NO_CLOUD: "true"
     expose:
       - "11434"
     volumes:
-      - reddock-ollama:/root/.ollama
+      - reddock-ollama-v2:/var/lib/ollama
+    networks:
+      - ollama-backend
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -24,21 +36,60 @@ services:
       start_period: 10s
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777
+    init: true
+    pids_limit: 1024
+    mem_limit: ${REDDOCK_OLLAMA_MEMORY_LIMIT:-8g}
     restart: unless-stopped
 
   ollama-model:
-    image: ollama/ollama@sha256:32931b46719f673c05fdbaa81ccb26da18ea4a1c57590a754874ab28ba269eb2
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.ollama
+    user: "10001:10001"
     environment:
-      OLLAMA_HOST: http://ollama:11434
-    command: ["pull", "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"]
-    depends_on:
-      ollama:
-        condition: service_healthy
+      OLLAMA_HOST: 127.0.0.1:11434
+      REDDOCK_LLM_MODEL: "${REDDOCK_LLM_MODEL:-qwen3.5:4b}"
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        trap 'kill "$$server_pid" 2>/dev/null || true; wait "$$server_pid" 2>/dev/null || true' EXIT
+        ollama serve &
+        server_pid=$$!
+        attempt=0
+        until ollama list >/dev/null 2>&1; do
+          attempt=$$((attempt + 1))
+          if [ "$$attempt" -ge 60 ]; then
+            echo "Ollama model downloader did not become ready" >&2
+            exit 1
+          fi
+          sleep 1
+        done
+        ollama pull "$$REDDOCK_LLM_MODEL"
     volumes:
-      - reddock-ollama:/root/.ollama
+      - reddock-ollama-v2:/var/lib/ollama
+    networks:
+      - ollama-download
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=67108864,mode=1777
+    init: true
+    pids_limit: 128
+    mem_limit: 512m
     restart: "no"
 
 volumes:
-  reddock-ollama:
+  reddock-ollama-v2:
+
+networks:
+  ollama-backend:
+    internal: true
+  ollama-download:

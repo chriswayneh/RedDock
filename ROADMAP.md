@@ -4,9 +4,9 @@
 
 You can already run RedDock locally, define allowed targets, collect observations, review findings, explore their connections, and export reports with evidence. AI advice is optional. [Try it step by step](docs/GETTING_STARTED.md).
 
-The latest release is **v0.8.0 (Phase 7)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
+The latest release is **v0.8.1 (Phase 8 Production hardening checkpoint)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
 
-Current work focuses on connecting the dormant identity and session foundations into a complete sign-in flow, adding administration, and proving the PostgreSQL, proxy, recovery, scaling, and deployment paths end to end. The checkpoints below separate what works now from what still needs to be finished.
+Current work focuses first on the local operator boundary, Compose isolation, bounded resource use, clear first-run instructions, and a simpler assessment workflow. Dormant identity and session foundations remain disconnected while these local safety and usability checkpoints are completed. The checkpoints below separate released behavior, development work, and remaining gates.
 
 ## Phase 0: Foundation (complete)
 
@@ -48,7 +48,7 @@ also implemented as content-addressed, data-only detector manifests rather than
 arbitrary code plugins.
 
 Portable lab-audit provenance is included in reporting and DockPacks, and real
-Phase 7 screenshots are published. The final security review and complete
+Phase 7 screenshots are published. The project self-review and complete
 CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8: Production polish
@@ -59,7 +59,25 @@ The goal is to make RedDock more reliable to operate and prepare it for future
 team use. Today it remains a **local, single-operator application**. Working
 sign-in, SSO, and shared-user access are not available yet.
 
-### Available now
+### Available in v0.8.1
+
+These changes are included in the immutable v0.8.1 tag and its verified
+multi-architecture container images.
+
+- **A narrower local boundary:** the application listens on a Unix socket shared
+  only with an unprivileged host-loopback ingress proxy. Optional Ollama and
+  PostgreSQL services use separate internal backend networks and receive no API
+  socket. The supplied Compose services use read-only root filesystems, dropped
+  capabilities, `no-new-privileges`, and fixed process and memory limits.
+- **Local change protection:** a generated master token protects command-line
+  changes and unlocks an independent, bounded browser session. Browser changes
+  require a separate origin-scoped proof, an exact Origin, and JSON-only requests.
+  Fixed process-local limits bound unlock and mutation attempts. This is not
+  user identity or a reason to publish the service. Safe reads remain available
+  through host loopback.
+- **Bounded discovery history:** each Dockyard retains at most 500 discovery
+  requests, including denied attempts. Metadata and link-local destinations are
+  non-overridable policy denials.
 
 - **A more usable workspace:** bookmarkable page, tab, and finding addresses;
   browser Back and Forward; full dashboard counts; complete paginated
@@ -69,18 +87,21 @@ sign-in, SSO, and shared-user access are not available yet.
   running.
 - **An opt-in API explorer:** Swagger and the schema are off by default, with
   an explicit local developer switch and the same loopback-only boundary.
-- **A database choice:** keep the simple default setup or use the private
+- **A database choice:** keep the simple default setup or use the internal-network
   [PostgreSQL package](docs/POSTGRESQL.md). A readiness check confirms the app
   can reach its database, not just that its process is running.
-- **AI is optional:** the normal package needs no model. The optional Ollama
-  bundle supplies a local AI runtime and downloads Qwen3.5 4B separately.
+- **AI is optional:** the normal package needs no model. The optional rootless
+  Ollama bundle supplies a local AI runtime and downloads Qwen3.5 4B separately.
+  It uses a new `reddock-ollama-v2` volume rather than silently adopting the
+  older root-owned cache. Host gateways classify as external and require HTTPS.
 - **More security checks:** automated code analysis and weekly dependency
   checks help identify problems. The frontend test suite now uses Jest, and CI
   prevents the retired Vitest packages from returning. Dependency updates are
   not merged automatically.
 - **Safer releases:** an annotated version tag must match the application,
   packages, README, roadmap, and changelog before automation can publish an
-  attested AMD64/ARM64 container image and GitHub Release.
+  attested AMD64/ARM64 container image and GitHub Release. Architecture-specific
+  source assets are extracted from that immutable attested digest.
 - **Native platform checks:** both AMD64 and ARM64 GitHub runners now build the
   production image and complete the same discovery-through-reporting smoke test.
 - **Recoverable local data:** the default SQLite package has an offline,
@@ -114,6 +135,10 @@ service.** Unsupported deployment modes remain blocked.
 
 ### Still needed before release
 
+- **First-run product flow:** publish the security-updated checkpoint under an
+  immutable tag, add the guided local self-assessment, simplify primary
+  navigation, and show evidence-derived checked and not-checked coverage in
+  Findings and generated reports.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete PostgreSQL disaster recovery, production
   deployment, and scaling validation. Continue recovery drills for the shipped
@@ -128,8 +153,8 @@ service.** Unsupported deployment modes remain blocked.
 
 #### Database and packaging
 
-- Validated Alembic baseline, packaged PostgreSQL driver, and a private,
-  pinned PostgreSQL Compose profile.
+- Validated Alembic baseline, packaged PostgreSQL driver, and a pinned
+  PostgreSQL Compose profile on an internal backend network.
 - Mounted database/provider secrets, real-server migration/CRUD CI, and a
   database-backed readiness probe separate from process liveness.
 - Explicit no-LLM default and optional AMD64/ARM64 Ollama + Qwen3.5 4B bundle;

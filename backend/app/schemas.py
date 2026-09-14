@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, SecretStr
 
 from app.detection.base import OPERATOR_STATUSES, FindingStatus
 from app.dockguard import ScopeRuleType
@@ -40,6 +40,23 @@ class SettingsRead(BaseModel):
     phase: str
     deployment_mode: Literal["local"]
     intelligence_configured: bool
+
+
+class OperatorUnlockCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: SecretStr = Field(min_length=43, max_length=43)
+
+
+class OperatorUnlockRead(BaseModel):
+    session_id: str = Field(min_length=43, max_length=43)
+    csrf_token: str = Field(min_length=43, max_length=43)
+
+
+class OperatorStatusRead(BaseModel):
+    available: bool
+    unlocked: bool
+    session_id: str | None = Field(default=None, min_length=43, max_length=43)
 
 
 class ScopeEntryCreate(BaseModel):

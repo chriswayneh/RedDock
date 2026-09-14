@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import func, select
@@ -22,6 +22,15 @@ from app.findings import findings_query, get_finding, list_evidence, set_status
 from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
 from app.lab_capabilities import CAPABILITIES
+from app.local_security import (
+    BROWSER_SESSION_MAX_AGE_SECONDS,
+    LOCAL_OPERATOR_RUNTIME_STATE,
+    OPERATOR_COOKIE_NAME,
+    LocalMutationDenied,
+    LocalMutationThrottled,
+    LocalOperatorRuntime,
+    LocalOperatorUnavailable,
+)
 from app.models import (
     Asset,
     CorrelationRun,
@@ -71,6 +80,9 @@ from app.schemas import (
     LabRevokeCreate,
     LabStatusRead,
     ObservationRead,
+    OperatorStatusRead,
+    OperatorUnlockCreate,
+    OperatorUnlockRead,
     ProfileRead,
     RedPathGraphRead,
     ReportCreate,
@@ -117,6 +129,68 @@ LIST_RESPONSES = {
         }
     }
 }
+
+
+def _local_operator_runtime(request: Request) -> LocalOperatorRuntime:
+    runtime = getattr(request.app.state, LOCAL_OPERATOR_RUNTIME_STATE, None)
+    if not isinstance(runtime, LocalOperatorRuntime):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local operator authorization unavailable",
+        )
+    return runtime
+
+
+@router.get("/operator/status", response_model=OperatorStatusRead)
+def operator_status(request: Request) -> OperatorStatusRead:
+    runtime = _local_operator_runtime(request)
+    session_id = runtime.request_browser_session_id(request)
+    return OperatorStatusRead(
+        available=runtime.available,
+        unlocked=session_id is not None,
+        session_id=session_id,
+    )
+
+
+@router.post("/operator/unlock", response_model=OperatorUnlockRead)
+def unlock_operator(
+    payload: OperatorUnlockCreate,
+    request: Request,
+    response: Response,
+) -> OperatorUnlockRead:
+    runtime = _local_operator_runtime(request)
+    try:
+        token = payload.token.get_secret_value()
+        browser_session = runtime.authorize_unlock(request, token)
+    except LocalOperatorUnavailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Local operator authorization unavailable",
+        ) from None
+    except LocalMutationThrottled:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Local unlock limit reached",
+            headers={"Retry-After": "60"},
+        ) from None
+    except LocalMutationDenied:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Local operator token is invalid",
+        ) from None
+    response.set_cookie(
+        OPERATOR_COOKIE_NAME,
+        browser_session.token,
+        httponly=True,
+        samesite="strict",
+        secure=False,
+        path="/",
+        max_age=BROWSER_SESSION_MAX_AGE_SECONDS,
+    )
+    return OperatorUnlockRead(
+        session_id=browser_session.session_id,
+        csrf_token=browser_session.csrf_token,
+    )
 
 
 def _list_total(response: Response, session: Session, model, dockyard_id: int) -> None:

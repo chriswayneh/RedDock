@@ -7,6 +7,7 @@ exactly what happened, including the runs that were never allowed to start.
 """
 
 import logging
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -43,6 +44,7 @@ _executor = ThreadPoolExecutor(
     max_workers=_settings.max_concurrent_runs, thread_name_prefix="reddock-discovery"
 )
 _pending: set[Future] = set()
+_admission_lock = threading.Lock()
 
 ACTIVE_STATUSES = (str(RunStatus.PENDING), str(RunStatus.RUNNING))
 
@@ -58,11 +60,35 @@ def create_run(
     adapter_name: str,
     profile_name: str,
 ) -> tuple[DiscoveryRun, Evaluation]:
+    """Serialize the fixed history cap with admission of the next run."""
+
+    with _admission_lock:
+        return _create_run(session, dockyard_id, requested_target, adapter_name, profile_name)
+
+
+def _create_run(
+    session: Session,
+    dockyard_id: int,
+    requested_target: str,
+    adapter_name: str,
+    profile_name: str,
+) -> tuple[DiscoveryRun, Evaluation]:
     """Evaluate a request and persist it, allowed or denied.
 
     A denied request is still recorded: an audit trail that only contains the
     requests that succeeded is not an audit trail.
     """
+    retained = session.scalar(
+        select(func.count())
+        .select_from(DiscoveryRun)
+        .where(DiscoveryRun.dockyard_id == dockyard_id)
+    ) or 0
+    if retained >= get_settings().max_discovery_runs_per_dockyard:
+        raise RunRejected(
+            "This Workspace has reached its fixed discovery history limit; "
+            "export what you need and create a new Workspace"
+        )
+
     adapter = registry.get_adapter(adapter_name)
     if adapter is None:
         raise RunRejected(f"Unknown discovery adapter: {adapter_name}")

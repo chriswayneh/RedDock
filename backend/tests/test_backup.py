@@ -340,6 +340,58 @@ def test_create_requires_an_explicit_offline_confirmation(tmp_path: Path) -> Non
         backup.create_backup(data, tmp_path / "backup.zip")
 
 
+def test_create_proves_the_application_is_offline(tmp_path: Path) -> None:
+    from app.instance_lock import LOCK_NAME, acquire_instance_lock
+
+    data = _make_data(tmp_path / "data", "current")
+    running = acquire_instance_lock(data / LOCK_NAME)
+    try:
+        with pytest.raises(BackupError, match="still running"):
+            create_backup(data, tmp_path / "backup.zip")
+    finally:
+        running.close()
+
+
+def test_maintenance_retains_the_instance_lock_for_each_operation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.instance_lock import LOCK_NAME, InstanceLockError, acquire_instance_lock
+
+    data = tmp_path / "data"
+    data.mkdir()
+
+    def probe(result=None):
+        with pytest.raises(InstanceLockError, match="still running"):
+            acquire_instance_lock(data / LOCK_NAME)
+        return result
+
+    monkeypatch.setattr(
+        backup,
+        "_create_backup_locked",
+        lambda *_args, **_kwargs: probe("digest"),
+    )
+    assert create_backup(data, tmp_path / "backup.zip") == "digest"
+
+    monkeypatch.setattr(
+        backup,
+        "_recover_restore_locked",
+        lambda *_args, **_kwargs: probe(False),
+    )
+    assert not backup.recover_restore(data, confirm_offline=True)
+
+    monkeypatch.setattr(
+        backup,
+        "_restore_backup_locked",
+        lambda *_args, **_kwargs: probe(),
+    )
+    backup.restore_backup(
+        data,
+        tmp_path / "backup.zip",
+        confirm_offline=True,
+        confirm_replace=True,
+    )
+
+
 def test_create_refuses_output_inside_data_directory(tmp_path: Path) -> None:
     data = _make_data(tmp_path / "data", "current")
 
