@@ -382,21 +382,6 @@ The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its 
 
 Phase 8 remains in development. Current work tightens the local operator boundary, separates API ingress from optional sidecars, caps resource use, and improves first-run clarity. Dormant identity, session, OIDC, and tenant foundations remain disabled. There is no sign-in route, no supported server mode, and no shared-user deployment. See the [roadmap](ROADMAP.md#phase-8-production-polish) for technical checkpoints and remaining gates.
 
-### What comes next
-
-- **v0.9.0:** complete the guided, authenticated, recoverable Phase 8 operating
-  foundation.
-- **v1.0.0:** establish a stable support, compatibility, and upgrade baseline.
-- **v1.1.0 through v1.4.0:** add provenance-rich vulnerability intelligence,
-  bounded safe assessment, credentialed checks, and evidence-based validation.
-- **v2.0.0:** add a separately installed commercial adversary-simulation pack
-  for authorized credential auditing, exploit validation, controlled payloads,
-  and evasion exercises.
-
-Each capability keeps scope enforcement, least privilege, explicit approval,
-bounded execution, and retained evidence. The complete acceptance gates and
-security boundaries are in the [planned releases](ROADMAP.md#planned-releases).
-
 ## Contributing and Security
 
 RedDock is MIT-licensed and owner-directed. Bug reports and design discussion are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before starting implementation work. Report potential vulnerabilities through [SECURITY.md](SECURITY.md) or GitHub Private Vulnerability Reporting, not a public issue.
