@@ -5,10 +5,8 @@
 **Find. Validate. Prove.**
 
 RedDock is an open-source vulnerability discovery, validation, and evidence
-platform for authorized environments. It brings scoped scanning, explainable
-findings, evidence-backed validation, and portable reporting into one
-inspectable workflow. I built it to explore how different AI models can assist
-security work without replacing evidence or controlling assessment tools.
+platform for authorized environments. It combines scoped scanning, explainable
+findings, evidence-backed validation, and portable reports.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
