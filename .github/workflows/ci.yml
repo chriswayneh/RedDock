@@ -212,7 +212,7 @@ jobs:
           trap cleanup EXIT
 
           "${compose[@]}" run --rm --no-deps --entrypoint python reddock-recover \
-            -c "from app.database import initialize_database; initialize_database()"
+            -c "from pathlib import Path; from app.database import initialize_database; from app.instance_lock import acquire_instance_lock; initialize_database(); acquire_instance_lock(Path('/var/lib/reddock/.reddock-instance.lock')).close()"
           "${compose[@]}" run --rm --no-deps --entrypoint sh reddock-backup \
             -c 'test -w /tmp && test "$(stat -c %a /tmp)" = 1777'
           "${compose[@]}" run --rm --no-deps reddock-backup create \

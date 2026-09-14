@@ -39,12 +39,14 @@ def acquire_instance_lock(path: Path) -> InstanceLock:
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags, 0o600)
+        descriptor = os.open(path, flags, 0o640)
     except OSError as error:
         raise InstanceLockError("RedDock instance lock could not be opened safely") from error
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise InstanceLockError("RedDock instance lock must be a regular file")
+        if os.name != "nt":
+            os.fchmod(descriptor, 0o640)
         _lock(descriptor)
         os.ftruncate(descriptor, 0)
         os.write(descriptor, f"{os.getpid()}\n".encode("ascii"))
@@ -58,7 +60,29 @@ def acquire_instance_lock(path: Path) -> InstanceLock:
 def acquire_offline_maintenance_lock(data_dir: Path) -> InstanceLock:
     """Retain exclusive ownership of a data directory for all maintenance work."""
 
-    return acquire_instance_lock(data_dir / LOCK_NAME)
+    path = data_dir / LOCK_NAME
+    if os.name == "nt":
+        return acquire_instance_lock(path)
+
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError:
+        return acquire_instance_lock(path)
+    except OSError as error:
+        raise InstanceLockError(
+            "RedDock instance lock could not be opened safely"
+        ) from error
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise InstanceLockError("RedDock instance lock must be a regular file")
+        _lock(descriptor)
+        return InstanceLock(descriptor)
+    except Exception:
+        os.close(descriptor)
+        raise
 
 
 def _lock(descriptor: int) -> None:
