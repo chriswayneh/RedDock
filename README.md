@@ -4,7 +4,7 @@
 
 **Discover. Validate. Prove.**
 
-**A local security workbench I’m building for my own use.**
+**A local security workbench I built to explore how different AI models can help create practical, evidence-driven security tooling.**
 
 I’m building RedDock to run controlled security checks, investigate findings, and produce reports with evidence I can trace back to each result.
 
