@@ -8,7 +8,7 @@ import secrets
 import stat
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from dataclasses import dataclass
 from hmac import compare_digest
 from pathlib import Path
@@ -20,6 +20,7 @@ logger = logging.getLogger("reddock.local_security")
 LOCAL_OPERATOR_RUNTIME_STATE = "local_operator_runtime"
 OPERATOR_COOKIE_NAME = "reddock_operator"
 OPERATOR_HEADER_NAME = "X-RedDock-Operator-Token"
+OPERATOR_CSRF_HEADER_NAME = "X-RedDock-Operator-CSRF"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 ALLOWED_BROWSER_ORIGINS = frozenset(
     {"http://localhost:8080", "http://127.0.0.1:8080"}
@@ -32,6 +33,9 @@ _MUTATION_LIMIT = 120
 _MUTATION_WINDOW_SECONDS = 60.0
 _UNLOCK_LIMIT = 10
 _UNLOCK_WINDOW_SECONDS = 60.0
+BROWSER_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60
+_BROWSER_SESSION_IDLE_SECONDS = 30 * 60
+_MAX_BROWSER_SESSIONS = 8
 
 
 class LocalOperatorUnavailable(RuntimeError):
@@ -70,6 +74,21 @@ class LocalOperatorStartup:
     created_token: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class IssuedLocalBrowserSession:
+    token: str
+    session_id: str
+    csrf_token: str
+
+
+@dataclass(slots=True)
+class _LocalBrowserSession:
+    session_id: str
+    csrf_digest: bytes
+    created_at: float
+    last_seen_at: float
+
+
 class LocalOperatorRuntime:
     """Hold only a token digest plus bounded process-local admission state."""
 
@@ -80,6 +99,8 @@ class LocalOperatorRuntime:
             _MUTATION_LIMIT, _MUTATION_WINDOW_SECONDS
         )
         self.__unlocks = _FixedWindowThrottle(_UNLOCK_LIMIT, _UNLOCK_WINDOW_SECONDS)
+        self.__sessions: OrderedDict[bytes, _LocalBrowserSession] = OrderedDict()
+        self.__session_lock = threading.Lock()
 
     @property
     def available(self) -> bool:
@@ -92,26 +113,145 @@ class LocalOperatorRuntime:
 
     def authorize_mutation(self, request: Request) -> None:
         self.__require_available()
-        if not origin_allowed(request):
-            raise LocalMutationDenied()
-        if not self.verify(operator_credential(request)):
+        origins = request.headers.getlist("origin")
+        header_values = request.headers.getlist(OPERATOR_HEADER_NAME)
+        cookie_values = _operator_cookie_values(request)
+        csrf_values = request.headers.getlist(OPERATOR_CSRF_HEADER_NAME)
+        if not origins:
+            if (
+                len(header_values) != 1
+                or cookie_values
+                or csrf_values
+                or not self.verify(header_values[0])
+            ):
+                raise LocalMutationDenied()
+        elif (
+            not browser_origin_allowed(request)
+            or header_values
+            or len(cookie_values) != 1
+            or len(csrf_values) != 1
+            or not self.__verify_browser_session(
+                cookie_values[0], csrf_values[0], touch=True
+            )
+        ):
             raise LocalMutationDenied()
         self.__mutations.consume()
 
-    def authorize_unlock(self, request: Request, candidate: str) -> None:
+    def authorize_unlock(
+        self, request: Request, candidate: str
+    ) -> IssuedLocalBrowserSession:
         self.__require_available()
-        if not origin_allowed(request):
+        if not browser_origin_allowed(request):
             raise LocalMutationDenied()
         self.__unlocks.consume()
         if not self.verify(candidate):
             raise LocalMutationDenied()
+        return self.__issue_browser_session()
 
     def request_is_unlocked(self, request: Request) -> bool:
-        return self.__file_matches() and self.verify(operator_credential(request))
+        return self.request_browser_session_id(request) is not None
+
+    def request_browser_session_id(self, request: Request) -> str | None:
+        """Return the public identifier for the request's active browser session."""
+
+        if not self.__file_matches():
+            self.__clear_browser_sessions()
+            return None
+        cookie_values = _operator_cookie_values(request)
+        if len(cookie_values) != 1:
+            return None
+        return self.__browser_session_id(cookie_values[0])
 
     def __require_available(self) -> None:
         if not self.__file_matches():
+            self.__clear_browser_sessions()
             raise LocalOperatorUnavailable()
+
+    def __issue_browser_session(self) -> IssuedLocalBrowserSession:
+        token = secrets.token_urlsafe(_TOKEN_BYTES)
+        session_id = secrets.token_urlsafe(_TOKEN_BYTES)
+        csrf_token = secrets.token_urlsafe(_TOKEN_BYTES)
+        if not all(
+            _TOKEN_PATTERN.fullmatch(value)
+            for value in (token, session_id, csrf_token)
+        ):
+            raise LocalOperatorUnavailable("generated browser credentials have an invalid shape")
+        moment = time.monotonic()
+        with self.__session_lock:
+            self.__purge_browser_sessions(moment)
+            while len(self.__sessions) >= _MAX_BROWSER_SESSIONS:
+                self.__sessions.popitem(last=False)
+            self.__sessions[_digest(token)] = _LocalBrowserSession(
+                session_id=session_id,
+                csrf_digest=_digest(csrf_token),
+                created_at=moment,
+                last_seen_at=moment,
+            )
+        return IssuedLocalBrowserSession(
+            token=token,
+            session_id=session_id,
+            csrf_token=csrf_token,
+        )
+
+    def __browser_session_id(self, token: str) -> str | None:
+        if not _TOKEN_PATTERN.fullmatch(token):
+            return None
+        token_digest = _digest(token)
+        moment = time.monotonic()
+        with self.__session_lock:
+            self.__purge_browser_sessions(moment)
+            matching_digest = self.__matching_session_digest(token_digest)
+            if matching_digest is None:
+                return None
+            return self.__sessions[matching_digest].session_id
+
+    def __verify_browser_session(
+        self, token: str, csrf_token: str | None, *, touch: bool
+    ) -> bool:
+        if not _TOKEN_PATTERN.fullmatch(token):
+            return False
+        if csrf_token is not None and not _TOKEN_PATTERN.fullmatch(csrf_token):
+            return False
+        token_digest = _digest(token)
+        moment = time.monotonic()
+        with self.__session_lock:
+            self.__purge_browser_sessions(moment)
+            matching_digest = self.__matching_session_digest(token_digest)
+            if matching_digest is None:
+                return False
+            session = self.__sessions[matching_digest]
+            if csrf_token is not None and not compare_digest(
+                session.csrf_digest, _digest(csrf_token)
+            ):
+                return False
+            if touch:
+                session.last_seen_at = moment
+                self.__sessions.move_to_end(matching_digest)
+            return True
+
+    def __matching_session_digest(self, token_digest: bytes) -> bytes | None:
+        return next(
+            (
+                digest
+                for digest in self.__sessions
+                if compare_digest(digest, token_digest)
+            ),
+            None,
+        )
+
+    def __purge_browser_sessions(self, moment: float) -> None:
+        expired = [
+            digest
+            for digest, session in self.__sessions.items()
+            if session.created_at + BROWSER_SESSION_MAX_AGE_SECONDS <= moment
+            or session.last_seen_at + _BROWSER_SESSION_IDLE_SECONDS <= moment
+        ]
+        for digest in expired:
+            del self.__sessions[digest]
+
+    def __clear_browser_sessions(self) -> None:
+        with self.__session_lock:
+            self.__sessions.clear()
 
     def __file_matches(self) -> bool:
         if self.__digest is None:
@@ -147,24 +287,21 @@ def load_or_create_local_operator(path: Path) -> LocalOperatorStartup:
     return LocalOperatorStartup(LocalOperatorRuntime(token, token_path), token)
 
 
-def origin_allowed(request: Request) -> bool:
-    """Accept CLI requests without Origin and browsers only from the fixed local UI."""
+def browser_origin_allowed(request: Request) -> bool:
+    """Accept an exact RedDock browser origin and reject non-browser unlocks."""
 
     origins = request.headers.getlist("origin")
-    return not origins or (len(origins) == 1 and origins[0] in ALLOWED_BROWSER_ORIGINS)
+    return len(origins) == 1 and origins[0] in ALLOWED_BROWSER_ORIGINS
 
 
-def operator_credential(request: Request) -> str | None:
-    header_values = request.headers.getlist(OPERATOR_HEADER_NAME)
-    cookie_values: list[str] = []
+def _operator_cookie_values(request: Request) -> list[str]:
+    values: list[str] = []
     for raw_cookie in request.headers.getlist("cookie"):
         for item in raw_cookie.split(";"):
             name, separator, value = item.strip().partition("=")
             if separator and name == OPERATOR_COOKIE_NAME:
-                cookie_values.append(value)
-    if len(header_values) + len(cookie_values) != 1:
-        return None
-    return (header_values + cookie_values)[0]
+                values.append(value)
+    return values
 
 
 def _digest(token: str) -> bytes:

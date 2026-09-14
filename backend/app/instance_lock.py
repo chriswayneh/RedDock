@@ -24,6 +24,12 @@ class InstanceLock:
         _unlock(descriptor)
         os.close(descriptor)
 
+    def __enter__(self) -> InstanceLock:
+        return self
+
+    def __exit__(self, *_exc_info: object) -> None:
+        self.close()
+
 
 def acquire_instance_lock(path: Path) -> InstanceLock:
     """Acquire and retain the exclusive process lock, refusing links and peers."""
@@ -49,32 +55,10 @@ def acquire_instance_lock(path: Path) -> InstanceLock:
         raise
 
 
-def verify_instance_offline(data_dir: Path) -> None:
-    """Prove no RedDock process holds the data-directory lifetime lock."""
+def acquire_offline_maintenance_lock(data_dir: Path) -> InstanceLock:
+    """Retain exclusive ownership of a data directory for all maintenance work."""
 
-    path = data_dir / LOCK_NAME
-    try:
-        if stat.S_ISLNK(path.lstat().st_mode):
-            raise InstanceLockError("RedDock instance lock must not be a link")
-    except FileNotFoundError:
-        # Data created before the lock existed has no running new-version process.
-        return
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as error:
-        raise InstanceLockError(
-            "RedDock instance lock could not be inspected safely"
-        ) from error
-    try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise InstanceLockError("RedDock instance lock must be a regular file")
-        _lock(descriptor)
-        _unlock(descriptor)
-    finally:
-        os.close(descriptor)
+    return acquire_instance_lock(data_dir / LOCK_NAME)
 
 
 def _lock(descriptor: int) -> None:

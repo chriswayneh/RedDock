@@ -20,6 +20,7 @@ import type {
   LabStatus,
   Observation,
   OperatorStatus,
+  OperatorUnlock,
   RedPathGraph,
   ReportRun,
   EvidenceManifest,
@@ -29,6 +30,47 @@ import type {
   ValidationRun,
   Version,
 } from "./types";
+
+const OPERATOR_CSRF_HEADER = "X-RedDock-Operator-CSRF";
+const OPERATOR_SESSION_STORAGE_KEY = "reddock.operator.browser-session.v1";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const SESSION_VALUE = /^[A-Za-z0-9_-]{43}$/;
+
+type StoredOperatorSession = { sessionId: string; csrfToken: string };
+
+function storedOperatorSession(): StoredOperatorSession | null {
+  if (typeof window === "undefined") return null;
+  const serialized = window.localStorage.getItem(OPERATOR_SESSION_STORAGE_KEY);
+  if (serialized === null) return null;
+  try {
+    const candidate = JSON.parse(serialized) as Partial<StoredOperatorSession>;
+    if (
+      typeof candidate.sessionId === "string" &&
+      typeof candidate.csrfToken === "string" &&
+      SESSION_VALUE.test(candidate.sessionId) &&
+      SESSION_VALUE.test(candidate.csrfToken)
+    ) {
+      return { sessionId: candidate.sessionId, csrfToken: candidate.csrfToken };
+    }
+  } catch {
+    /* stale or malformed browser state is treated as locked */
+  }
+  clearOperatorSession();
+  return null;
+}
+
+function storeOperatorSession(session: OperatorUnlock): void {
+  window.localStorage.setItem(
+    OPERATOR_SESSION_STORAGE_KEY,
+    JSON.stringify({ sessionId: session.session_id, csrfToken: session.csrf_token }),
+  );
+}
+
+function clearOperatorSession(): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(OPERATOR_SESSION_STORAGE_KEY);
+  }
+}
 
 async function detailOf(response: Response): Promise<string> {
   try {
@@ -41,11 +83,19 @@ async function detailOf(response: Response): Promise<string> {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers = new Headers(init?.headers);
+  headers.set("Content-Type", "application/json");
+  const csrfToken = storedOperatorSession()?.csrfToken;
+  if (!SAFE_METHODS.has(method) && path !== "/operator/unlock" && csrfToken) {
+    headers.set(OPERATOR_CSRF_HEADER, csrfToken);
+  }
   const response = await fetch(`/api${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    headers,
   });
   if (!response.ok) {
+    if (response.status === 401 && !SAFE_METHODS.has(method)) clearOperatorSession();
     throw new Error(await detailOf(response));
   }
   if (response.status === 204) {
@@ -92,8 +142,18 @@ export type DiscoveryOutcome =
   | { accepted: false; error: string };
 
 export const api = {
-  operatorStatus: () => request<OperatorStatus>("/operator/status"),
-  unlockOperator: (token: string) => post<void>("/operator/unlock", { token }),
+  operatorStatus: async () => {
+    const status = await request<OperatorStatus>("/operator/status");
+    const stored = storedOperatorSession();
+    const unlocked =
+      status.unlocked && status.session_id !== null && stored?.sessionId === status.session_id;
+    if (!unlocked && stored !== null) clearOperatorSession();
+    return { ...status, unlocked };
+  },
+  unlockOperator: async (token: string) => {
+    const session = await post<OperatorUnlock>("/operator/unlock", { token });
+    storeOperatorSession(session);
+  },
   dashboard: () => request<DashboardSummary>("/dashboard"),
   settings: () => request<Settings>("/settings"),
   assetPage: (id: number, offset = 0) => dockyardPage<Asset>(id, "assets", offset),
@@ -193,14 +253,18 @@ export const api = {
     adapter: string,
     profile: string,
   ): Promise<DiscoveryOutcome> {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    const csrfToken = storedOperatorSession()?.csrfToken;
+    if (csrfToken) headers.set(OPERATOR_CSRF_HEADER, csrfToken);
     const response = await fetch(`/api/dockyards/${id}/discoveries`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ target, adapter, profile }),
     });
     if (response.status === 202 || response.status === 403) {
       return { accepted: response.status === 202, run: (await response.json()) as DiscoveryRun };
     }
+    if (response.status === 401) clearOperatorSession();
     return { accepted: false, error: await detailOf(response) };
   },
 };

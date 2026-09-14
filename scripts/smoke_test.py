@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """End-to-end smoke test against a running RedDock container.
 
-It exercises the whole story — Dockyard, authorized scope, DockGuard decision,
-adapter, asset, service, observation, evidence, detection, finding — against
-loopback only. It never contacts a system outside the machine running RedDock,
-and the only HTTP origin it probes is RedDock's own.
+It exercises the whole story against the Compose ingress service: Dockyard,
+authorized scope, DockGuard decision, adapter, asset, service, observation,
+evidence, detection, and finding. It never contacts a system outside RedDock's
+isolated Compose networks, and the only HTTP origin it probes is RedDock's own.
 
 Usage: python scripts/smoke_test.py [base-url]
 """
@@ -22,8 +22,8 @@ from zipfile import ZipFile
 TIMEOUT = 10
 RUN_DEADLINE = 240
 OPERATOR_TOKEN = os.getenv("REDDOCK_OPERATOR_TOKEN", "")
-SCAN_TARGET = os.getenv("REDDOCK_SMOKE_TARGET", "127.0.0.1")
-HTTP_TARGET = os.getenv("REDDOCK_SMOKE_ORIGIN", "http://127.0.0.1:8080")
+SCAN_TARGET = os.getenv("REDDOCK_SMOKE_TARGET", "reddock-ingress")
+HTTP_TARGET = os.getenv("REDDOCK_SMOKE_ORIGIN", "http://reddock-ingress:8080")
 LAB_ACKNOWLEDGEMENT = (
     "I confirm this Dockyard is an isolated lab that I am authorized to test."
 )

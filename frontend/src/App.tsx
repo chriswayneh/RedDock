@@ -149,7 +149,7 @@ export function App() {
         {operator && !operator.unlocked && (
           <OperatorGate
             available={operator.available}
-            onUnlocked={() => setOperator({ available: true, unlocked: true })}
+            onUnlocked={() => void refresh()}
             onError={setError}
           />
         )}
@@ -245,7 +245,8 @@ function OperatorGate({
         <h2 id="operator-gate-title">Unlock changes for this browser session</h2>
         <p className="hint">
           Copy the one-time startup token from <code>docker compose logs reddock</code>. RedDock
-          keeps it in an HttpOnly, host-only session cookie and never stores it in browser storage.
+          exchanges it for a short-lived browser session. The master token is never stored by the
+          browser. Same-origin tabs share the request proof that matches the active session.
         </p>
       </div>
       <form className="operator-unlock-form" onSubmit={(event) => void unlock(event)}>

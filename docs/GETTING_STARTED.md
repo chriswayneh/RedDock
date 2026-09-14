@@ -38,7 +38,7 @@ On the first start, RedDock creates a local operator token and prints it to the 
 docker compose logs reddock
 ```
 
-Copy the value labeled `First-start local operator token`, enter it in the browser, and select **Unlock changes**. RedDock stores the token file in the `reddock-data` volume and the browser keeps it only in an HttpOnly, host-only session cookie. If the token file is removed after initialization, changes fail closed until the file is restored and RedDock is restarted.
+Copy the value labeled `First-start local operator token`, enter it in the browser, and select **Unlock changes**. RedDock stores the master token file in the `reddock-data` volume. The browser receives an independent short-lived cookie plus an origin-scoped request proof shared by RedDock tabs; it never stores the master token. If the token file is removed after initialization, changes fail closed until the file is restored and RedDock is restarted.
 
 If you already downloaded the repository, use its existing folder instead of cloning a second copy.
 

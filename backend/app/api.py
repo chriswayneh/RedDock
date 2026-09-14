@@ -23,6 +23,7 @@ from app.intelligence import runner as intelligence_runner
 from app.inventory import get_asset, list_assets, list_observations, list_services
 from app.lab_capabilities import CAPABILITIES
 from app.local_security import (
+    BROWSER_SESSION_MAX_AGE_SECONDS,
     LOCAL_OPERATOR_RUNTIME_STATE,
     OPERATOR_COOKIE_NAME,
     LocalMutationDenied,
@@ -81,6 +82,7 @@ from app.schemas import (
     ObservationRead,
     OperatorStatusRead,
     OperatorUnlockCreate,
+    OperatorUnlockRead,
     ProfileRead,
     RedPathGraphRead,
     ReportCreate,
@@ -142,22 +144,24 @@ def _local_operator_runtime(request: Request) -> LocalOperatorRuntime:
 @router.get("/operator/status", response_model=OperatorStatusRead)
 def operator_status(request: Request) -> OperatorStatusRead:
     runtime = _local_operator_runtime(request)
+    session_id = runtime.request_browser_session_id(request)
     return OperatorStatusRead(
         available=runtime.available,
-        unlocked=runtime.request_is_unlocked(request),
+        unlocked=session_id is not None,
+        session_id=session_id,
     )
 
 
-@router.post("/operator/unlock", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/operator/unlock", response_model=OperatorUnlockRead)
 def unlock_operator(
     payload: OperatorUnlockCreate,
     request: Request,
     response: Response,
-) -> None:
+) -> OperatorUnlockRead:
     runtime = _local_operator_runtime(request)
     try:
         token = payload.token.get_secret_value()
-        runtime.authorize_unlock(request, token)
+        browser_session = runtime.authorize_unlock(request, token)
     except LocalOperatorUnavailable:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -176,11 +180,16 @@ def unlock_operator(
         ) from None
     response.set_cookie(
         OPERATOR_COOKIE_NAME,
-        token,
+        browser_session.token,
         httponly=True,
         samesite="strict",
         secure=False,
         path="/",
+        max_age=BROWSER_SESSION_MAX_AGE_SECONDS,
+    )
+    return OperatorUnlockRead(
+        session_id=browser_session.session_id,
+        csrf_token=browser_session.csrf_token,
     )
 
 

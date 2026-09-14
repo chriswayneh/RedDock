@@ -69,10 +69,12 @@ multi-architecture container images.
   PostgreSQL services use separate internal backend networks and receive no API
   socket. The supplied Compose services use read-only root filesystems, dropped
   capabilities, `no-new-privileges`, and fixed process and memory limits.
-- **Local change protection:** a generated operator token, exact browser Origin
-  checks, JSON-only mutations, and fixed process-local request limits protect
-  unsafe local operations. This is not user identity or a reason to publish the
-  service. Safe reads remain available through host loopback.
+- **Local change protection:** a generated master token protects command-line
+  changes and unlocks an independent, bounded browser session. Browser changes
+  require a separate origin-scoped proof, an exact Origin, and JSON-only requests.
+  Fixed process-local limits bound unlock and mutation attempts. This is not
+  user identity or a reason to publish the service. Safe reads remain available
+  through host loopback.
 - **Bounded discovery history:** each Dockyard retains at most 500 discovery
   requests, including denied attempts. Metadata and link-local destinations are
   non-overridable policy denials.
@@ -98,7 +100,8 @@ multi-architecture container images.
   not merged automatically.
 - **Safer releases:** an annotated version tag must match the application,
   packages, README, roadmap, and changelog before automation can publish an
-  attested AMD64/ARM64 container image and GitHub Release.
+  attested AMD64/ARM64 container image and GitHub Release. Architecture-specific
+  source assets are extracted from that immutable attested digest.
 - **Native platform checks:** both AMD64 and ARM64 GitHub runners now build the
   production image and complete the same discovery-through-reporting smoke test.
 - **Recoverable local data:** the default SQLite package has an offline,

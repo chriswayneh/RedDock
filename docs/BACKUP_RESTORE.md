@@ -19,8 +19,11 @@ below.
 
 Creation and verification fail closed unless all of these checks pass:
 
-- RedDock is explicitly declared offline and no SQLite journal, WAL, or shared
-  memory sidecar exists.
+- RedDock is explicitly declared offline. The maintenance command acquires the
+  same exclusive instance lock as the application and retains it until the
+  backup, restore, or recovery operation finishes. Any running application or
+  peer maintenance command makes the operation fail closed.
+- No SQLite journal, WAL, or shared memory sidecar exists.
 - The SQLite database passes `quick_check` and `foreign_key_check` and names a
   database migration revision this RedDock build understands. Every table and
   column required by that exact revision must also be present.

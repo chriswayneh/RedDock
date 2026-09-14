@@ -6,19 +6,25 @@ All notable changes to RedDock are documented here.
 
 ### Added
 
-- A local operator-token boundary for unsafe requests. The token is generated
-  once, stored with the local data, disclosed once in startup logs, and accepted
-  through a header or a host-only HttpOnly browser cookie. Exact browser Origin
-  checks, ambiguous-credential rejection, and fixed process-local throttles
-  reduce accidental or cross-origin changes without claiming user identity.
+- A local operator-token boundary for unsafe requests. The master token is
+  generated once, stored with the local data, disclosed once in startup logs,
+  and accepted only through the command-line header or browser unlock form.
+  Browser unlock issues an independent bounded HttpOnly session cookie and a
+  separate origin-scoped request proof shared by same-origin tabs. A public
+  session identifier prevents stale proof and cookie pairs from appearing
+  unlocked. Exact browser Origin checks,
+  ambiguous-credential rejection, expiry, an eight-session cap, and fixed
+  process-local throttles reduce accidental or cross-origin changes without
+  claiming user identity.
 - A Unix-socket-only Compose application boundary behind one non-root loopback
   ingress proxy. Optional PostgreSQL and Ollama services receive only their
   dedicated backend networks and cannot initiate TCP requests to the API.
 - Matching Debian Nmap source archives, package metadata, license notices, and
   checksums inside every RedDock image and as architecture-specific release
   assets.
-- A process-lifetime data-directory lock that makes offline backup, restore, and
-  recovery commands verify that RedDock is actually stopped.
+- A process-lifetime data-directory lock that offline backup, restore, and
+  recovery commands retain until they finish, preventing application startup or
+  peer maintenance from racing SQLite and evidence replacement.
 - A dormant process-owned authentication coordinator for the future server
   boundary. It applies durable login and callback admission, creates and
   consumes browser-bound OIDC state once, validates the provider identity,
@@ -118,7 +124,9 @@ All notable changes to RedDock are documented here.
 - Fail-closed release automation that validates annotated tags against every
   packaged and public version source, reruns the backend and frontend gates,
   publishes an attested AMD64/ARM64 image to GitHub Container Registry, and
-  creates the matching GitHub Release only after successful builds.
+  creates the matching GitHub Release only after successful builds. Packaged
+  Nmap source is extracted through the attested immutable image digest rather
+  than a mutable registry tag.
 - A narrowly scoped development lockfile fix for the high-severity js-yaml
   merge-budget advisory, updating 4.3.1 to patched 4.3.2 without changing runtime
   dependencies or lowering the existing audit gate.
@@ -291,6 +299,9 @@ All notable changes to RedDock are documented here.
 
 ### Testing
 
+- Point the default end-to-end smoke target at RedDock's Compose ingress
+  service so discovery remains useful after the API moved from TCP to a Unix
+  socket.
 - Backup regressions cover round trips, database and evidence tampering,
   manifest/path/mode/limit enforcement, offline and destructive confirmations,
   SQLite semantic checks, evidence-reference reconciliation, failed replacement

@@ -64,7 +64,9 @@ def client(environment: Path) -> Iterator[TestClient]:
             headers={"Origin": "http://localhost:8080"},
             json={"token": token},
         )
-        assert response.status_code == 204, response.text
+        assert response.status_code == 200, response.text
+        test_client.headers["X-RedDock-Operator-CSRF"] = response.json()["csrf_token"]
+        test_client.headers["Origin"] = "http://localhost:8080"
         yield test_client
 
 

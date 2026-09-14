@@ -11,7 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
 from app.authentication import AuthenticationRuntime, create_authentication_runtime
-from app.config import DormantServerRuntimeConfig, get_settings
+from app.config import DormantServerRuntimeConfig, get_settings, local_state_directory
 from app.correlation.runner import recover_interrupted_runs as recover_interrupted_correlations
 from app.database import (
     DATABASE_REQUEST_BINDING_STATE,
@@ -112,8 +112,11 @@ def build_lifespan(
                 request_session_factory = primary_database.session
                 deployment_mode = "server"
             else:
-                token_path = Path(get_settings().operator_token_file)
-                instance_lock = acquire_instance_lock(token_path.parent / ".reddock-instance.lock")
+                settings = get_settings()
+                token_path = Path(settings.operator_token_file)
+                instance_lock = acquire_instance_lock(
+                    local_state_directory(settings) / ".reddock-instance.lock"
+                )
                 initialize_database()
                 with SessionLocal() as session:
                     # A run that was in flight when the process stopped did not finish.

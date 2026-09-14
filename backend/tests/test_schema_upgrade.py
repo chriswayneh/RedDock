@@ -359,7 +359,9 @@ def test_phase_1_data_survives_and_phase_2_runs_on_top_of_it(phase_1_database: P
             headers={"Origin": "http://localhost:8080"},
             json={"token": token},
         )
-        assert unlocked.status_code == 204, unlocked.text
+        assert unlocked.status_code == 200, unlocked.text
+        client.headers["X-RedDock-Operator-CSRF"] = unlocked.json()["csrf_token"]
+        client.headers["Origin"] = "http://localhost:8080"
         assert [row["name"] for row in client.get("/api/dockyards").json()] == [
             "Existing engagement"
         ]

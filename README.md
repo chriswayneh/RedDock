@@ -62,7 +62,7 @@ cd RedDock
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. The token is generated once and stored in the `reddock-data` volume. If its file is removed after initialization, RedDock refuses changes instead of silently replacing it.
+Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. The master token stays in the `reddock-data` volume; the browser receives only a short-lived local session. If the token file is removed after initialization, RedDock refuses changes instead of silently replacing it.
 
 See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local demonstration, shutdown instructions, and troubleshooting. Contributors can use `master`, which may contain unfinished work newer than the stable tag.
 

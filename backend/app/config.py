@@ -467,6 +467,17 @@ class Settings(BaseModel):
     max_detector_plugin_rules: int = 50
 
 
+def local_state_directory(settings: Settings) -> Path:
+    """Return the lock root for the active local database-backed state."""
+
+    if settings.database_url.startswith("sqlite:///"):
+        database_path = Path(
+            os.path.abspath(settings.database_url.removeprefix("sqlite:///"))
+        )
+        return database_path.parent
+    return Path(os.path.abspath(settings.operator_token_file)).parent
+
+
 @lru_cache
 def get_settings() -> Settings:
     defaults = Settings()

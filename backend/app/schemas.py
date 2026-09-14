@@ -48,9 +48,15 @@ class OperatorUnlockCreate(BaseModel):
     token: SecretStr = Field(min_length=43, max_length=43)
 
 
+class OperatorUnlockRead(BaseModel):
+    session_id: str = Field(min_length=43, max_length=43)
+    csrf_token: str = Field(min_length=43, max_length=43)
+
+
 class OperatorStatusRead(BaseModel):
     available: bool
     unlocked: bool
+    session_id: str | None = Field(default=None, min_length=43, max_length=43)
 
 
 class ScopeEntryCreate(BaseModel):

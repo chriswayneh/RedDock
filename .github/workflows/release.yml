@@ -144,18 +144,19 @@ jobs:
       - name: Extract matching Nmap source from each published architecture
         run: |
           set -euo pipefail
+          image_ref="${IMAGE_NAME}@${{ steps.build.outputs.digest }}"
           for architecture in amd64 arm64; do
             source_dir="$RUNNER_TEMP/nmap-source-$architecture"
             mkdir -p "$source_dir"
             docker pull --platform "linux/$architecture" \
-              "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+              "$image_ref"
             container_id="$(docker create --platform "linux/$architecture" \
-              "${IMAGE_NAME}:${GITHUB_REF_NAME}")"
+              "$image_ref")"
             docker cp \
               "$container_id:/usr/share/reddock-source/nmap/." "$source_dir/"
             docker rm "$container_id"
             printf 'image=%s\nplatform=linux/%s\nmanifest=%s\n' \
-              "${IMAGE_NAME}:${GITHUB_REF_NAME}" "$architecture" \
+              "$image_ref" "$architecture" \
               '${{ steps.build.outputs.digest }}' > "$source_dir/REDDOCK_IMAGE.txt"
             tar -C "$RUNNER_TEMP" -czf \
               "$RUNNER_TEMP/reddock-nmap-source-$architecture.tar.gz" \

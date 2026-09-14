@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, jest as vi } from "@jest/g
 import { App } from "./App";
 import { formatDate } from "./format";
 
-beforeEach(() => window.history.replaceState(null, "", "/"));
+beforeEach(() => {
+  window.history.replaceState(null, "", "/");
+  window.localStorage.setItem(
+    "reddock.operator.browser-session.v1",
+    JSON.stringify({ sessionId: "S".repeat(43), csrfToken: "C".repeat(43) }),
+  );
+});
 
 const dockyard = {
   id: 1,
@@ -378,7 +384,7 @@ function stubApi({
       if (path === "/api/dashboard") return json({ dockyard_count: 2, asset_count: assets.length * 2, discovery_run_count: 0, open_finding_count: findings.length * 2, recent_dockyards: [dockyard, { ...dockyard, id: 2, name: "Second workspace" }], recent_runs: [] });
       if (path === "/api/settings") return json({ name: "RedDock", version: "0.8.0", phase: "Phase 7", deployment_mode: "local", intelligence_configured: (providerResponse as { available: boolean }).available });
       if (path === "/api/lab/status") return json({ deployment_enabled: false, capabilities: [] });
-      if (path === "/api/operator/status") return json({ available: true, unlocked: true });
+      if (path === "/api/operator/status") return json({ available: true, unlocked: true, session_id: "S".repeat(43) });
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
