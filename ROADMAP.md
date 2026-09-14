@@ -8,6 +8,25 @@ The latest release is **v0.8.1 (Phase 8 Production hardening checkpoint)**. **Ph
 
 Current work focuses first on the local operator boundary, Compose isolation, bounded resource use, clear first-run instructions, and a simpler assessment workflow. Dormant identity and session foundations remain disconnected while these local safety and usability checkpoints are completed. The checkpoints below separate released behavior, development work, and remaining gates.
 
+## Planned releases
+
+These versions are direction, not date promises. A release ships only after its
+security, migration, documentation, and end-to-end acceptance gates pass.
+
+| Version | Phase | Outcome |
+| --- | --- | --- |
+| `v0.9.0` | Phase 8: Production polish | Finish guided first use, authenticated team access, operations, recovery, and deployment validation without weakening local mode |
+| `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
+| `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |
+| `v1.2.0` | Phase 11: Expanded safe assessment | Add bounded UDP discovery, sanitized HTTP response sampling, and a reviewed allowlist of non-intrusive service checks |
+| `v1.3.0` | Phase 12: Credentialed checks | Add least-privilege, read-only check adapters with secret references, strict redaction, RBAC, and complete audit evidence |
+| `v1.4.0` | Phase 13: Evidence-based validation | Add fixed, approval-gated validation packs that improve confidence without accepting arbitrary commands or exploit payloads |
+
+Automated exploitation, brute force, payload delivery, and evasion are not on
+the standard-runtime roadmap. They may be researched later as separately
+installed lab components with stronger isolation, authorization, and audit
+requirements. See [Beyond the standard runtime](#beyond-the-standard-runtime).
+
 ## Phase 0: Foundation (complete)
 
 Containerized application, React UI shell, FastAPI API, OpenAPI 3.1 schema and Swagger UI explorer, SQLite Dockyards, safety model, documentation, tests, and CI. Completion means a clean checkout can build and launch RedDock locally; Phase 0 contains no assessment tools.
@@ -53,7 +72,7 @@ CI/Docker test matrix passed. Released as v0.8.0.
 
 ## Phase 8: Production polish
 
-**Status: in progress, not released.**
+**Status: in progress; v0.8.1 checkpoint released.**
 
 The goal is to make RedDock more reliable to operate and prepare it for future
 team use. Today it remains a **local, single-operator application**. Working
@@ -133,12 +152,11 @@ sign-in, request-authentication, logout, and administration experience.
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
 
-### Still needed before release
+### Still needed before Phase 8 completion
 
-- **First-run product flow:** publish the security-updated checkpoint under an
-  immutable tag, add the guided local self-assessment, simplify primary
-  navigation, and show evidence-derived checked and not-checked coverage in
-  Findings and generated reports.
+- **First-run product flow:** add the guided local self-assessment, simplify
+  primary navigation, and show evidence-derived checked and not-checked
+  coverage in Findings and generated reports.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete PostgreSQL disaster recovery, production
   deployment, and scaling validation. Continue recovery drills for the shipped
@@ -283,3 +301,123 @@ PostgreSQL recovery, scaling, and remaining operational requirements are documen
 validated end to end.
 
 </details>
+
+## Phase 9: Stable operating baseline
+
+**Planned release: v1.0.0.**
+
+Phase 9 turns the completed Phase 8 capabilities into a stable contract rather
+than adding new scanning power.
+
+- Publish tested installation, upgrade, rollback, backup, and recovery paths.
+- Define supported platforms, configuration compatibility, and deprecation
+  policy.
+- Exercise local and authenticated deployment paths through clean-install and
+  upgrade tests.
+- Complete independent security review and resolve release-blocking findings.
+- Keep local-only operation, no-LLM operation, and exported evidence available
+  without a hosted RedDock service.
+
+## Phase 10: Vulnerability intelligence
+
+**Planned release: v1.1.0.**
+
+Phase 10 makes the existing local catalogue boundary useful without claiming
+that a product/version match proves vulnerability or exploitability.
+
+- Add an explicit intelligence update command that imports versioned NVD CVE
+  and CPE data, CISA Known Exploited Vulnerabilities status, and optional EPSS
+  prioritization data.
+- Retain source, retrieval time, source publication time, format version, and
+  SHA-256 for every imported snapshot.
+- Normalize vendor, product, version, and affected ranges before matching.
+- Display the match method, matched evidence, confidence, feed age, and reasons
+  a result remains uncertain.
+- Keep updates operator-controlled. RedDock continues to work offline and with
+  no catalogue installed.
+- Test importers with retained fixtures so normal CI never depends on a live
+  external feed.
+
+Completion means an operator can update, inspect, use, and remove the local
+catalogue while every report distinguishes an association, known exploitation,
+and a RedDock validation result.
+
+## Phase 11: Expanded safe assessment
+
+**Planned release: v1.2.0.**
+
+Phase 11 broadens observation while preserving DockGuard and the non-invasive
+default.
+
+- Add a bounded, opt-in common-UDP profile with fixed ports, timing, retries,
+  and result limits.
+- Add opt-in HTTP response sampling with strict byte and time limits, safe
+  content types, secret redaction, and hashes. Full bodies and binary content
+  are not retained by default.
+- Add a versioned allowlist of individually reviewed, non-intrusive service
+  checks. Arbitrary NSE names, categories, script arguments, scanner flags, and
+  third-party scripts remain rejected.
+- Re-evaluate scope immediately before contact and retain the exact profile,
+  tool version, approved checks, and normalized output as evidence.
+- Keep capabilities in dedicated least-privilege scanner services. Any required
+  network capability is granted only to that service, never to the API or web
+  application.
+
+Completion means each new observation is bounded, reproducible, attributable,
+and distinguishable from a vulnerability verdict.
+
+## Phase 12: Credentialed checks
+
+**Planned release: v1.3.0.**
+
+Phase 12 adds read-only configuration evidence after authenticated team access
+and tenant isolation are proven.
+
+- Start with a small set of read-only adapters and documented least-privilege
+  account requirements.
+- Accept deployment-owned secret references, not passwords, keys, cookies, or
+  tokens in ordinary API fields.
+- Resolve secrets only inside the isolated check worker and never place them in
+  the database, logs, evidence, reports, browser, model packets, or error text.
+- Bind credential use to one organization, Dockyard, adapter, scope, role, and
+  short approval window.
+- Add rotation, revocation, redaction, authorization, cross-tenant, and hostile
+  output tests before enabling an adapter.
+- Record who approved and ran the check, which secret reference was used, and
+  what evidence was produced without recording the secret value.
+
+Completion means a credential can be rotated or revoked independently and a
+report can prove what was checked without disclosing the credential.
+
+## Phase 13: Evidence-based validation
+
+**Planned release: v1.4.0.**
+
+Phase 13 adds fixed validation packs for selected finding types. It does not
+turn RedDock into a general exploit framework.
+
+- Define one reviewed request sequence, success condition, side-effect analysis,
+  timeout, and evidence schema for each supported validation.
+- Require an eligible finding, fresh DockGuard decision, explicit approval, and
+  a short authorization window immediately before contact.
+- Report separate states for `associated`, `observed`, `safely reproduced`,
+  `not reproduced`, and `indeterminate`.
+- Reject arbitrary commands, URLs, headers, payload files, scanner options, and
+  user-authored validation code.
+- Add target-side test fixtures and negative cases proving the pack does not
+  widen scope or silently change target state.
+
+Completion means validation can strengthen or weaken confidence using retained
+evidence while uncertainty remains visible.
+
+## Beyond the standard runtime
+
+Brute force, exploit payloads, denial-of-service checks, fuzzing, and evasion
+create materially different risk. They are not planned for the normal RedDock
+image or its default API.
+
+Any future research implementation must use a separately installed image, an
+isolated lab network, explicit deployment enablement, per-engagement approval,
+short-lived authorization, hard rate and resource limits, immutable capability
+manifests, and complete audit evidence. It must also pass a separate security,
+legal, and abuse-risk review before a version is promised.
