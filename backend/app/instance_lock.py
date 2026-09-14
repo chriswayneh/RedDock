@@ -35,18 +35,19 @@ def acquire_instance_lock(path: Path) -> InstanceLock:
     """Acquire and retain the exclusive process lock, refusing links and peers."""
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        return _acquire_posix_directory_lock(path.parent)
+
     flags = os.O_RDWR | os.O_CREAT
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags, 0o640)
+        descriptor = os.open(path, flags, 0o600)
     except OSError as error:
         raise InstanceLockError("RedDock instance lock could not be opened safely") from error
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise InstanceLockError("RedDock instance lock must be a regular file")
-        if os.name != "nt":
-            os.fchmod(descriptor, 0o640)
         _lock(descriptor)
         os.ftruncate(descriptor, 0)
         os.write(descriptor, f"{os.getpid()}\n".encode("ascii"))
@@ -60,24 +61,26 @@ def acquire_instance_lock(path: Path) -> InstanceLock:
 def acquire_offline_maintenance_lock(data_dir: Path) -> InstanceLock:
     """Retain exclusive ownership of a data directory for all maintenance work."""
 
-    path = data_dir / LOCK_NAME
-    if os.name == "nt":
-        return acquire_instance_lock(path)
+    return acquire_instance_lock(data_dir / LOCK_NAME)
+
+
+def _acquire_posix_directory_lock(data_dir: Path) -> InstanceLock:
+    """Lock the directory inode so a read-only maintenance mount can participate."""
 
     flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags)
-    except FileNotFoundError:
-        return acquire_instance_lock(path)
+        descriptor = os.open(data_dir, flags)
     except OSError as error:
         raise InstanceLockError(
-            "RedDock instance lock could not be opened safely"
+            "RedDock data directory could not be locked safely"
         ) from error
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-            raise InstanceLockError("RedDock instance lock must be a regular file")
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise InstanceLockError("RedDock data directory must be a directory")
         _lock(descriptor)
         return InstanceLock(descriptor)
     except Exception:
