@@ -30,14 +30,24 @@ security work without replacing evidence or controlling assessment tools.
 
 RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make one bodyless HTTP-origin probe. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
 
-It does not test UDP, credentials, exploitability, response bodies, NSE scripts, brute force, payloads, or evasion. It ships no CVE feed. An optional local catalogue can associate an exact reported product and version with CVE identifiers, but that association is not proof that the service is affected.
+### Where it is going
 
-The [versioned roadmap](ROADMAP.md#planned-releases) plans locally cached
-vulnerability intelligence first, followed by bounded UDP and web observation,
-reviewed non-intrusive service checks, least-privilege credentialed checks, and
-fixed evidence-based validation. A later commercial capability pack is planned
-for controlled adversary simulation without enabling intrusive behavior in the
-default open-source runtime.
+Today's release does not yet test UDP, credentials, exploitability, response
+bodies, NSE scripts, brute force, payloads, or evasion, and it ships no CVE
+feed. Those are development targets, not permanent product limits:
+
+- **v1.1.0:** locally cached CVE, CISA KEV, and EPSS intelligence.
+- **v1.2.0:** bounded UDP discovery, sanitized HTTP response sampling, and
+  reviewed non-intrusive service checks.
+- **v1.3.0:** least-privilege credentialed checks with strict secret isolation.
+- **v1.4.0:** evidence-based exploitability validation for supported findings.
+- **v2.0.0:** a separately installed commercial pack for authorized credential
+  auditing, exploit validation, controlled payloads, and evasion exercises.
+
+The complete [versioned roadmap](ROADMAP.md#planned-releases) explains the
+security and completion gates for each release. A catalogue match will remain
+an association rather than proof that a service is affected; stronger claims
+require target evidence and a supported validation result.
 
 ### Current boundary
 
