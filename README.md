@@ -2,9 +2,13 @@
 
 # RedDock
 
-**Discover. Validate. Prove.**
+**Find. Validate. Prove.**
 
-RedDock is a local security workbench for controlled checks, evidence-backed investigation, and portable reporting. I built it to explore how different AI models can help create practical tooling that anyone can run and inspect.
+RedDock is an open-source vulnerability discovery, validation, and evidence
+platform for authorized environments. It brings scoped scanning, explainable
+findings, evidence-backed validation, and portable reporting into one
+inspectable workflow. I built it to explore how different AI models can assist
+security work without replacing evidence or controlling assessment tools.
 
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
@@ -75,10 +79,15 @@ See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local de
 
 ### Why I am building it
 
-I want a security workbench that keeps scope, findings, and evidence together in one workflow. These questions guide how I build it:
+I want one transparent platform that helps find vulnerabilities and keeps the
+scope, conclusion, and supporting evidence together. These questions guide how
+I build it:
 
-- Can active checks stay narrow, explicit, and easy to audit?
+- Can it expand vulnerability coverage without losing control of authorized
+  scope?
 - Can a finding keep a clear trail back to the evidence behind it?
+- Can it distinguish a possible association from an observed and validated
+  weakness?
 - Can optional AI help explain results without receiving tools or control?
 - Can the project be honest about unfinished work instead of hiding it?
 

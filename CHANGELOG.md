@@ -1,23 +1,7 @@
 # Changelog
 
-All notable changes to RedDock are documented here.
-
-## Unreleased
-
-### Documentation
-
-- Publish a versioned roadmap from the Phase 8 completion checkpoint through
-  vulnerability intelligence, expanded safe assessment, credentialed checks,
-  evidence-based validation, and a separately installed v2.0 commercial
-  adversary-simulation pack. Keep intrusive behavior out of the default
-  open-source runtime and require the commercial pack to pass separate
-  security, legal, and abuse-risk review.
-
-### Fixed
-
-- Resolve each architecture-specific image digest from the immutable published
-  index before extracting Nmap source, avoiding Docker's attempt to overwrite
-  one local parent-digest reference with a second platform.
+Released changes to RedDock are documented here. Work in progress is added only
+when a version is published.
 
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
