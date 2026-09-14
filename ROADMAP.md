@@ -1,38 +1,45 @@
 # RedDock roadmap
 
-## The short version
+## Current phase
 
-RedDock is an open-source vulnerability discovery, validation, and evidence
-platform for authorized environments. You can already run it locally, define
-allowed targets, discover services, identify a focused set of security
-weaknesses, validate supported findings, explore their connections, and export
-reports with evidence. AI advice is optional.
+| Milestone | Details |
+| --- | --- |
+| **Now** | **Phase 8: Production polish** |
+| **Status** | **In progress** |
+| **Latest release** | [`v0.8.1`](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), a Phase 8 production-hardening checkpoint |
+| **Phase 8 target** | `v0.9.0` |
+
+RedDock already runs locally. It can define allowed targets, discover services,
+identify supported security weaknesses, validate eligible findings, show their
+connections, and export reports with traceable evidence. AI advice is optional.
 [Try it step by step](docs/GETTING_STARTED.md).
 
-The long-term goal is broad, useful vulnerability coverage with evidence an
-operator can inspect and reproduce. Safety controls determine how a capability
-runs; they do not limit the platform to its current checks. Each phase expands
-coverage only after scope enforcement, least privilege, approval, evidence, and
-safe failure behavior are designed and tested.
+### What remains in Phase 8
 
-The latest release is **v0.8.1 (Phase 8 Production hardening checkpoint)**. **Phase 8 is in progress, not a finished production release.** Its purpose is to make the tool more reliable and prepare for future controlled multi-user deployments. Sign-in, SSO, and usable role-based accounts are not available today; supporting code is not a shipped feature.
+- Make the first-run and assessment workflows easier to follow.
+- Complete authenticated team access, including OIDC, SSO, and RBAC.
+- Validate PostgreSQL recovery, deployment, scaling, and operating procedures.
+- Complete end-to-end acceptance testing and independent security review.
 
-Current work focuses first on the local operator boundary, Compose isolation, bounded resource use, clear first-run instructions, and a simpler assessment workflow. Dormant identity and session foundations remain disconnected while these local safety and usability checkpoints are completed. The checkpoints below separate released behavior, development work, and remaining gates.
+Until those gates pass, RedDock remains a local, single-operator tool. The
+identity and session foundations in the source are not yet a usable sign-in or
+shared-access feature.
 
 ## Planned releases
 
 These versions are direction, not date promises. A release ships only after its
 security, migration, documentation, and end-to-end acceptance gates pass.
 
-| Version | Phase | Outcome |
-| --- | --- | --- |
-| `v0.9.0` | Phase 8: Production polish | Finish guided first use, authenticated team access, operations, recovery, and deployment validation without weakening local mode |
-| `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
-| `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |
-| `v1.2.0` | Phase 11: Expanded safe assessment | Add bounded UDP discovery, sanitized HTTP response sampling, and a reviewed allowlist of non-intrusive service checks |
-| `v1.3.0` | Phase 12: Credentialed checks | Add least-privilege, read-only check adapters with secret references, strict redaction, RBAC, and complete audit evidence |
-| `v1.4.0` | Phase 13: Evidence-based validation | Add fixed, approval-gated validation packs that improve confidence without accepting arbitrary commands or exploit payloads |
-| `v2.0.0` | Phase 14: Controlled adversary simulation | Deliver a separately installed commercial capability pack for authorized credential auditing, exploit validation, controlled payloads, and evasion testing |
+| Status | Version | Phase | Outcome |
+| --- | --- | --- | --- |
+| **Released checkpoint** | `v0.8.1` | Phase 8: Production polish | Local safety, reliability, and deployment foundations |
+| **Current target** | `v0.9.0` | Phase 8: Production polish | Finish guided first use, authenticated team access, operations, recovery, and deployment validation without weakening local mode |
+| Planned | `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
+| Planned | `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |
+| Planned | `v1.2.0` | Phase 11: Expanded safe assessment | Add bounded UDP discovery, sanitized HTTP response sampling, and a reviewed allowlist of non-intrusive service checks |
+| Planned | `v1.3.0` | Phase 12: Credentialed checks | Add least-privilege, read-only check adapters with secret references, strict redaction, RBAC, and complete audit evidence |
+| Planned | `v1.4.0` | Phase 13: Evidence-based validation | Add fixed, approval-gated validation packs that improve confidence without accepting arbitrary commands or exploit payloads |
+| Planned | `v2.0.0` | Phase 14: Controlled adversary simulation | Deliver a separately installed commercial capability pack for authorized credential auditing, exploit validation, controlled payloads, and evasion testing |
 
 Intrusive capabilities are planned for Phase 14 as a separate commercial
 RedDock product, not as a default feature of the open-source core. This keeps
