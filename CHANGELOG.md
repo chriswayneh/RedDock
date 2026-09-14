@@ -8,9 +8,10 @@ All notable changes to RedDock are documented here.
 
 - Publish a versioned roadmap from the Phase 8 completion checkpoint through
   vulnerability intelligence, expanded safe assessment, credentialed checks,
-  and evidence-based validation. Keep brute force, exploit payloads, and evasion
-  outside the standard runtime unless a separately isolated research track
-  passes its own security, legal, and abuse-risk review.
+  evidence-based validation, and a separately installed v2.0 commercial
+  adversary-simulation pack. Keep intrusive behavior out of the default
+  open-source runtime and require the commercial pack to pass separate
+  security, legal, and abuse-risk review.
 
 ### Fixed
 
