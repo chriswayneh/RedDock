@@ -390,7 +390,11 @@ I use Claude Code and OpenAI Codex for implementation and review assistance. The
 
 ## License
 
-[MIT](LICENSE).
+Licensed under the MIT License. Use it, fork it, modify it, or build something of your own. See [LICENSE](LICENSE) for the terms.
+
+---
+
+If this project helped you, a ⭐ is appreciated.
 
 ## Built With
 
