@@ -101,11 +101,13 @@ I build it:
 
 I keep the source, tests, architecture notes, and tradeoffs visible so anyone interested can see how the project evolves. Passing automated checks is useful evidence, not a security certification.
 
-#### Zero trust and least privilege
+## Zero trust and least privilege
 
 RedDock treats browser input, target output, model output, stored paths, and archives as untrusted. DockGuard checks scope immediately before target contact, tools receive fixed arguments without a shell, and stored-data features receive no target capability. The Compose application listens on a Unix socket shared only with its loopback ingress proxy; optional Ollama and PostgreSQL services do not receive that socket. Containers run with bounded resources, read-only root filesystems where supported, dropped capabilities, and `no-new-privileges`.
 
-These are concrete controls, not a claim that RedDock is ready for shared or internet-facing use. See the [security model](SECURITY.md#zero-trust-and-least-privilege-status) and [threat model](docs/THREAT_MODEL.md).
+Local access does not authorize a target: the configured engagement scope and applicable approval gates still decide whether an operation may proceed. The operator, host, Docker daemon, and deployment configuration remain trusted. The operator token is not a multi-user identity system.
+
+These are concrete zero-trust controls, not a complete enterprise zero-trust architecture or a claim that RedDock is ready for shared or internet-facing use. See the [security model](SECURITY.md#zero-trust-and-least-privilege-status) and [threat model](docs/THREAT_MODEL.md).
 
 ### Technical capability reference
 
