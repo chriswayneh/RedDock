@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
@@ -18,6 +19,7 @@ from app.detection import runner as detection_runner
 from app.detection.base import FindingStatus, Severity
 from app.discovery import registry
 from app.discovery import runner as discovery_runner
+from app.discovery.request_runtime import request_discovery_runtime
 from app.dockguard import Evaluation, ScopeRejected, evaluate, system_resolver
 from app.findings import findings_query, get_finding, list_evidence, set_status
 from app.intelligence import runner as intelligence_runner
@@ -599,6 +601,7 @@ def start_discovery(
     payload: DiscoveryCreate,
     session: Session = Depends(get_session),
     session_factory: SessionFactory = Depends(get_session_factory),
+    discovery_runtime: discovery_runner.DiscoveryRuntime = Depends(request_discovery_runtime),
 ) -> Response | DiscoveryRunRead:
     """Request a discovery run.
 
@@ -620,7 +623,14 @@ def start_discovery(
             content=jsonable_encoder(DiscoveryRunRead.model_validate(run)),
             status_code=status.HTTP_403_FORBIDDEN,
         )
-    discovery_runner.submit_run(run.id, session_factory)
+    try:
+        discovery_runner.submit_run(run.id, session_factory, discovery_runtime)
+    except discovery_runner.DiscoveryUnavailable:
+        run.status = "failed"
+        run.error = "Discovery unavailable"
+        run.completed_at = datetime.now(UTC)
+        session.commit()
+        raise HTTPException(status_code=503, detail="Discovery unavailable") from None
     return DiscoveryRunRead.model_validate(run)
 
 

@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import router
@@ -17,6 +18,7 @@ from app.database import (
     DATABASE_REQUEST_BINDING_STATE,
     DatabaseRequestBinding,
     PrimaryDatabaseRuntime,
+    SessionFactory,
     SessionLocal,
     create_rate_limiter_runtime,
     create_server_primary_database_runtime,
@@ -24,13 +26,17 @@ from app.database import (
 )
 from app.detection.registry import available_detectors
 from app.detection.runner import recover_interrupted_runs as recover_interrupted_detections
-from app.discovery.runner import recover_interrupted_runs
+from app.discovery.runner import DISCOVERY_RUNTIME_STATE, DiscoveryRuntime, recover_interrupted_runs
 from app.instance_lock import acquire_instance_lock
 from app.intelligence.runner import recover_interrupted_runs as recover_interrupted_intelligence
 from app.local_security import LOCAL_OPERATOR_RUNTIME_STATE, load_or_create_local_operator
 from app.oidc import OidcProvider
 from app.rate_limits import RateLimiterRuntime
 from app.reporting.runner import recover_interrupted_runs as recover_interrupted_reports
+from app.request_authentication import (
+    AUTHENTICATION_REQUEST_BINDING_STATE,
+    AuthenticationRequestBinding,
+)
 from app.response_security import ResponseSecurityMiddleware
 from app.validation.runner import recover_interrupted_runs as recover_interrupted_validations
 
@@ -76,6 +82,7 @@ def build_lifespan(
         [DormantServerRuntimeConfig, OidcProvider, RateLimiterRuntime, Engine],
         AuthenticationRuntime,
     ] = create_authentication_runtime,
+    discovery_factory: Callable[[SessionFactory], DiscoveryRuntime] = DiscoveryRuntime,
 ):
     """Own future server resources once per application process and lifespan."""
 
@@ -86,6 +93,10 @@ def build_lifespan(
         available_detectors()
         if hasattr(application.state, DATABASE_REQUEST_BINDING_STATE):
             raise RuntimeError("database request capability is already installed")
+        if hasattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE) or hasattr(
+            application.state, DISCOVERY_RUNTIME_STATE,
+        ):
+            raise RuntimeError("request capability is already installed")
         primary_database = None
         provider = None
         rate_limiter = None
@@ -94,6 +105,8 @@ def build_lifespan(
         request_capability_installed = False
         local_operator_installed = False
         instance_lock = None
+        discovery_runtime = None
+        authentication_binding_installed = False
         try:
             if server_config is not None:
                 primary_database = primary_database_factory(server_config)
@@ -138,41 +151,58 @@ def build_lifespan(
                     )
                 request_session_factory = SessionLocal
                 deployment_mode = "local"
+            database_binding = DatabaseRequestBinding(deployment_mode, request_session_factory)
             setattr(
                 application.state,
                 DATABASE_REQUEST_BINDING_STATE,
-                DatabaseRequestBinding(deployment_mode, request_session_factory),
+                database_binding,
             )
             request_capability_installed = True
+            if server_config is not None:
+                setattr(
+                    application.state, AUTHENTICATION_REQUEST_BINDING_STATE,
+                    AuthenticationRequestBinding(database_binding, authentication_runtime),
+                )
+                authentication_binding_installed = True
+            discovery_runtime = discovery_factory(request_session_factory)
+            setattr(application.state, DISCOVERY_RUNTIME_STATE, discovery_runtime)
             yield
         finally:
             try:
-                if request_capability_installed:
-                    delattr(application.state, DATABASE_REQUEST_BINDING_STATE)
+                if discovery_runtime is not None:
+                    await run_in_threadpool(discovery_runtime.close)
             finally:
                 try:
-                    if local_operator_installed:
-                        delattr(application.state, LOCAL_OPERATOR_RUNTIME_STATE)
+                    if hasattr(application.state, DISCOVERY_RUNTIME_STATE):
+                        delattr(application.state, DISCOVERY_RUNTIME_STATE)
+                    if authentication_binding_installed:
+                        delattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE)
+                    if request_capability_installed:
+                        delattr(application.state, DATABASE_REQUEST_BINDING_STATE)
                 finally:
                     try:
-                        if authentication_runtime is not None:
-                            del application.state.authentication_runtime
-                            authentication_runtime.close()
+                        if local_operator_installed:
+                            delattr(application.state, LOCAL_OPERATOR_RUNTIME_STATE)
                     finally:
                         try:
-                            if provider is not None:
-                                provider.close()
+                            if authentication_runtime is not None:
+                                del application.state.authentication_runtime
+                                authentication_runtime.close()
                         finally:
                             try:
-                                if rate_limiter is not None:
-                                    rate_limiter.close()
+                                if provider is not None:
+                                    provider.close()
                             finally:
-                                if primary_database is not None:
-                                    if hasattr(application.state, "primary_database_runtime"):
-                                        del application.state.primary_database_runtime
-                                    primary_database.close()
-                                if instance_lock is not None:
-                                    instance_lock.close()
+                                try:
+                                    if rate_limiter is not None:
+                                        rate_limiter.close()
+                                finally:
+                                    if primary_database is not None:
+                                        if hasattr(application.state, "primary_database_runtime"):
+                                            del application.state.primary_database_runtime
+                                        primary_database.close()
+                                    if instance_lock is not None:
+                                        instance_lock.close()
 
     return managed_lifespan
 

@@ -10,8 +10,8 @@ This package contains RedDock Core's FastAPI application: the API, DockGuard sco
 | --- | --- | --- |
 | Default local mode | Supported | Loopback-only, account-free operation with Host restrictions. Anyone who can reach the API has local-owner authority, so do not expose it to a network. |
 | Optional PostgreSQL | Supported for local use | Private persistence and real-server migration coverage. It does not add authentication or make shared deployment safe. |
-| Tenant and role enforcement | Enforced in the API | Routes are permission-classified and data loaders require an organization context. Today that context is always the reserved local owner. |
-| OIDC and browser sessions | Dormant | Protocol, cookie, CSRF, session, audit, and first-owner primitives are testable but not registered on any route. |
+| Tenant and role enforcement | Enforced in the API | Routes are permission-classified and data loaders require an organization context. Supported local mode uses the reserved local owner; dormant configured tests use the resolved membership. |
+| OIDC and browser sessions | Dormant | Protected request dependencies resolve configured sessions in tests. Sign-in, callback, logout, and renewal routes are not registered; server startup remains blocked. |
 | Authenticated server mode | Blocked | Startup refuses `REDDOCK_DEPLOYMENT_MODE=server` until the remaining identity, proxy, lifecycle, administration, scaling, and end-to-end gates are complete. |
 
 Least privilege is applied where the current package can enforce it. The
@@ -126,8 +126,8 @@ enforces the manifest against an explicit local owner. Negative tests prove a
 viewer cannot mutate state, read raw evidence, approve model disclosure, or
 export a DockPack. These controls are not authentication: the only supported
 runtime remains account-free loopback `local` mode, and `server` mode fails startup
-until the dormant coordinator is connected to reviewed HTTP routes, browser
-cookies, and request-scoped session context.
+until reviewed sign-in, callback, logout, renewal, administration, workflow actor
+checks, and production operations are integrated and tested end to end.
 
 The dormant session primitive issues a 256-bit browser token and derives a
 separate browser-readable CSRF proof using domain-separated SHA-256. It
@@ -198,15 +198,20 @@ explicit local binding. A configured request uses
 `PrimaryDatabaseRuntime.session`, and each yielded session is closed after the
 request. A missing or malformed binding returns a generic `503` rather than
 falling back to another database when the database dependency is reached.
-Configured protected routes return `401`
-rather than receiving the reserved local owner until browser identity wiring is
-complete.
+Configured protected routes never receive the reserved local owner. They require
+an immutable authentication capability paired with the exact database binding.
+The coordinator checks trusted HTTPS ingress, active user and membership,
+configured issuer and organization, current role, and session validity. Changes
+also require exact Origin, CSRF proof, and a durable membership limiter decision.
+Missing or invalid credentials return `401`; capability outages return generic
+`503`. HTTP sign-in and session renewal remain unregistered.
 
 Discovery carries the exact request session factory from submission into its
-worker, so configured work cannot fall back to ambient `SessionLocal`. This
-binds the database capability but does not solve background executor shutdown.
-Draining or cancelling in-flight work before the primary runtime closes remains
-a server-mode gate.
+worker, so configured work cannot fall back to ambient `SessionLocal`. Each
+lifespan owns its executor; missing, closed, or mismatched pools reject work.
+Shutdown drains accepted work in a worker thread before closing authentication,
+provider, limiter, or primary database resources. Compose allows 12 minutes for
+bounded discovery to finish; forced termination still needs restart recovery.
 
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
@@ -255,10 +260,10 @@ limit against that declaration, but it cannot discover the orchestrator's
 actual process count.
 
 Before server mode can be enabled, HTTP sign-in, callback, logout, cookie, and
-error handling; browser session resolution and authenticated request context;
+error handling; session renewal and workflow actor propagation;
 a packaged TLS proxy;
-administration; metrics; background executor lifecycle and drain; capacity
-planning; and authenticated end-to-end tests remain release blockers.
+administration; metrics; forced-interruption and capacity exercises; and
+authenticated end-to-end tests remain release blockers.
 
 An operator or infrastructure tool must provision this role after migrations;
 RedDock migrations do not create or manage database logins. Rotate its password

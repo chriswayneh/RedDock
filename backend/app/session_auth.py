@@ -12,7 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.authorization import AuthorizationContext, Role
-from app.models import BrowserSession, Membership, User
+from app.models import BrowserSession, Membership, Organization, User
 from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 
 SESSION_LIFETIME = timedelta(hours=8)
@@ -236,6 +236,8 @@ def resolve_browser_session(
     csrf_token: str | None = None,
     now: datetime | None = None,
     touch: bool = False,
+    expected_issuer: str | None = None,
+    expected_organization_slug: str | None = None,
 ) -> AuthorizationContext | None:
     """Resolve a token and optionally stage a throttled touch without committing."""
 
@@ -249,6 +251,15 @@ def resolve_browser_session(
     browser_session, membership, user = row
     context = _authorization_context(membership, user)
     if context is None or not _is_active(browser_session, now=resolved_at):
+        return None
+    if expected_issuer is not None and user.oidc_issuer != expected_issuer:
+        return None
+    if expected_organization_slug is not None and session.scalar(
+        select(Organization.id).where(
+            Organization.id == context.organization_id,
+            Organization.slug == expected_organization_slug,
+        )
+    ) is None:
         return None
     if csrf_token is not None and not csrf_token_matches(
         csrf_token, browser_session.csrf_token_hash
@@ -399,6 +410,8 @@ def use_browser_session(
     csrf_token: str | None = None,
     rotate_if_due: bool = False,
     now: datetime | None = None,
+    expected_issuer: str | None = None,
+    expected_organization_slug: str | None = None,
 ) -> SessionUseResult | None:
     """Resolve, touch, and optionally rotate inside one isolated transaction."""
 
@@ -426,6 +439,8 @@ def use_browser_session(
                     csrf_token=active_csrf,
                     now=checked_at,
                     touch=True,
+                    expected_issuer=expected_issuer,
+                    expected_organization_slug=expected_organization_slug,
                 )
                 if context is None:
                     raise SessionRejected("Browser session is invalid")

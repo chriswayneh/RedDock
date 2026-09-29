@@ -55,6 +55,61 @@ def test_inventory_is_not_visible_until_evidence_is_published(
             assert count == 0 if fail_write else count > 0
 
 
+@pytest.mark.parametrize("unavailable", ["missing", "closed", "mismatched"])
+def test_unavailable_pool_rejects_before_creating_run(
+    client, dockyard_id, adapter, add_scope, unavailable
+):
+    from unittest.mock import Mock
+
+    from app.database import SessionLocal
+    from app.models import DiscoveryRun
+
+    add_scope(dockyard_id, "127.0.0.1")
+    original = getattr(client.app.state, discovery_runner.DISCOVERY_RUNTIME_STATE)
+    replacement = None
+    try:
+        if unavailable == "missing":
+            delattr(client.app.state, discovery_runner.DISCOVERY_RUNTIME_STATE)
+        elif unavailable == "closed":
+            original.close()
+        else:
+            replacement = discovery_runner.DiscoveryRuntime(Mock())
+            setattr(client.app.state, discovery_runner.DISCOVERY_RUNTIME_STATE, replacement)
+        response = start(client, dockyard_id, "127.0.0.1")
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Discovery unavailable"}
+        with SessionLocal() as session:
+            assert session.scalar(select(func.count()).select_from(DiscoveryRun)) == 0
+        assert not adapter.requests
+    finally:
+        setattr(client.app.state, discovery_runner.DISCOVERY_RUNTIME_STATE, original)
+        if replacement is not None:
+            replacement.close()
+
+
+def test_pool_shutdown_race_records_terminal_failure(
+    client, dockyard_id, adapter, add_scope, monkeypatch
+):
+    from app.database import SessionLocal
+    from app.models import DiscoveryRun
+
+    add_scope(dockyard_id, "127.0.0.1")
+
+    def reject(*args):
+        raise discovery_runner.DiscoveryUnavailable("private shutdown detail")
+
+    monkeypatch.setattr(discovery_runner, "submit_run", reject)
+    response = start(client, dockyard_id, "127.0.0.1")
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Discovery unavailable"}
+    with SessionLocal() as session:
+        run = session.scalar(select(DiscoveryRun))
+        assert run.status == "failed"
+        assert run.completed_at is not None
+        assert run.error == "Discovery unavailable"
+    assert not adapter.requests
+
+
 class StubAdapter(DiscoveryAdapter):
     """A recording adapter so tests observe orchestration, not nmap."""
 
@@ -113,7 +168,11 @@ def _install(monkeypatch: pytest.MonkeyPatch, stub: StubAdapter) -> None:
     monkeypatch.setattr(registry, "get_adapter", lambda name: stub if name == stub.name else None)
     monkeypatch.setattr(registry, "available_adapters", lambda: (stub,))
     # Run discovery inline so assertions see a finished run.
-    monkeypatch.setattr(discovery_runner, "submit_run", discovery_runner.execute_run)
+    monkeypatch.setattr(
+        discovery_runner,
+        "submit_run",
+        lambda run_id, factory, _runtime: discovery_runner.execute_run(run_id, factory),
+    )
 
 
 def start(client: TestClient, dockyard: int, target: str) -> dict:
@@ -433,7 +492,7 @@ def test_scope_removed_between_request_and_execution_denies_the_run(
     monkeypatch.setattr(registry, "get_adapter", lambda name: stub if name == stub.name else None)
     # Hold the run at pending so the scope can change before it executes.
     monkeypatch.setattr(
-        discovery_runner, "submit_run", lambda _run_id, _session_factory: None
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime: None
     )
     entry = add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")
@@ -483,7 +542,7 @@ def test_interrupted_runs_are_marked_rather_than_left_active(
     add_scope,
 ):
     monkeypatch.setattr(
-        discovery_runner, "submit_run", lambda _run_id, _session_factory: None
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime: None
     )
     add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")

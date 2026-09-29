@@ -202,6 +202,14 @@ def test_configured_lifespan_starts_and_closes_capabilities_in_exact_order(
             events.append("authentication.close")
             super().close()
 
+    from app.discovery.runner import DISCOVERY_RUNTIME_STATE, DiscoveryRuntime
+    from app.request_authentication import AUTHENTICATION_REQUEST_BINDING_STATE
+
+    class OrderedDiscovery(DiscoveryRuntime):
+        def close(self):
+            events.append("discovery.close")
+            super().close()
+
     primary_runtime = None
 
     def primary_factory(config):
@@ -222,6 +230,10 @@ def test_configured_lifespan_starts_and_closes_capabilities_in_exact_order(
         events.append("authentication.create")
         return OrderedAuthentication(config, provider, limiter, engine)
 
+    def discovery_factory(session_factory):
+        events.append("discovery.create")
+        return OrderedDiscovery(session_factory)
+
     monkeypatch.setattr(
         app.main,
         "_recover_interrupted_work",
@@ -235,6 +247,7 @@ def test_configured_lifespan_starts_and_closes_capabilities_in_exact_order(
             limiter_factory=limiter_factory,
             provider_factory=provider_factory,
             authentication_factory=authentication_factory,
+            discovery_factory=discovery_factory,
         )
     )
 
@@ -250,11 +263,15 @@ def test_configured_lifespan_starts_and_closes_capabilities_in_exact_order(
         "limiter.create",
         "provider.create",
         "authentication.create",
+        "discovery.create",
+        "discovery.close",
         "authentication.close",
         "provider.close",
         "limiter.close",
         "primary.close",
     ]
+    assert not hasattr(application.state, DISCOVERY_RUNTIME_STATE)
+    assert not hasattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE)
 
 
 def test_provider_startup_failure_closes_the_limiter(environment):

@@ -30,7 +30,8 @@ services:
     pids_limit: 256
     mem_limit: 1g
     restart: unless-stopped
-    stop_grace_period: 15s
+    # Allow bounded discovery work to retain its result before database shutdown.
+    stop_grace_period: 12m
     healthcheck:
       test: ["CMD", "python", "-m", "app.compose_socket", "check"]
       interval: 15s

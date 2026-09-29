@@ -20,7 +20,7 @@ controls, not a certification or a claim that server mode is ready.
 | --- | --- | --- |
 | Network ingress | The supported Compose application listens on a Unix socket. Only the unprivileged ingress proxy receives that socket, and only the proxy publishes `127.0.0.1:8080` on the host. Optional sidecars use separate backend networks and receive no API socket. | This boundary depends on the provided Compose files. Raw container publication or adding another service to the socket volume is not supported. Do not publish RedDock to a LAN, proxy, or the internet. |
 | Local change protection | First start generates a high-entropy operator token in the data volume. CLI changes require that token. Browser unlock exchanges it for a bounded in-process session, a separate origin-scoped request proof, and one exact local Origin. Fixed process-local throttles bound mutation and unlock attempts. | This is an accident boundary for local changes, not user identity. Safe reads remain available through the host-loopback ingress, and the session and throttle state are not shared across processes. |
-| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, browser session resolution, proxy trust, and administration remain release gates. |
+| Identity | Server mode fails startup. Dormant OIDC primitives constrain provider origins, redirects, response sizes, algorithms, claims, state, nonce, and PKCE. | No authentication route is registered. Login, callback, logout, session renewal, proxy trust, and administration remain release gates. |
 | Authorization | Routes have a deny-by-default permission manifest. Unknown roles and inactive memberships receive no authority. Resource loaders constrain data by organization. | Current local requests use the reserved local owner. The operator token does not create a user identity, tenant, or role. |
 | Target and model access | DockGuard authorizes target contact. Detectors and reports have no network capability. Model advice receives only a separately approved packet and no tools. | RedDock enforces declared scope but cannot establish the operator's legal or contractual authority. |
 | Process and secrets | Compose services use fixed unprivileged users, read-only root filesystems, bounded writable mounts, fixed resource limits, dropped capabilities, and `no-new-privileges`. Database credentials use mounted secret files. The dormant limiter uses a separately credentialed PostgreSQL role whose narrow privileges are checked at startup. | PostgreSQL support does not enable authenticated shared use. The main role still runs migrations, and both future server database secrets exist in one process. |
@@ -149,7 +149,7 @@ deployment is secure.
 - The content security policy is stated positively: `default-src 'self'` with same-origin script, style, image, font, and connection sources, and no `unsafe-inline` of any kind. The build emits no inline script or style, so an injected reference has nowhere to resolve to. The interactive API documentation keeps the narrower framing and object policy because its bundles load from a CDN.
 - Liveness discloses only that the process can answer. The separate readiness route performs one database query and returns a generic 503 without connection details; container orchestration uses readiness rather than treating a database-blind process check as healthy.
 - The only accepted deployment mode is `local`. `REDDOCK_DEPLOYMENT_MODE=server` and unknown values fail startup until authenticated server mode is implemented; enabling PostgreSQL does not widen the trust boundary.
-- Future server-browser primitives already require one exact HTTPS origin and a host-bound `Secure`, `HttpOnly`, `SameSite=Lax` session cookie. Their request verifier rejects ambiguous duplicate credentials and requires both exact Origin and session-bound CSRF proof for unsafe methods. They are deliberately disconnected from routes, and setting `REDDOCK_PUBLIC_ORIGIN` in local mode fails startup rather than implying authentication that is not present.
+- Future server-browser primitives already require one exact HTTPS origin and a host-bound `Secure`, `HttpOnly`, `SameSite=Lax` session cookie. Their request verifier rejects ambiguous duplicate credentials and requires both exact Origin and session-bound CSRF proof for unsafe methods. They connect to dormant protected request dependencies but do not enable sign-in or server mode, and setting `REDDOCK_PUBLIC_ORIGIN` in local mode fails startup rather than implying authentication that is not present.
 - Dormant OIDC primitives accept provider endpoints only from deployment-owned
   HTTPS origins, reject redirects and oversized responses, use authorization
   code with PKCE, bind one-use state to a host-only transaction cookie, and
@@ -183,11 +183,13 @@ deployment is secure.
   local binding. Configured requests use `PrimaryDatabaseRuntime.session`; a
   missing or malformed binding makes the database dependency produce a generic
   `503` rather than an ambient fallback, and every yielded session is closed.
-  Configured protected routes receive no local-owner context and return `401`
-  until browser identity resolution is connected. Discovery carries the exact
-  request factory into its worker instead of importing `SessionLocal`. Executor
-  drain or cancellation before primary-runtime shutdown remains unfinished.
-  None of this enables an auth route, UI, or server mode.
+  Configured protected routes receive no local-owner context. A paired
+  authentication capability resolves active sessions through the owned engine,
+  rechecks configured issuer, organization and role, and requires exact Origin
+  and CSRF proof plus durable mutation limiting. Discovery owns a factory-bound
+  executor and drains accepted work before database shutdown. Forced termination
+  still requires restart recovery. None of this enables sign-in routes, UI, or
+  server mode.
 - Future authentication throttling uses atomic database updates shared across
   workers. A global bucket is checked before any client bucket, counters stop at
   their fixed limit, client and identity values are protected by a

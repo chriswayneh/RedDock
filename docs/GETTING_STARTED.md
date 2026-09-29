@@ -104,6 +104,11 @@ In the terminal running RedDock, press **Ctrl+C**. Then run:
 docker compose down
 ```
 
+Shutdown lets accepted discovery checks finish before closing the database.
+Compose allows up to 12 minutes, so stopping during a check may take time. If
+the process is forcibly stopped, RedDock marks unfinished work as interrupted
+on its next startup; it does not claim that work completed.
+
 Your default local database, evidence, and operator token stay in Docker's named data volume. To resume, open a terminal in the same RedDock folder and run `docker compose up --build`, then reopen the browser link. A new browser session may ask you to unlock changes with the original token.
 
 Do not add `-v` to the shutdown command unless you intend to delete that stored data. Docker volume cleanup can also delete it. Persistent storage is not a backup; do not make this local setup the only copy of important assessment evidence.

@@ -173,12 +173,18 @@ multi-architecture container images.
   Coverage is not proof of security or a claim about every allowed target.
 - **Report schema 3:** new snapshots include check coverage; existing report
   downloads remain available. This work is not yet part of the stable v0.8.1 tag.
+- **Orderly discovery shutdown:** each application owns its worker pool and
+  finishes accepted discovery work before closing its database. Compose allows
+  up to 12 minutes for this; forced interruption is recorded on restart.
 
 ### Foundations built but not enabled
 
 Core sign-in pieces now connect behind a dormant process-owned coordinator.
-They are not registered as HTTP routes and still need a complete, tested
-sign-in, request-authentication, logout, and administration experience.
+Protected request dependencies now resolve hash-only browser sessions through
+the same owned database, recheck active membership and role, and require exact
+Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
+Sign-in and logout are not registered as HTTP routes. Session renewal, workflow
+actor checks, administration, and end-to-end team access still need integration.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
@@ -269,8 +275,10 @@ These primitives are not an enabled authentication system:
 - One immutable lifespan binding now selects the request database factory.
   Local requests use the explicit local factory; configured requests use the
   owned primary runtime and never fall back to ambient state. Configured
-  protected routes return `401` until browser identity is connected. Discovery
-  passes that exact factory from request submission into its worker.
+  protected routes use only the paired authentication capability, recheck active
+  session membership, issuer, organization and role, and enforce Origin, CSRF
+  and durable mutation limiting. Discovery passes that exact factory into a
+  lifespan-owned worker pool and drains accepted work before resource shutdown.
 - Dormant authentication throttling is serialized in PostgreSQL across workers.
   It admits through a global bucket before creating a client bucket, stores
   only deployment-keyed HMACs, owns a separate transaction, groups IPv6 clients
@@ -289,11 +297,11 @@ These primitives are not an enabled authentication system:
   changes, and sequence usage. Operators provision and rotate it outside
   RedDock migrations.
 - The next enablement checkpoint still needs HTTP sign-in, callback, logout,
-  cookie, and error handling; browser session resolution and authenticated
-  request context; administration; a
+  cookie, and error handling; session renewal and workflow actor propagation;
+  administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
-  capacity planning; background executor shutdown and drain; and end-to-end
-  authenticated tests.
+  capacity planning; forced-interruption exercises; and end-to-end authenticated
+  tests across all roles.
 
 #### Automated review
 
