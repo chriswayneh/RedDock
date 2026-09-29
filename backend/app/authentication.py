@@ -12,7 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
+from app.authorization import AuthorizationContext
+from app.browser_security import browser_request_credentials, origin_matches, parse_public_origin
 from app.config import DormantServerRuntimeConfig
 from app.models import Organization
 from app.oidc import (
@@ -25,17 +28,33 @@ from app.oidc import (
 from app.rate_limits import (
     OIDC_CALLBACK_PLAN,
     OIDC_LOGIN_PLAN,
+    REQUEST_MUTATION_PLAN,
     RateLimiterRuntime,
     RateLimitUnavailable,
     client_subject,
+    membership_subject,
 )
 from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 from app.session_auth import (
     IssuedSession,
     SessionRejected,
+    SessionUnavailable,
     is_browser_session_token,
     issue_browser_session,
+    use_browser_session,
 )
+
+SAFE_REQUEST_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+class RequestAuthenticationUnavailable(RuntimeError):
+    """The configured request identity capability could not make a decision."""
+
+
+class RequestAuthenticationThrottled(RuntimeError):
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__("Request limit reached")
+        self.retry_after_seconds = retry_after_seconds
 
 
 class AuthenticationFailure(RuntimeError):
@@ -72,6 +91,7 @@ class AuthenticationRuntime:
         if provider is None or limiter is None:
             raise ValueError("provider and limiter runtimes are required")
         self.__config = config
+        self.__origin = parse_public_origin(config.public_origin)
         self.__provider = provider
         self.__limiter = limiter
         self.__lifecycle_engine = lifecycle_engine
@@ -201,6 +221,49 @@ class AuthenticationRuntime:
             raise
         except (OidcError, RateLimitUnavailable, SessionRejected, SQLAlchemyError):
             raise AuthenticationFailure() from None
+
+    def authorize_browser_request(
+        self, request: Request, *, now: datetime | None = None,
+    ) -> AuthorizationContext | None:
+        """Resolve active browser identity through the exact owned lifecycle engine.
+
+        Only trusted ingress may supply the client marker. Session use owns its
+        transaction and cannot commit a route's business transaction. Rotation
+        remains a separate, future browser operation.
+        """
+        if self.__closed:
+            raise RequestAuthenticationUnavailable("Authentication unavailable")
+        hosts = request.headers.getlist("host")
+        if request.url.scheme != "https" or len(hosts) != 1 or not origin_matches(
+            "https://" + hosts[0], self.__origin,
+        ):
+            return None
+        try:
+            client_subject(getattr(request.state, "reddock_client_ip", None))
+        except (ValueError, TypeError):
+            return None
+        credentials = browser_request_credentials(request, self.__origin)
+        if credentials is None:
+            return None
+        try:
+            result = use_browser_session(
+                self.__lifecycle_engine, credentials.token,
+                csrf_token=credentials.csrf_token, now=now,
+                expected_issuer=self.__config.oidc_issuer,
+                expected_organization_slug=self.__config.organization_slug,
+            )
+            if result is None:
+                return None
+            if request.method.upper() not in SAFE_REQUEST_METHODS:
+                decision = self.__limiter.enforce(
+                    REQUEST_MUTATION_PLAN,
+                    subject=membership_subject(result.context.membership_id), now=now,
+                )
+                if not decision.allowed:
+                    raise RequestAuthenticationThrottled(decision.retry_after_seconds)
+            return result.context
+        except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
+            raise RequestAuthenticationUnavailable("Authentication unavailable") from None
 
     def close(self) -> None:
         """Disable this facade without taking ownership of shared resources."""

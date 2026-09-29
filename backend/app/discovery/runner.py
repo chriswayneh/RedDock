@@ -40,17 +40,58 @@ from app.targets import Target, TargetKind, normalize_target
 logger = logging.getLogger("reddock.discovery")
 
 _settings = get_settings()
-_executor = ThreadPoolExecutor(
-    max_workers=_settings.max_concurrent_runs, thread_name_prefix="reddock-discovery"
-)
-_pending: set[Future] = set()
 _admission_lock = threading.Lock()
+DISCOVERY_RUNTIME_STATE = "discovery_runtime"
 
 ACTIVE_STATUSES = (str(RunStatus.PENDING), str(RunStatus.RUNNING))
 
 
 class RunRejected(ValueError):
     """Raised when a run cannot be created at all (bad adapter, profile or load)."""
+
+
+class DiscoveryUnavailable(RuntimeError):
+    """The application-owned discovery pool is missing or shutting down."""
+
+
+class DiscoveryRuntime:
+    """Own one pool and drain it before its exact database factory is closed."""
+
+    def __init__(self, session_factory: SessionFactory) -> None:
+        if not callable(session_factory):
+            raise ValueError("an application-owned session factory is required")
+        self.__session_factory = session_factory
+        self.__executor = ThreadPoolExecutor(
+            max_workers=_settings.max_concurrent_runs, thread_name_prefix="reddock-discovery",
+        )
+        self.__lock = threading.Lock()
+        self.__closed = False
+        self.__pending: set[Future] = set()
+
+    def owns(self, session_factory: SessionFactory) -> bool:
+        with self.__lock:
+            return not self.__closed and session_factory is self.__session_factory
+
+    def _completed(self, future: Future) -> None:
+        with self.__lock:
+            self.__pending.discard(future)
+
+    def submit(self, run_id: int, session_factory: SessionFactory) -> None:
+        with self.__lock:
+            if self.__closed or session_factory is not self.__session_factory:
+                raise DiscoveryUnavailable("Discovery unavailable")
+            future = self.__executor.submit(execute_run, run_id, self.__session_factory)
+            self.__pending.add(future)
+        # An already-completed future invokes this callback immediately, so do
+        # not register it while holding the pool's admission lock.
+        future.add_done_callback(self._completed)
+
+    def close(self) -> None:
+        with self.__lock:
+            self.__closed = True
+        # Accepted runs finish and retain terminal evidence. Do not dispose their
+        # database, cancel queued work silently, or block the application's loop.
+        self.__executor.shutdown(wait=True, cancel_futures=False)
 
 
 def create_run(
@@ -200,11 +241,9 @@ def get_run(session: Session, dockyard_id: int, run_id: int) -> DiscoveryRun | N
     )
 
 
-def submit_run(run_id: int, session_factory: SessionFactory) -> None:
+def submit_run(run_id: int, session_factory: SessionFactory, runtime: DiscoveryRuntime) -> None:
     """Execute a run on the bounded background pool."""
-    future = _executor.submit(execute_run, run_id, session_factory)
-    _pending.add(future)
-    future.add_done_callback(_pending.discard)
+    runtime.submit(run_id, session_factory)
 
 
 def execute_run(run_id: int, session_factory: SessionFactory) -> None:

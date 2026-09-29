@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
+from app.authentication import RequestAuthenticationThrottled, RequestAuthenticationUnavailable
 from app.authorization import (
     LOCAL_AUTHORIZATION,
     PUBLIC_ROUTES,
@@ -20,6 +21,7 @@ from app.local_security import (
     LocalOperatorRuntime,
     LocalOperatorUnavailable,
 )
+from app.request_authentication import request_authentication_runtime
 
 _REQUEST_AUTHORIZATION: ContextVar[AuthorizationContext | None] = ContextVar(
     "reddock_request_authorization",
@@ -28,11 +30,24 @@ _REQUEST_AUTHORIZATION: ContextVar[AuthorizationContext | None] = ContextVar(
 
 
 def current_authorization(request: Request) -> AuthorizationContext | None:
-    """Resolve local authority only for an explicitly initialized local app."""
+    """Resolve only the identity capability paired with this request database."""
 
     binding = database_request_binding(request)
     if binding is not None and binding.mode == "local":
         return LOCAL_AUTHORIZATION
+    route = request.scope.get("route")
+    if binding is not None and (request.method, getattr(route, "path", None)) not in PUBLIC_ROUTES:
+        runtime = request_authentication_runtime(request, binding)
+        if runtime is not None:
+            try:
+                return runtime.authorize_browser_request(request)
+            except RequestAuthenticationThrottled as error:
+                raise HTTPException(
+                    status_code=429, detail="Request limit reached",
+                    headers={"Retry-After": str(error.retry_after_seconds)},
+                ) from None
+            except RequestAuthenticationUnavailable:
+                raise HTTPException(status_code=503, detail="Authentication unavailable") from None
     return None
 
 

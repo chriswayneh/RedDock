@@ -5,7 +5,7 @@ and cookie contract that OIDC/session routes must use before server mode can be
 enabled.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hmac import compare_digest
 from urllib.parse import urlsplit
 
@@ -122,17 +122,33 @@ def authenticate_browser_request(
     expected_origin: PublicOrigin,
 ) -> AuthorizationContext | None:
     """Resolve one request, requiring exact Origin and CSRF proof for mutations."""
+    credentials = browser_request_credentials(request, expected_origin)
+    if credentials is None:
+        return None
+    return resolve_browser_session(session, credentials.token, csrf_token=credentials.csrf_token)
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserRequestCredentials:
+    token: str = field(repr=False)
+    csrf_token: str | None = field(default=None, repr=False)
+
+
+def browser_request_credentials(
+    request: Request, expected_origin: PublicOrigin,
+) -> BrowserRequestCredentials | None:
+    """Validate credential shape and mutation proofs before database access."""
     token = _session_cookie(request)
     if token is None:
         return None
     if request.method.upper() in _SAFE_METHODS:
-        return resolve_browser_session(session, token)
+        return BrowserRequestCredentials(token)
 
     origin = _unique_header(request, "origin")
     csrf_token = _unique_header(request, CSRF_HEADER_NAME)
-    if not origin_matches(origin, expected_origin) or csrf_token is None:
+    if not origin_matches(origin, expected_origin) or not is_browser_session_token(csrf_token):
         return None
-    return resolve_browser_session(session, token, csrf_token=csrf_token)
+    return BrowserRequestCredentials(token, csrf_token)
 
 
 def set_browser_session_cookie(response: Response, token: str) -> None:

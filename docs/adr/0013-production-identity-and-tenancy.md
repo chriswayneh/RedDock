@@ -125,9 +125,8 @@ exact pre-provisioned issuer/subject membership, locked through session
 issuance, before an audited hash-only session is created. Post-burn provider
 exchange and ID-token validation failures make a best-effort attempt to record
 bounded denial events. Expected failures are generic, with a retry interval
-only for a durable rate-limit denial. No HTTP route or UI invokes this
-coordinator, no protected request resolves its sessions, and server mode
-remains disabled. The primary runtime verifies its effective login, database,
+only for a durable rate-limit denial. No HTTP sign-in route or UI invokes this
+coordinator, and server mode remains disabled. The primary runtime verifies its effective login, database,
 fixed search path, and timeout policy; owns its engine and session factory for
 the application lifespan; bounds connection, checkout, statement, lock,
 idle-transaction, and transaction waits; and disposes the engine at shutdown.
@@ -142,13 +141,24 @@ local binding. Configured request database dependencies use
 `PrimaryDatabaseRuntime.session`, and each yielded session is closed. A missing
 or malformed binding produces a generic database-dependency `503` without
 falling back to ambient database state. Configured protected routes receive no
-local-owner context and return `401` until browser identity is resolved.
+local-owner context. A separate immutable authentication binding must match the
+exact database binding and process-owned coordinator. Through trusted HTTPS
+ingress, each request resolves one hash-only session and rechecks active user,
+membership, role, configured issuer, and configured organization. Invalid or
+ambiguous credentials return `401`; dependency outages return generic `503`.
+Mutations additionally require exact Origin and CSRF proof before database
+resolution and a durable membership-scoped limiter decision afterward. Role
+enforcement and tenant-scoped record lookups remain mandatory. Public health
+checks do not require a browser session.
 
 Discovery carries the exact request session factory from submission into its
-worker. This prevents ambient database fallback, but it does not manage the
-executor lifetime. Coordinated drain or cancellation before primary-runtime
-shutdown remains required. No authentication route or UI is enabled, and
-server mode remains disabled.
+worker. Each lifespan owns one executor bound to that exact factory; missing,
+closed, or mismatched runtimes reject admission. Shutdown drains accepted work
+before closing authentication, provider, limiter, and primary database resources.
+Compose gives the bounded discovery work 12 minutes to finish. Forced termination
+still requires interrupted-work recovery on restart. HTTP session renewal,
+sign-in/logout, and workflow actor rechecks are not enabled. Server mode remains
+disabled until those integrations and the other deployment gates are complete.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
