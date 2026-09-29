@@ -116,6 +116,7 @@ ROUTE_PERMISSIONS: Final = MappingProxyType(
         ("GET", "/api/dockyards/{dockyard_id}/discoveries/{run_id}"): Permission.INVENTORY_READ,
         ("GET", "/api/dockyards/{dockyard_id}/evidence"): Permission.RAW_EVIDENCE_READ,
         ("GET", "/api/dockyards/{dockyard_id}/detections"): Permission.FINDING_READ,
+        ("GET", "/api/dockyards/{dockyard_id}/coverage"): Permission.FINDING_READ,
         ("POST", "/api/dockyards/{dockyard_id}/detections"): Permission.WORKFLOW_RUN,
         ("GET", "/api/dockyards/{dockyard_id}/detections/{run_id}"): Permission.FINDING_READ,
         ("GET", "/api/dockyards/{dockyard_id}/correlations"): Permission.CORRELATION_READ,

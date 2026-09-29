@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { api } from "./api";
+import { LOCAL_WALKTHROUGH_TARGET } from "./Assessment";
 import {
   DataTable,
   DockyardPicker,
@@ -43,6 +44,7 @@ export function App() {
   const [version, setVersion] = useState<Version | null>(null);
   const [operator, setOperator] = useState<OperatorStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
   const selected = route.workspace ? dockyards.find((item) => item.id === contextDockyardId) : null;
 
   const refresh = useCallback(async () => {
@@ -94,6 +96,27 @@ export function App() {
     navigate(pageUrl(item, contextDockyardId));
   }
 
+  async function startWalkthrough() {
+    if (demoBusy || !operator?.unlocked) return;
+    setDemoBusy(true);
+    let created: Dockyard | null = null;
+    try {
+      const workspace = await api.createDockyard("My first local walkthrough", "RedDock Compose self-assessment");
+      created = workspace;
+      setDockyards((current) => [workspace, ...current]);
+      await api.addScope(workspace.id, "include", LOCAL_WALKTHROUGH_TARGET);
+      openDockyard(workspace, "Assessment");
+      setError(null);
+    } catch (failure) {
+      if (created) openDockyard(created, "Scope");
+      setError(created
+        ? "The workspace was created, but its scope could not be confirmed. Review Scope before continuing."
+        : failure instanceof Error ? failure.message : "Could not create the walkthrough workspace.");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
   function openDockyard(dockyard: Dockyard, tab: WorkspaceTab = "Scope") {
     navigate(workspaceUrl(dockyard.id, tab));
   }
@@ -114,9 +137,11 @@ export function App() {
           <span className="brand-mark">R</span>
           <span>RedDock</span>
         </button>
-        <p className="tagline">Discover. Validate. Prove.</p>
+        <p className="tagline">Find. Validate. Prove.</p>
         <nav aria-label="Primary navigation">
-          {pages.map((item) => (
+          {["Assessment", "Tools"].map((group) => <div key={group}>
+            <p className="nav-group-label">{group}</p>
+            {pages.filter((item) => (["Dashboard", "Dockyards", "Findings", "Reports"].includes(item)) === (group === "Assessment")).map((item) => (
             <button
               key={item}
               className={page === item ? "nav-item active" : "nav-item"}
@@ -124,7 +149,8 @@ export function App() {
             >
               {item}
             </button>
-          ))}
+            ))}
+          </div>)}
         </nav>
         <div className="sidebar-footer">
           <span className={health?.status === "healthy" ? "status-dot online" : "status-dot"} />{" "}
@@ -160,6 +186,9 @@ export function App() {
             health={health}
             openPage={open}
             openDockyard={openDockyard}
+            onWalkthrough={() => void startWalkthrough()}
+            walkthroughDisabled={demoBusy || !operator?.unlocked}
+            walkthroughBusy={demoBusy}
             onError={setError}
           />
         )}
@@ -193,7 +222,7 @@ export function App() {
         {page === "Intelligence" && <Intelligence dockyards={dockyards} onError={setError} />}
         {page === "Lab" && <Lab dockyards={dockyards} onError={setError} />}
         {page === "RedLedger" && <LedgerPage key={contextDockyardId} dockyards={dockyards} initialDockyardId={contextDockyardId} onSelect={(id) => navigate(pageUrl("RedLedger", id), contextDockyardId === null)} onError={setError} />}
-        {page === "Reports" && <Reports dockyards={dockyards} onError={setError} />}
+        {page === "Reports" && <Reports key={contextDockyardId} dockyards={dockyards} initialDockyardId={contextDockyardId} onError={setError} />}
         {page === "Settings" && <SettingsPage onError={setError} />}
       </main>
     </div>
@@ -273,12 +302,18 @@ function Dashboard({
   health,
   openPage,
   openDockyard,
+  onWalkthrough,
+  walkthroughDisabled,
+  walkthroughBusy,
   onError,
 }: {
   dockyards: Dockyard[];
   health: Health | null;
   openPage: (page: Page) => void;
   openDockyard: (dockyard: Dockyard, tab?: WorkspaceTab) => void;
+  onWalkthrough: () => void;
+  walkthroughDisabled: boolean;
+  walkthroughBusy: boolean;
   onError: (message: string | null) => void;
 }) {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -303,6 +338,16 @@ function Dashboard({
         </div>
         <button className="primary-button" onClick={() => openPage("Dockyards")}>
           Manage Dockyards
+        </button>
+      </section>
+      <section className="panel walkthrough-start">
+        <div>
+          <h2>New to RedDock?</h2>
+          <p>Create a local walkthrough workspace with one allowed target: RedDock's own Compose proxy.</p>
+          <p className="hint">You review each step before it runs. Unlock local changes above to begin.</p>
+        </div>
+        <button className="primary-button" disabled={walkthroughDisabled} onClick={onWalkthrough}>
+          {walkthroughBusy ? "Creating workspace..." : "Start local walkthrough"}
         </button>
       </section>
       <section className="metrics">

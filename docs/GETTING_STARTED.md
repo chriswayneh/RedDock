@@ -50,6 +50,14 @@ not supported while sign-in is unfinished.
 
 ## 2. Create a demonstration workspace
 
+**Using master?** Select **Start local walkthrough** on the dashboard after
+unlocking changes. It creates the workspace and one exact include rule, then
+opens the **Assessment** guide. Follow its buttons through the steps below.
+The Discovery tab prefills the local HTTP target and profile, but you must still
+check DockGuard and start the run yourself. This shortcut is newer than v0.8.1.
+
+**Using the stable v0.8.1 tag?** Create the same workspace manually:
+
 1. Open **Dockyards** and create a Dockyard named `My first local demo`. A Dockyard is simply a workspace for one assessment.
 2. Open that workspace's **Scope** tab. Add an **include** entry for exactly `http://reddock-ingress:8080`.
 3. Use the scope check on the same target. DockGuard should return `ALLOWED`.
@@ -67,6 +75,12 @@ Scope is your allowlist, not permission from a system's owner. For real assessme
 7. Open **Detection** and select **Run detection**. Then open **Findings** to inspect the results and their evidence.
 
 A finding is a rule's conclusion, not proof that someone can break in. A missing security header is not the same as a compromised server. Zero findings is also a valid result; it means these checks did not produce findings, not that the system has no vulnerabilities. Results may differ from screenshots as the application changes.
+
+On master, **What was checked?** distinguishes reviewed observations, observations
+awaiting detection, and checks with no retained observations. Collecting new
+observations requires another detection run. **Checked** never means secure and
+does not claim that every allowed target was assessed. New reports retain the
+same coverage summary with their evidence snapshot.
 
 **Validation** is optional. Only eligible open HTTP header findings can be rechecked. Creating a request does not run it; a separate approval note authorizes the limited probe. You can skip it for this tour.
 

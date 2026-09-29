@@ -71,7 +71,7 @@ def test_report_set_is_complete_hash_linked_and_portable(
     assert response.status_code == 201, response.text
     report = response.json()
     assert report["status"] == "completed"
-    assert report["report_schema"] == "reddock.reporting/2"
+    assert report["report_schema"] == "reddock.reporting/3"
     for field in (
         "snapshot_sha256",
         "technical_sha256",
@@ -89,6 +89,9 @@ def test_report_set_is_complete_hash_linked_and_portable(
     assert technical.status_code == executive.status_code == manifest_response.status_code == 200
     assert "RedDock technical report" in technical.text
     assert "RedDock executive report" in executive.text
+    assert "## Assessment coverage" in technical.text
+    assert "## Assessment coverage" in executive.text
+    assert "Checked does not mean secure" in executive.text
     assert "aggregate risk score" in executive.text
     manifest = manifest_response.json()
     assert manifest["schema"] == "reddock.evidence-manifest/1"
@@ -239,7 +242,7 @@ def test_lab_policy_history_is_bounded_isolated_and_portable(
     with ZipFile(BytesIO(package)) as archive:
         snapshot = json.loads(archive.read("reports/technical.json"))
         technical = archive.read("reports/technical.md").decode()
-    assert snapshot["schema"] == "reddock.reporting/2"
+    assert snapshot["schema"] == "reddock.reporting/3"
     assert [row["id"] for row in snapshot["lab"]["audit_events"]] == sorted(
         row["id"] for row in snapshot["lab"]["audit_events"]
     )

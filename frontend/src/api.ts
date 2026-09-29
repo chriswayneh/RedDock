@@ -1,5 +1,6 @@
 import type {
   Adapter,
+  AssessmentCoverage,
   DashboardSummary,
   ListPage,
   Settings,
@@ -155,6 +156,7 @@ export const api = {
     storeOperatorSession(session);
   },
   dashboard: () => request<DashboardSummary>("/dashboard"),
+  coverage: (id: number) => request<AssessmentCoverage>(`/dockyards/${id}/coverage`),
   settings: () => request<Settings>("/settings"),
   assetPage: (id: number, offset = 0) => dockyardPage<Asset>(id, "assets", offset),
   servicePage: (id: number, offset = 0) => dockyardPage<ServiceRow>(id, "services", offset),

@@ -38,6 +38,13 @@ source bytes. Canonical JSON, ordered records, fixed ZIP metadata, and exclusion
 of report history make unchanged state byte-reproducible. Every output is
 retained and hashed, and a package is re-hashed before download.
 
+New reports on master use `reddock.reporting/3`. Their snapshot includes a fixed
+check-coverage summary derived from completed discovery sources and the latest
+detection receipt. Both Markdown reports explain reviewed, collected, and
+not-checked observations. Coverage describes retained Dockyard observations,
+not every allowed target or vulnerability. A checked category is not a security
+verdict. Existing schema-2 packages are not rewritten and remain downloadable.
+
 ## Consequences
 
 - A report is traceable to exact retained bytes, not merely to database claims.

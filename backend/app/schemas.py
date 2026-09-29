@@ -42,6 +42,22 @@ class SettingsRead(BaseModel):
     intelligence_configured: bool
 
 
+class CoverageCheckRead(BaseModel):
+    id: str
+    title: str
+    status: Literal["checked", "collected", "not_checked"]
+    observation_count: int
+    reviewed_observation_count: int
+
+
+class CoverageRead(BaseModel):
+    checks: list[CoverageCheckRead]
+    latest_detection_run_id: int | None
+    latest_detection_status: str | None
+    unsupported: list[str]
+    limitation: str
+
+
 class OperatorUnlockCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

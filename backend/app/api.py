@@ -11,6 +11,7 @@ from app import lab
 from app.authorization_dependencies import authorize_request, request_authorization
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
+from app.coverage import assessment_coverage
 from app.database import SessionFactory, get_session, get_session_factory
 from app.detection import registry as detection_registry
 from app.detection import runner as detection_runner
@@ -55,6 +56,7 @@ from app.schemas import (
     AssetRead,
     CorrelationCreate,
     CorrelationRunRead,
+    CoverageRead,
     DashboardRead,
     DetectionCreate,
     DetectionRunRead,
@@ -251,6 +253,12 @@ def require_dockyard(dockyard_id: int, session: Session) -> Dockyard:
     if dockyard is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dockyard not found")
     return dockyard
+
+
+@router.get("/dockyards/{dockyard_id}/coverage", response_model=CoverageRead)
+def read_coverage(dockyard_id: int, session: Session = Depends(get_session)) -> dict:
+    require_dockyard(dockyard_id, session)
+    return assessment_coverage(session, dockyard_id)
 
 
 def _evaluation_body(evaluation: Evaluation) -> ScopeEvaluationRead:

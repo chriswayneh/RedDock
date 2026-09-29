@@ -33,6 +33,12 @@ const adapters = [
     ],
     target_kinds: ["ipv4", "hostname"],
   },
+  {
+    name: "http", version: "1.0.0", title: "HTTP probe",
+    description: "One bodyless origin probe.",
+    profiles: [{ name: "http_probe", title: "HTTP probe", description: "Record selected response headers." }],
+    target_kinds: ["http_origin"],
+  },
 ];
 
 const detectors = [
@@ -385,6 +391,7 @@ function stubApi({
       if (path === "/api/settings") return json({ name: "RedDock", version: "0.8.0", phase: "Phase 7", deployment_mode: "local", intelligence_configured: (providerResponse as { available: boolean }).available });
       if (path === "/api/lab/status") return json({ deployment_enabled: false, capabilities: [] });
       if (path === "/api/operator/status") return json({ available: true, unlocked: true, session_id: "S".repeat(43) });
+      if (path.endsWith("/coverage")) return json({ checks: [], latest_detection_run_id: null, latest_detection_status: null, unsupported: ["UDP discovery"], limitation: "Checked does not mean secure." });
 
       if (path.endsWith("/health")) return json({ status: "healthy", service: "reddock-core" });
       if (path.endsWith("/version"))
@@ -497,6 +504,44 @@ async function openWorkspace(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe("RedDock application", () => {
+  it("prepares one scoped walkthrough without starting discovery", async () => {
+    stubApi({ scope: [{ ...scopeEntry, value: "http://reddock-ingress:8080" }] });
+    const user = userEvent.setup();
+    render(<App />);
+    const start = await screen.findByRole("button", { name: "Start local walkthrough" });
+    await waitFor(() => expect(start).toBeEnabled());
+    await user.click(start);
+    expect(await screen.findByText("Your assessment, step by step")).toBeInTheDocument();
+    const mutations = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(mutations.map(([input]) => String(input))).toEqual(["/api/dockyards", "/api/dockyards/2/scope"]);
+    expect(JSON.parse(String(mutations[1][1]?.body))).toEqual({ rule: "include", target: "http://reddock-ingress:8080" });
+    expect(window.location.pathname).toBe("/dockyards/2/assessment");
+    expect(screen.getByRole("link", { name: "Open reports" })).toHaveAttribute("href", "/reports?dockyard=2");
+    await user.click(screen.getByRole("button", { name: "Open discovery" }));
+    await waitFor(() => expect(screen.getByLabelText("Target")).toHaveValue("http://reddock-ingress:8080"));
+    expect(screen.getByLabelText("Adapter")).toHaveValue("http");
+    expect(screen.getByRole("button", { name: "Run discovery" })).toBeDisabled();
+  });
+
+  it("preserves the walkthrough workspace if scope creation fails", async () => {
+    stubApi();
+    const normalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      if (String(input) === "/api/dockyards/2/scope" && init?.method === "POST") {
+        return Promise.resolve(new Response(JSON.stringify({ detail: "Scope could not be saved" }), { status: 500 }));
+      }
+      return normalFetch(input, init);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    const start = await screen.findByRole("button", { name: "Start local walkthrough" });
+    await waitFor(() => expect(start).toBeEnabled());
+    await user.click(start);
+    expect(await screen.findByText(/workspace was created, but its scope could not be confirmed/)).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/dockyards/2/scope");
+    expect(vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2);
+  });
+
   it("restores a finding deep link after remount and follows browser history", async () => {
     stubApi({ findings: [finding] });
     window.history.replaceState(null, "", `/dockyards/1/findings/${finding.id}`);

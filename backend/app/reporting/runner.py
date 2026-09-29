@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.coverage import assessment_coverage
 from app.evidence import (
     METADATA_FILE,
     NORMALIZED_FILE,
@@ -47,7 +48,7 @@ from app.models import (
     ValidationRun,
 )
 
-REPORT_SCHEMA = "reddock.reporting/2"
+REPORT_SCHEMA = "reddock.reporting/3"
 MANIFEST_SCHEMA = "reddock.evidence-manifest/1"
 DOCKPACK_SCHEMA = "reddock.dockpack/1"
 ACTIVE_STATUSES = ("pending", "queued", "running")
@@ -707,6 +708,7 @@ def _snapshot(session: Session, dockyard_id: int, manifest: dict) -> dict:
             for row in scopes
         ],
         "counts": counts,
+        "coverage": assessment_coverage(session, dockyard_id),
         "assets": [
             {
                 "id": row.id,
@@ -920,7 +922,7 @@ def _technical_markdown(snapshot: dict) -> str:
     dockyard = snapshot["dockyard"]
     counts = snapshot["counts"]
     lines = [
-        f"# RedDock technical report — {_md(dockyard['name'])}",
+        f"# RedDock technical report: {_md(dockyard['name'])}",
         "",
         f"Report schema: `{REPORT_SCHEMA}`  ",
         f"Generator: `RedDock {snapshot['generator']['version']}`  ",
@@ -938,6 +940,7 @@ def _technical_markdown(snapshot: dict) -> str:
             )
     else:
         lines.append("No scope entries were retained in this Dockyard.")
+    lines.extend(_coverage_markdown(snapshot["coverage"]))
     lines.extend(
         [
             "",
@@ -1084,6 +1087,26 @@ def _technical_markdown(snapshot: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _coverage_markdown(coverage: dict) -> list[str]:
+    labels = {"checked": "Checked", "collected": "Detection needed", "not_checked": "Not checked"}
+    lines = [
+        "", "## Assessment coverage", "",
+        "| Check | Status | Observations | Reviewed observations |",
+        "| --- | --- | --- | --- |",
+    ]
+    for check in coverage["checks"]:
+        lines.append(
+            f"| {_md(check['title'])} | {labels[check['status']]} | "
+            f"{check['observation_count']} | {check['reviewed_observation_count']} |"
+        )
+    lines.extend([
+        "", "Not tested by this release: " + ", ".join(coverage["unsupported"]) + ".",
+        "", "Coverage describes retained observations, not every allowed target or "
+        "vulnerability. Checked does not mean secure.",
+    ])
+    return lines
+
+
 def _executive_markdown(snapshot: dict) -> str:
     dockyard = snapshot["dockyard"]
     counts = snapshot["counts"]
@@ -1097,7 +1120,7 @@ def _executive_markdown(snapshot: dict) -> str:
         if validation["status"] == "completed"
     )
     lines = [
-        f"# RedDock executive report — {_md(dockyard['name'])}",
+        f"# RedDock executive report: {_md(dockyard['name'])}",
         "",
         "## Assessment snapshot",
         "",
@@ -1152,6 +1175,7 @@ def _executive_markdown(snapshot: dict) -> str:
         "",
     ]
     lines.extend(f"- {_md(item)}" for item in snapshot["limitations"])
+    lines.extend(_coverage_markdown(snapshot["coverage"]))
     return "\n".join(lines).rstrip() + "\n"
 
 

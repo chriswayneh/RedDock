@@ -132,6 +132,20 @@ export type Adapter = {
   target_kinds: string[];
 };
 
+export type AssessmentCoverage = {
+  checks: {
+    id: string;
+    title: string;
+    status: "checked" | "collected" | "not_checked";
+    observation_count: number;
+    reviewed_observation_count: number;
+  }[];
+  latest_detection_run_id: number | null;
+  latest_detection_status: string | null;
+  unsupported: string[];
+  limitation: string;
+};
+
 export type Detector = {
   id: string;
   version: string;

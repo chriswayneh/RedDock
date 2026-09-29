@@ -16,7 +16,7 @@ connections, and export reports with traceable evidence. AI advice is optional.
 
 ### What remains in Phase 8
 
-- Make the first-run and assessment workflows easier to follow.
+- Validate the guided assessment workflow with fresh users.
 - Complete authenticated team access, including OIDC, SSO, and RBAC.
 - Validate PostgreSQL recovery, deployment, scaling, and operating procedures.
 - Complete end-to-end acceptance testing and independent security review.
@@ -163,6 +163,17 @@ multi-architecture container images.
   Exact compact port lists are retained as evidence; count-only summaries never
   become guessed inventory, and newly closed ports do not fill the service list.
 
+### New on master after v0.8.1
+
+- **Guided local walkthrough:** create one workspace scoped to RedDock's own
+  Compose proxy, then follow scope, discovery, detection, findings, and reports.
+  Nothing scans automatically. Primary navigation separates assessment from tools.
+- **Check coverage:** Findings, the assessment guide, and new reports distinguish
+  reviewed observations from those awaiting detection and checks not performed.
+  Coverage is not proof of security or a claim about every allowed target.
+- **Report schema 3:** new snapshots include check coverage; existing report
+  downloads remain available. This work is not yet part of the stable v0.8.1 tag.
+
 ### Foundations built but not enabled
 
 Core sign-in pieces now connect behind a dormant process-owned coordinator.
@@ -174,9 +185,8 @@ service.** Unsupported deployment modes remain blocked.
 
 ### Still needed before Phase 8 completion
 
-- **First-run product flow:** add the guided local self-assessment, simplify
-  primary navigation, and show evidence-derived checked and not-checked
-  coverage in Findings and generated reports.
+- **First-run acceptance:** validate the guided local self-assessment with fresh
+  users before declaring the product flow complete.
 - **Working team access:** integrate sign-in, SSO, permissions, and administration.
 - **Operational readiness:** complete PostgreSQL disaster recovery, production
   deployment, and scaling validation. Continue recovery drills for the shipped

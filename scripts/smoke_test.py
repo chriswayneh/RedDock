@@ -535,7 +535,7 @@ def reporting_checks(base: str, dockyard_id: int, lab_event_minimum: int) -> Non
     )
     check(
         "report snapshot includes the lab policy ledger",
-        first["report_schema"] == "reddock.reporting/2"
+        first["report_schema"] == "reddock.reporting/3"
         and first["source_counts"]["lab_authorizations"] >= 1
         and first["source_counts"]["lab_audit_events"] >= lab_event_minimum,
         first["source_counts"],
@@ -565,9 +565,19 @@ def reporting_checks(base: str, dockyard_id: int, lab_event_minimum: int) -> Non
     with ZipFile(BytesIO(package)) as archive:
         snapshot = json.loads(archive.read("reports/technical.json"))
         technical = archive.read("reports/technical.md").decode()
+    status, live_coverage = call(base, "GET", f"/api/dockyards/{dockyard_id}/coverage")
+    check(
+        "live and packaged coverage agree on retained checks",
+        status == 200
+        and live_coverage == snapshot["coverage"]
+        and {item["id"]: item["status"] for item in live_coverage["checks"]}
+        == {"http_headers": "checked", "tls": "not_checked", "services": "checked"}
+        and "## Assessment coverage" in technical
+        and "Checked does not mean secure" in technical,
+    )
     check(
         "DockPack carries bounded lab authorization and decision history",
-        snapshot["schema"] == "reddock.reporting/2"
+        snapshot["schema"] == "reddock.reporting/3"
         and len(snapshot["lab"]["authorizations"]) >= 1
         and len(snapshot["lab"]["audit_events"]) >= lab_event_minimum
         and "## Lab authorization and policy audit" in technical,

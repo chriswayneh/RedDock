@@ -17,12 +17,14 @@ function artifactParts(path: string): { directory: string; name: string } {
 
 export function Reports({
   dockyards,
+  initialDockyardId = null,
   onError,
 }: {
   dockyards: Dockyard[];
+  initialDockyardId?: number | null;
   onError: (message: string | null) => void;
 }) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(initialDockyardId);
   const [runs, setRuns] = useState<ReportRun[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [offset, setOffset] = useState(0);

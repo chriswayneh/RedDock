@@ -85,6 +85,16 @@ Open [http://localhost:8080](http://localhost:8080). On the first start, copy th
 
 See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local demonstration, shutdown instructions, and troubleshooting. Contributors can use `master`, which may contain unfinished work newer than the stable tag.
 
+### New on master
+
+The dashboard now offers **Start local walkthrough**: a guided assessment of
+RedDock's own Compose proxy, with no automatic scanning. Findings and new reports
+show what was checked, what still needs detection, and what was not checked.
+These additions are not in the stable `v0.8.1` tag.
+
+To try them in a separate folder, clone without `--branch v0.8.1 --depth 1`, then
+use the same Compose command above. Keep only one RedDock stack on port 8080.
+
 ### Why I am building it
 
 I want one transparent platform that helps find vulnerabilities and keeps the
@@ -143,6 +153,14 @@ These are concrete zero-trust controls, not a complete enterprise zero-trust arc
 </details>
 
 ## Screenshots
+
+### Guided assessment on master
+
+[Open the local walkthrough](docs/screenshots/assessment-guide.jpg) or
+[inspect the check coverage](docs/screenshots/assessment-coverage.jpg). These
+views are newer than the stable tag; the release gallery follows below.
+
+<a href="docs/screenshots/assessment-guide.jpg"><img src="docs/screenshots/assessment-guide.jpg" alt="Guided RedDock assessment with five operator-controlled steps and observation-based coverage" width="900"></a>
 
 <div align="center">
 
