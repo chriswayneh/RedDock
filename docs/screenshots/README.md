@@ -9,6 +9,8 @@ Click a view to open its full-size screenshot. These are examples, not a claim t
 | View | What it shows |
 | --- | --- |
 | [First-run unlock](operator-unlock.png) | See the local change-protection prompt before creating or running anything. |
+| [Guided assessment](assessment-guide.jpg) | Follow five local assessment steps on master; nothing scans automatically. |
+| [Check coverage](assessment-coverage.jpg) | Distinguish reviewed HTTP observations from checks not performed. Newer than v0.8.1. |
 | [Dashboard](dashboard.png) | See your workspaces and recent checking activity. |
 | [Workspace](workspace.png) | Define what is allowed before running a check. |
 | [Detection](detection.png) | See which rules turn recorded observations into findings. |

@@ -7,7 +7,7 @@ export const pagePaths = {
 } as const;
 export type Page = keyof typeof pagePaths;
 export const workspaceTabs = [
-  "Scope", "Discovery", "Assets", "Services", "Observations", "Detection",
+  "Assessment", "Scope", "Discovery", "Assets", "Services", "Observations", "Detection",
   "Findings", "Validation", "Runs",
 ] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];

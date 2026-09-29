@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { Coverage } from "./Coverage";
 import { DataTable, EmptyState, StatusPill } from "./components";
 import { formatDate, humanize } from "./format";
 import { PageControls } from "./ListNotice";
@@ -106,6 +107,7 @@ export function FindingsPanel({
         <p className="hint">
           Review each finding with the observations and evidence behind it.
         </p>
+        <Coverage dockyardId={dockyardId} refreshKey={refreshKey} />
         <div className="filter-row">
           <label>
             Severity

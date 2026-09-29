@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
+import { Assessment, LOCAL_WALKTHROUGH_TARGET } from "./Assessment";
 import { DataTable, DecisionPanel, EmptyState, StatusPill } from "./components";
 import { DetectionPanel, FindingsPanel, ValidationPanel } from "./Findings";
 import { formatDate, humanize, kindLabel, plural } from "./format";
@@ -162,6 +163,10 @@ export function Workspace({
         ))}
       </nav>
 
+      {tab === "Assessment" && <Assessment dockyardId={dockyard.id} onStep={(next) => {
+        setTab(next); onTabChange?.(next);
+      }} />}
+
       {tab === "Scope" && (
         <ScopePanel
           dockyardId={dockyard.id}
@@ -175,6 +180,7 @@ export function Workspace({
           dockyardId={dockyard.id}
           adapters={adapters}
           scopeCount={scope.length}
+          walkthrough={scope.some((entry) => entry.rule === "include" && entry.value === LOCAL_WALKTHROUGH_TARGET)}
           onStarted={() => refreshFirstPage("runs")}
           onError={onError}
         />
@@ -373,18 +379,28 @@ function DiscoveryPanel({
   dockyardId,
   adapters,
   scopeCount,
+  walkthrough = false,
   onStarted,
   onError,
 }: {
   dockyardId: number;
   adapters: Adapter[];
   scopeCount: number;
+  walkthrough?: boolean;
   onStarted: () => Promise<void>;
   onError: (message: string | null) => void;
 }) {
-  const [target, setTarget] = useState("");
-  const [adapterName, setAdapterName] = useState(adapters[0]?.name ?? "");
-  const [profile, setProfile] = useState(adapters[0]?.profiles[0]?.name ?? "");
+  const [target, setTarget] = useState(walkthrough ? LOCAL_WALKTHROUGH_TARGET : "");
+  const preferredAdapter = walkthrough ? adapters.find((item) => item.name === "http") : adapters[0];
+  const [adapterName, setAdapterName] = useState(preferredAdapter?.name ?? "");
+  const [profile, setProfile] = useState(preferredAdapter?.profiles[0]?.name ?? "");
+
+  useEffect(() => {
+    if (walkthrough) {
+      setTarget((current) => current || LOCAL_WALKTHROUGH_TARGET);
+      setAdapterName("http");
+    }
+  }, [walkthrough]);
   const [preview, setPreview] = useState<ScopeEvaluation | null>(null);
   const [busy, setBusy] = useState(false);
 

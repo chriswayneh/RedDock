@@ -144,4 +144,11 @@ describe("Phase 6 reporting", () => {
     await user.selectOptions(screen.getByLabelText("Dockyard"), "2");
     await waitFor(() => expect(screen.queryByText("Report #21")).not.toBeInTheDocument());
   });
+
+  it("opens the workspace supplied by a report link", async () => {
+    stubReports([]);
+    render(<Reports dockyards={[dockyard, { ...dockyard, id: 2, name: "Other" }]} initialDockyardId={2} onError={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText("Dockyard")).toHaveValue("2"));
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).startsWith("/api/dockyards/2/reports"))).toBe(true);
+  });
 });

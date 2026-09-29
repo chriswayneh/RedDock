@@ -105,3 +105,20 @@ main { padding: 42px clamp(24px, 5vw, 76px); max-width: 1500px; width: 100%; mar
 .operator-unlock-form { display: grid; gap: 8px; }
 .operator-unlock-form label { color: #c9d1d9; font-size: 13px; font-weight: 700; }
 @media (max-width: 800px) { .operator-gate { grid-template-columns: 1fr; } }
+.nav-group-label { color: #8b949e; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin: 18px 12px 6px; }
+.sidebar nav > div { display: grid; gap: 4px; }
+main, .sidebar { min-width: 0; }
+.walkthrough-start { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
+.assessment-steps { padding-left: 24px; margin: 24px 0; }
+.assessment-steps li { padding: 16px 8px; border-bottom: 1px solid #30363d; }
+.assessment-steps li > div { display: inline-block; width: 72%; vertical-align: middle; }
+.assessment-steps p { color: #8b949e; font-size: 13px; margin: 8px 0; }
+.assessment-steps a { display: inline-block; text-decoration: none; }
+.coverage-summary { margin: 20px 0; padding: 16px; border: 1px solid #30363d; border-radius: 8px; }
+.coverage-list { list-style: none; padding: 0; }
+.coverage-list li { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; border-bottom: 1px solid #30363d; padding: 10px 0; }
+.coverage-list small { grid-column: 1 / -1; color: #8b949e; }
+.coverage-summary summary, .walkthrough-help summary { cursor: pointer; }
+@media (max-width: 800px) { .walkthrough-start { align-items: start; flex-direction: column; }.assessment-steps li > div { width: 100%; }.assessment-steps button, .assessment-steps a { margin-top: 8px; } }
+@media (max-width: 800px) { .sidebar nav > div { display: flex; align-items: center; }.nav-group-label { margin: 0 8px; }.coverage-list li { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { main > header { flex-wrap: wrap; } }
