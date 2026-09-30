@@ -20,6 +20,7 @@ from app.browser_security import (
     browser_request_credentials,
     origin_matches,
     parse_public_origin,
+    session_recovery_credentials,
 )
 from app.config import DormantServerRuntimeConfig
 from app.models import Organization
@@ -45,6 +46,7 @@ from app.session_auth import (
     SessionRejected,
     SessionUnavailable,
     SessionUseResult,
+    csrf_token_for_session,
     is_browser_session_token,
     issue_browser_session,
     logout_proven_browser_session,
@@ -81,6 +83,13 @@ class LoginChallenge:
     authorization_url: str = field(repr=False)
     browser_token: str = field(repr=False)
     expires_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveredSession:
+    context: AuthorizationContext
+    expires_at: datetime
+    csrf_token: str = field(repr=False)
 
 
 class AuthenticationRuntime:
@@ -266,6 +275,45 @@ class AuthenticationRuntime:
             return result.context
         except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
             raise RequestAuthenticationUnavailable("Authentication unavailable") from None
+
+    def recover_browser_session(
+        self, request: Request, *, now: datetime | None = None,
+    ) -> RecoveredSession:
+        """Recover current browser state without touching expiry or rotating tokens."""
+        if self.verified_browser_client(request) is None:
+            raise AuthenticationFailure()
+        credentials = session_recovery_credentials(request, self.__origin)
+        if credentials is None:
+            raise AuthenticationFailure()
+        csrf_token = csrf_token_for_session(credentials.token)
+        if csrf_token is None:
+            raise AuthenticationFailure()
+        try:
+            # Release the primary connection before durable admission, then
+            # recheck identity/session validity after admission may have waited.
+            with Session(self.__lifecycle_engine) as session:
+                context = resolve_browser_session(
+                    session, credentials.token, csrf_token=csrf_token, now=now,
+                    expected_issuer=self.__config.oidc_issuer,
+                    expected_organization_slug=self.__config.organization_slug,
+                )
+            if context is None:
+                raise AuthenticationFailure()
+            decision = self.__limiter.enforce(
+                REQUEST_MUTATION_PLAN, subject=membership_subject(context.membership_id), now=now,
+            )
+            if not decision.allowed:
+                raise AuthenticationFailure(retry_after_seconds=decision.retry_after_seconds)
+            result = use_browser_session(
+                self.__lifecycle_engine, credentials.token, csrf_token=csrf_token,
+                touch=False, now=now, expected_issuer=self.__config.oidc_issuer,
+                expected_organization_slug=self.__config.organization_slug,
+            )
+            if result is None:
+                raise AuthenticationFailure()
+            return RecoveredSession(result.context, result.expires_at, csrf_token)
+        except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
+            raise AuthenticationFailure() from None
 
     def _admit_session_mutation(
         self, request: Request, *, logout: bool, now: datetime | None,

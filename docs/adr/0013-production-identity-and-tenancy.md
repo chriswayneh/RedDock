@@ -256,7 +256,16 @@ cookies and response expiry retain the original absolute deadline. Logout rechec
 the presented generation's proof and configured issuer/organization under family
 locks before revoking. Inactive membership or a retained predecessor grants only
 this revocation authority. Already-revoked retained families can complete logout
-idempotently. Denials never clear or overwrite cookies. Frontend session recovery,
+idempotently. Denials never clear or overwrite cookies. A dormant recovery read
+now restores current role, permissions, absolute expiry, and the derived CSRF
+proof. It requires trusted HTTPS ingress, exactly one bearer cookie, the
+non-safelisted `X-RedDock-Session: recover` header, and exactly one
+`Sec-Fetch-Site: same-origin` header. If Origin is present it must match exactly;
+no authentication endpoint grants CORS access. Recovery uses the shared durable
+membership request budget and rechecks identity after admission. It does not
+touch idle activity, extend expiry, rotate tokens, emit session events, or set
+cookies. Its no-store response contains no bearer, subject, or user identifier.
+Frontend session recovery,
 multi-tab behavior, and full authentication acceptance remain separate gates.
 
 ## Ownership model
