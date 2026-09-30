@@ -22,9 +22,12 @@ from app.models import (
     ReportRun,
 )
 from app.reporting import runner as reporting_runner
+from tests.phase1 import LOCAL_WORKFLOW
 
 
-def _prepared(recorder, session: Session, dockyard_id: int, environment: Path) -> None:
+def _prepared(
+    recorder, session: Session, dockyard_id: int, environment: Path, *, workflow=LOCAL_WORKFLOW,
+) -> None:
     recorder.identified_service(
         "127.0.0.1", 23, service_name="telnet", product="Example daemon", version="1.0"
     )
@@ -51,8 +54,8 @@ def _prepared(recorder, session: Session, dockyard_id: int, environment: Path) -
     from app.correlation.runner import start_correlation
     from app.detection.runner import start_detection
 
-    assert start_detection(session, dockyard_id).status == "completed"
-    assert start_correlation(session, dockyard_id).status == "completed"
+    assert start_detection(session, dockyard_id, **workflow).status == "completed"
+    assert start_correlation(session, dockyard_id, **workflow).status == "completed"
 
 
 def test_report_set_is_complete_hash_linked_and_portable(

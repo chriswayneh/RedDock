@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission
 from app.config import get_settings
 from app.detection import registry
 from app.detection.base import (
@@ -46,6 +47,8 @@ from app.detection.fingerprint import fingerprint as compute_fingerprint
 from app.evidence import DETECTION_SCOPE, EVIDENCE_SCHEMA, EvidenceStore
 from app.findings import attach_evidence, resolve_absent, upsert_finding
 from app.models import DetectionRun, Observation
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 logger = logging.getLogger("reddock.detection")
 
@@ -77,21 +80,36 @@ class _DetectorOutcome:
         return self.error is None
 
 
-def create_run(session: Session, dockyard_id: int) -> DetectionRun:
+def create_run(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> DetectionRun:
     """Persist a pending detection run, refusing to overlap with another."""
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
     if active_run_count(session, dockyard_id):
         raise RunRejected("A detection run is already in flight for this Dockyard")
     run = DetectionRun(dockyard_id=dockyard_id, status=str(DetectionRunStatus.PENDING))
     session.add(run)
+    session.flush()
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.DETECTION_REQUEST, outcome=SecurityOutcome.SUCCESS,
+        target_type="detection_run", target_id=str(run.id), reason_code="detection_requested",
+    )
     session.commit()
     session.refresh(run)
     return run
 
 
-def start_detection(session: Session, dockyard_id: int) -> DetectionRun:
+def start_detection(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> DetectionRun:
     """Create and execute one detection run over a Dockyard's recorded state."""
-    run = create_run(session, dockyard_id)
-    return execute_run(session, run)
+    run = create_run(session, dockyard_id, authorization=authorization, policy=policy)
+    return execute_run(session, run, authorization=authorization, policy=policy)
 
 
 def active_run_count(session: Session, dockyard_id: int) -> int:
@@ -146,15 +164,19 @@ def recover_interrupted_runs(session: Session) -> int:
     return len(interrupted)
 
 
-def execute_run(session: Session, run: DetectionRun) -> DetectionRun:
+def execute_run(
+    session: Session, run: DetectionRun, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> DetectionRun:
     """Run every registered detector over the Dockyard snapshot. Never raises."""
     run.status = str(DetectionRunStatus.RUNNING)
     run.started_at = datetime.now(UTC)
     session.commit()
 
     try:
-        return _perform(session, run)
-    except SnapshotLimitExceeded as error:
+        return _perform(session, run, authorization=authorization, policy=policy)
+    except (SnapshotLimitExceeded, AuthorizationDenied) as error:
+        session.rollback()
         run.status = str(DetectionRunStatus.FAILED)
         run.error = str(error)[:500]
         run.completed_at = datetime.now(UTC)
@@ -162,6 +184,7 @@ def execute_run(session: Session, run: DetectionRun) -> DetectionRun:
         return run
     except Exception:  # a detection run must not leave the record ambiguous
         logger.exception("Detection run %s failed unexpectedly", run.id)
+        session.rollback()
         run.status = str(DetectionRunStatus.FAILED)
         run.error = "Detection failed unexpectedly; see the RedDock container log"
         run.completed_at = datetime.now(UTC)
@@ -169,7 +192,10 @@ def execute_run(session: Session, run: DetectionRun) -> DetectionRun:
         return run
 
 
-def _perform(session: Session, run: DetectionRun) -> DetectionRun:
+def _perform(
+    session: Session, run: DetectionRun, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> DetectionRun:
     enrichment, warning = load_enrichment()
     context = build_context(session, run.dockyard_id, enrichment=enrichment)
     observations = _observation_rows(session, context)
@@ -193,9 +219,15 @@ def _perform(session: Session, run: DetectionRun) -> DetectionRun:
     run.finding_count = len(stored)
     run.new_finding_count = new_count
     run.resolved_finding_count = len(resolved)
-    session.commit()
-
     _store_evidence(session, run, context, stored, resolved)
+    actor = require_workflow_actor(
+        session, policy, authorization, run.dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.DETECTION_PUBLISH, outcome=SecurityOutcome.SUCCESS,
+        target_type="detection_run", target_id=str(run.id), reason_code="detection_published",
+    )
     session.commit()
     return run
 
@@ -384,7 +416,7 @@ def _store(
             reproduced[detector.id].add(identity)
             stored.append((detected, identity, finding.id))
             new_count += 1 if created else 0
-    session.commit()
+    session.flush()
     return stored, new_count, reproduced
 
 
@@ -414,7 +446,7 @@ def _resolve(
                     "title": finding.title,
                 }
             )
-    session.commit()
+    session.flush()
     return resolved
 
 

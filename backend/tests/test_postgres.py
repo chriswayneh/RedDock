@@ -9,6 +9,8 @@ from alembic import command
 from sqlalchemy import create_engine, delete, func, inspect, select, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from tests.phase1 import LOCAL_WORKFLOW
+
 
 def test_postgresql_migrations_and_crud(
     tmp_path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
@@ -1136,6 +1138,7 @@ def test_postgresql_migrations_and_crud(
 
         _postgres_approval_races(monkeypatch)
         _postgres_lab_races(monkeypatch)
+        _postgres_stored_actor_rechecks(monkeypatch, tmp_path)
 
         # Exercise reporting against the real server: another connection
         # commits a scope change after source capture starts. The report must
@@ -1168,7 +1171,7 @@ def test_postgresql_migrations_and_crud(
 
         monkeypatch.setattr(runner, "_snapshot", concurrent_scope_change)
         with app.database.SessionLocal() as session:
-            report = runner.start_report(session, report_dockyard_id)
+            report = runner.start_report(session, report_dockyard_id, **LOCAL_WORKFLOW)
             assert report.status == "completed", report.error
         with app.database.SessionLocal() as session:
             assert (
@@ -1181,6 +1184,62 @@ def test_postgresql_migrations_and_crud(
         monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'after-postgres.db'}")
         app.config.get_settings.cache_clear()
         app.database.configure_engine()
+
+
+def _postgres_stored_actor_rechecks(monkeypatch, tmp_path):
+    from app.correlation import runner as correlation
+    from app.database import SessionLocal
+    from app.detection import runner as detection
+    from app.models import (
+        AssetRelationship,
+        Dockyard,
+        Finding,
+        FindingCorrelation,
+        FrameworkMapping,
+        Membership,
+        SecurityAuditEvent,
+    )
+    from app.reporting import runner as reporting
+    from tests.phase1 import Recorder
+    from tests.test_reporting import _prepared
+
+    for runner, start, hook, kind in (
+        (detection, detection.start_detection, "load_enrichment", "detection"),
+        (correlation, correlation.start_correlation, "_finding_hashes", "correlation"),
+        (reporting, reporting.start_report, "_technical_markdown", "report"),
+    ):
+        with SessionLocal() as session:
+            dockyard = Dockyard(name=f"Publication authority {kind} {uuid4()}")
+            session.add(dockyard)
+            session.commit()
+            dockyard_id = dockyard.id
+            _prepared(Recorder(session, dockyard_id), session, dockyard_id, tmp_path)
+            previous = [list(session.scalars(select(model.id).order_by(model.id))) for model in (
+                Finding, AssetRelationship, FindingCorrelation, FrameworkMapping,
+            )]
+        original = getattr(runner, hook)
+
+        def revoke(*args, **kwargs):
+            result = original(*args, **kwargs)
+            with SessionLocal.begin() as writer:
+                writer.get(Membership, 1).status = "disabled"
+            return result
+
+        with monkeypatch.context() as revoke_patch:
+            revoke_patch.setattr(runner, hook, revoke)
+            with SessionLocal() as session:
+                run = start(session, dockyard_id, **LOCAL_WORKFLOW)
+                assert run.status == "failed"
+                assert run.evidence_path is None
+                assert session.scalar(select(SecurityAuditEvent.id).where(
+                    SecurityAuditEvent.action == f"{kind}.publish",
+                    SecurityAuditEvent.target_id == str(run.id),
+                )) is None
+                assert [list(session.scalars(select(model.id).order_by(model.id))) for model in (
+                    Finding, AssetRelationship, FindingCorrelation, FrameworkMapping,
+                )] == previous
+        with SessionLocal.begin() as writer:
+            writer.get(Membership, 1).status = "active"
 
 
 def _postgres_lab_races(monkeypatch):

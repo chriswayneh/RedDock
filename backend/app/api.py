@@ -712,6 +712,7 @@ def start_detection(
     dockyard_id: int,
     payload: DetectionCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> DetectionRunRead:
     """Run every registered detector over what this Dockyard already recorded.
 
@@ -722,7 +723,11 @@ def start_detection(
     """
     require_dockyard(dockyard_id, session)
     try:
-        run = detection_runner.start_detection(session, dockyard_id)
+        run = detection_runner.start_detection(
+            session, dockyard_id, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except detection_runner.RunRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     return DetectionRunRead.model_validate(run)
@@ -765,11 +770,16 @@ def start_correlation(
     dockyard_id: int,
     payload: CorrelationCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> CorrelationRunRead:
     """Relate stored state only; the deliberately empty body selects nothing."""
     require_dockyard(dockyard_id, session)
     try:
-        return correlation_runner.start_correlation(session, dockyard_id)
+        return correlation_runner.start_correlation(
+            session, dockyard_id, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except correlation_runner.RunRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
@@ -882,11 +892,16 @@ def create_report(
     dockyard_id: int,
     payload: ReportCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> ReportRunRead:
     """Snapshot all retained state; the empty request chooses no target or path."""
     require_dockyard(dockyard_id, session)
     try:
-        return reporting_runner.start_report(session, dockyard_id)
+        return reporting_runner.start_report(
+            session, dockyard_id, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except reporting_runner.ReportRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 

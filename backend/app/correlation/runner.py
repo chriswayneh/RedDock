@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission
 from app.config import get_settings
 from app.correlation.frameworks import FRAMEWORK, RULE_MAPPINGS, VERSION
 from app.evidence import CORRELATION_SCOPE, EVIDENCE_SCHEMA, EvidenceStore
@@ -27,6 +28,8 @@ from app.models import (
     FrameworkMapping,
     Observation,
 )
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 logger = logging.getLogger("reddock.correlation")
 ACTIVE_STATUSES = ("pending", "running")
@@ -36,7 +39,13 @@ class RunRejected(ValueError):
     """Raised when a correlation snapshot cannot safely be started."""
 
 
-def start_correlation(session: Session, dockyard_id: int) -> CorrelationRun:
+def start_correlation(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> CorrelationRun:
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
     if session.scalar(
         select(func.count()).select_from(CorrelationRun).where(
             CorrelationRun.dockyard_id == dockyard_id,
@@ -47,9 +56,15 @@ def start_correlation(session: Session, dockyard_id: int) -> CorrelationRun:
 
     run = CorrelationRun(dockyard_id=dockyard_id, status="pending")
     session.add(run)
+    session.flush()
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.CORRELATION_REQUEST, outcome=SecurityOutcome.SUCCESS,
+        target_type="correlation_run", target_id=str(run.id), reason_code="correlation_requested",
+    )
     session.commit()
     session.refresh(run)
-    return _execute(session, run)
+    return _execute(session, run, authorization=authorization, policy=policy)
 
 
 def list_runs(
@@ -100,13 +115,16 @@ def recover_interrupted_runs(session: Session) -> int:
     return len(rows)
 
 
-def _execute(session: Session, run: CorrelationRun) -> CorrelationRun:
+def _execute(
+    session: Session, run: CorrelationRun, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> CorrelationRun:
     run.status = "running"
     run.started_at = datetime.now(UTC)
     session.commit()
     try:
-        return _perform(session, run)
-    except RunRejected as error:
+        return _perform(session, run, authorization=authorization, policy=policy)
+    except (RunRejected, AuthorizationDenied) as error:
         session.rollback()
         run = session.get(CorrelationRun, run.id)
         if run is None:
@@ -129,7 +147,10 @@ def _execute(session: Session, run: CorrelationRun) -> CorrelationRun:
         return run
 
 
-def _perform(session: Session, run: CorrelationRun) -> CorrelationRun:
+def _perform(
+    session: Session, run: CorrelationRun, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> CorrelationRun:
     assets = list(
         session.scalars(
             select(Asset).where(Asset.dockyard_id == run.dockyard_id).order_by(Asset.id)
@@ -187,7 +208,6 @@ def _perform(session: Session, run: CorrelationRun) -> CorrelationRun:
         mappings,
     )
     run.status = "completed"
-    session.commit()
 
     result = _result_document(
         run, assets, findings, asset_relationships, finding_correlations, mappings
@@ -217,6 +237,14 @@ def _perform(session: Session, run: CorrelationRun) -> CorrelationRun:
     run.result_sha256 = normalized.sha256
     run.metadata_sha256 = metadata.sha256
     run.completed_at = datetime.now(UTC)
+    actor = require_workflow_actor(
+        session, policy, authorization, run.dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.CORRELATION_PUBLISH, outcome=SecurityOutcome.SUCCESS,
+        target_type="correlation_run", target_id=str(run.id), reason_code="correlation_published",
+    )
     session.commit()
     return run
 

@@ -11,6 +11,12 @@ _BOUNDED_IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,63}")
 
 
 class SecurityAction(StrEnum):
+    DETECTION_REQUEST = "detection.request"
+    DETECTION_PUBLISH = "detection.publish"
+    CORRELATION_REQUEST = "correlation.request"
+    CORRELATION_PUBLISH = "correlation.publish"
+    REPORT_REQUEST = "report.request"
+    REPORT_PUBLISH = "report.publish"
     LAB_AUTHORIZE = "lab.authorize"
     LAB_REVOKE = "lab.revoke"
     VALIDATION_REQUEST = "validation.request"

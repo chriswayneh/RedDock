@@ -11,7 +11,11 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.authorization import LOCAL_AUTHORIZATION
 from app.models import Asset, DiscoveryRun, EvidenceRecord, Observation, SecurityAuditEvent, Service
+from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+
+LOCAL_WORKFLOW = {"authorization": LOCAL_AUTHORIZATION, "policy": LOCAL_WORKFLOW_POLICY}
 
 
 def discovery_receipt(factory, run_id: int) -> int:

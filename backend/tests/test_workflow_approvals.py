@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
+from app.authorization import AuthorizationContext, Role
 from app.browser_security import CSRF_HEADER_NAME, SESSION_COOKIE_NAME
 from app.database import DatabaseRequestBinding
 from app.intelligence import runner as intelligence
@@ -39,7 +40,14 @@ def approval(request, request_setup, monkeypatch):
 
     monkeypatch.setattr(validation, "_validate", probe)
     with database.SessionLocal() as session:
-        _prepared(Recorder(session, own_id), session, own_id)
+        member = session.get(Membership, membership_id)
+        workflow = {
+            "authorization": AuthorizationContext(
+                member.organization_id, member.user_id, member.id, Role(member.role),
+            ),
+            "policy": getattr(application.state, WORKFLOW_REQUEST_BINDING_STATE).policy,
+        }
+        _prepared(Recorder(session, own_id), session, own_id, workflow=workflow)
         session.add(ScopeEntry(
             dockyard_id=own_id, rule="include", kind="url", value="http://127.0.0.1:8080",
         ))

@@ -191,6 +191,16 @@ policy until expiry, supersession, or explicit revocation. Revoking its author's
 membership does not implicitly revoke that policy; discovery independently
 checks its current execution actor and the lab gate before contact.
 
+Stored-data detection, correlation, and report creation require the same exact
+workflow policy and record requester attribution. They re-read current authority
+before committing a publication event. Detection and correlation no longer
+commit intermediate findings or relationships: result rows, artifact references,
+and the publication event become visible together. A failed check or evidence
+write rolls back unpublished results while retaining a failed run. Reporting
+preserves its independent consistent snapshot transaction, then checks current
+permission at publication and removes partial artifacts on failure. Sensitive
+edits, export auditing, administration, and full deployment acceptance remain open.
+
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
 bearer token and CSRF proof together after one hour. Rotation preserves the
