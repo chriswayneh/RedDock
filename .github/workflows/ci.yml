@@ -312,6 +312,59 @@ jobs:
           echo "::add-mask::$REDDOCK_OPERATOR_TOKEN"
           export REDDOCK_OPERATOR_TOKEN
           python3 scripts/smoke_test.py
+      - name: Verify request logs exclude secrets during success and upstream failure
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          compose = ["docker", "compose", "-p", "reddock-ci", "-f", "compose.yaml",
+                     "-f", str(Path(os.environ["RUNNER_TEMP"], "compose-ci.yaml"))]
+          marker = "reddock-private-request-canary"
+          headers = {"Authorization": "Bearer " + marker, "Cookie": "session=" + marker,
+                     "Referer": "https://example.invalid/" + marker, "User-Agent": marker}
+
+          def probe(path, expected, body=None):
+              request = urllib.request.Request("http://127.0.0.1:8080" + path,
+                                               headers=headers, data=body)
+              try:
+                  with urllib.request.urlopen(request, timeout=10) as response:
+                      status = response.status
+                      response.read()
+              except urllib.error.HTTPError as error:
+                  status = error.code
+                  error.read()
+              assert status == expected, "unexpected privacy-probe response"
+
+          probe("/api/health?code=" + marker, 200)
+          probe("/api/auth/" + marker + "?state=" + marker, 404)
+          probe("/api/auth/callback?code=" + marker, 413, b"x" * (2 * 1024 * 1024 + 1))
+          # Only the CI-owned service is stopped, after the product smoke is complete.
+          subprocess.run(compose + ["stop", "-t", "10", "reddock"], check=True)
+          probe("/api/auth/callback?code=" + marker, 502)
+
+          records = []
+          for service in ("reddock", "reddock-ingress"):
+              result = subprocess.run(compose + ["logs", "--no-color", "--no-log-prefix", service],
+                                      capture_output=True, text=True, check=True)
+              logs = result.stdout + result.stderr
+              assert marker not in logs, "request secret appeared in container logs"
+              if service == "reddock-ingress":
+                  records = [json.loads(line) for line in result.stdout.splitlines()
+                             if line.startswith("{")]
+          assert records, "structured request metrics are missing"
+          for record in records:
+              assert set(record) == {"time", "route", "method", "status", "bytes", "duration_seconds"}
+              assert record["route"] in {"other", "authentication", "api", "static", "application"}
+              assert record["method"] in {"OTHER", "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+          assert any(row["route"] == "authentication" and row["status"] == 413 for row in records)
+          assert any(row["route"] == "authentication" and row["status"] == 502 for row in records)
+          print("Request logs retain bounded metrics without synthetic request secrets.")
+          PY
       - if: always()
         run: |
           compose=(docker compose -p reddock-ci -f compose.yaml -f "$RUNNER_TEMP/compose-ci.yaml")

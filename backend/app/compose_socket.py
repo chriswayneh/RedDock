@@ -32,6 +32,7 @@ def serve() -> None:
             "--uds",
             str(SOCKET_PATH),
             "--no-proxy-headers",
+            "--no-access-log",
         ),
     )
 
