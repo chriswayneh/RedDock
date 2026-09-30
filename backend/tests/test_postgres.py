@@ -1241,9 +1241,10 @@ def _postgres_lab_races(monkeypatch):
 
     try:
         with monkeypatch.context() as race_patch:
-            race_patch.setenv("REDDOCK_LAB_MODE_ENABLED", "true")
-            race_patch.setenv("REDDOCK_MAX_LAB_AUTHORIZATIONS_PER_DOCKYARD", "3")
-            get_settings.cache_clear()
+            settings = get_settings().model_copy(update={
+                "lab_mode_enabled": True, "max_lab_authorizations_per_dockyard": 3,
+            })
+            race_patch.setattr(lab, "get_settings", lambda: settings)
             # Independent processes do not share the local SQLite mutex.
             race_patch.setattr(lab, "_MUTATION_LOCK", nullcontext())
             with ThreadPoolExecutor(max_workers=2) as executor:
