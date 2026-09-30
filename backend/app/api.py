@@ -396,6 +396,7 @@ def authorize_lab_capability(
     dockyard_id: int,
     payload: LabAuthorizationCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> LabAuthorizationRead:
     require_dockyard(dockyard_id, session)
     try:
@@ -406,7 +407,10 @@ def authorize_lab_capability(
             payload.acknowledgement,
             payload.note,
             payload.duration_minutes,
+            authorization=request_authorization(), policy=policy,
         )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except ValueError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     if not decision.allowed:
@@ -423,9 +427,16 @@ def revoke_lab_capability(
     authorization_id: int,
     payload: LabRevokeCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> LabAuthorizationRead:
     require_dockyard(dockyard_id, session)
-    authorization = lab.revoke_authorization(session, dockyard_id, authorization_id)
+    try:
+        authorization = lab.revoke_authorization(
+            session, dockyard_id, authorization_id,
+            authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     if authorization is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Authorization not found")
     return LabAuthorizationRead.model_validate(authorization)

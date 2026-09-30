@@ -195,6 +195,13 @@ deployment is secure.
   both actions retain separate actor records. No browser credential or approval
   note is copied into the security event. Revocation after committed admission
   cannot cancel a probe or retract a packet already admitted for disclosure.
+- Lab grants and revocations recheck current `lab:authorize` permission and
+  commit structured actor attribution with the policy mutation. Audit failure
+  rolls back grant creation, supersession, or revocation. PostgreSQL workspace
+  locking serializes these mutations and the history bound across workers.
+  Grants remain workspace policy until expiry, supersession, or explicit
+  revocation, independently of later changes to their original grantor's role.
+  Discovery separately rechecks the current execution actor and lab policy.
 - Dormant renewal and logout adapters require exact Origin and matching CSRF,
   then consume durable membership admission before mutation. Renewal rechecks
   active identity, rotates both proofs when due, and preserves absolute expiry.

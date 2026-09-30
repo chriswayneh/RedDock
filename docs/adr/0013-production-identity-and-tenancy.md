@@ -180,7 +180,16 @@ audit commit together before target or provider contact. Another authorized
 member can approve a retained request after its requester loses access. Historical
 local pending requests remain usable, with no fabricated requester attribution.
 PostgreSQL races verify one-winner approval and final revocation checks. This does
-not complete lab grants, stored-data workflows, administration, or server acceptance.
+not complete stored-data workflows, administration, or server acceptance.
+
+Lab grant and revocation mutations use the same paired workflow policy, with
+current `lab:authorize` permission held through the atomic policy/audit commit.
+The workspace row serializes PostgreSQL mutations before identity locks; local
+SQLite also uses a process mutex. Grant supersession and the lab history bound
+therefore remain consistent across independent workers. A grant is workspace
+policy until expiry, supersession, or explicit revocation. Revoking its author's
+membership does not implicitly revoke that policy; discovery independently
+checks its current execution actor and the lab gate before contact.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
