@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from app.authorization import LOCAL_AUTHORIZATION
 from app.discovery import registry
 from app.discovery import runner as discovery_runner
 from app.discovery.base import (
@@ -23,6 +24,8 @@ from app.discovery.base import (
     RawArtifact,
 )
 from app.targets import TargetKind
+from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+from tests.phase1 import discovery_receipt
 
 
 @pytest.mark.parametrize("fail_write", [False, True])
@@ -73,7 +76,7 @@ def test_unavailable_pool_rejects_before_creating_run(
         elif unavailable == "closed":
             original.close()
         else:
-            replacement = discovery_runner.DiscoveryRuntime(Mock())
+            replacement = discovery_runner.DiscoveryRuntime(Mock(), LOCAL_WORKFLOW_POLICY)
             setattr(client.app.state, discovery_runner.DISCOVERY_RUNTIME_STATE, replacement)
         response = start(client, dockyard_id, "127.0.0.1")
         assert response.status_code == 503
@@ -171,7 +174,9 @@ def _install(monkeypatch: pytest.MonkeyPatch, stub: StubAdapter) -> None:
     monkeypatch.setattr(
         discovery_runner,
         "submit_run",
-        lambda run_id, factory, _runtime: discovery_runner.execute_run(run_id, factory),
+        lambda run_id, factory, runtime, receipt: discovery_runner.execute_run(
+            run_id, factory, receipt, runtime.policy,
+        ),
     )
 
 
@@ -347,7 +352,8 @@ def test_discovery_history_final_slot_is_process_atomic(
         with SessionLocal() as session:
             try:
                 discovery_runner.create_run(
-                    session, dockyard_id, "127.0.0.1", adapter.name, "safe"
+                    session, dockyard_id, "127.0.0.1", adapter.name, "safe",
+                    authorization=LOCAL_AUTHORIZATION, policy=LOCAL_WORKFLOW_POLICY,
                 )
             except discovery_runner.RunRejected:
                 return "capped"
@@ -492,7 +498,7 @@ def test_scope_removed_between_request_and_execution_denies_the_run(
     monkeypatch.setattr(registry, "get_adapter", lambda name: stub if name == stub.name else None)
     # Hold the run at pending so the scope can change before it executes.
     monkeypatch.setattr(
-        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime: None
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
     )
     entry = add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")
@@ -501,7 +507,10 @@ def test_scope_removed_between_request_and_execution_denies_the_run(
     client.delete(f"/api/dockyards/{dockyard_id}/scope/{entry['id']}")
     from app.database import SessionLocal
 
-    discovery_runner.execute_run(accepted.json()["id"], SessionLocal)
+    discovery_runner.execute_run(
+        accepted.json()["id"], SessionLocal,
+        discovery_receipt(SessionLocal, accepted.json()["id"]), LOCAL_WORKFLOW_POLICY,
+    )
 
     run = client.get(
         f"/api/dockyards/{dockyard_id}/discoveries/{accepted.json()['id']}"
@@ -542,7 +551,7 @@ def test_interrupted_runs_are_marked_rather_than_left_active(
     add_scope,
 ):
     monkeypatch.setattr(
-        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime: None
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
     )
     add_scope(dockyard_id, "127.0.0.1")
     accepted = start(client, dockyard_id, "127.0.0.1")

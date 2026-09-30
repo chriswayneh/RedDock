@@ -2,6 +2,8 @@ import pytest
 
 from app.config import get_settings
 from app.lab_capabilities import EXTENDED_SERVICE_DISCOVERY, LAB_ACKNOWLEDGEMENT
+from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+from tests.phase1 import discovery_receipt
 
 
 @pytest.fixture()
@@ -120,7 +122,7 @@ def test_lab_discovery_needs_both_gates_and_denial_is_a_run(
     monkeypatch.setattr(
         runner_module,
         "submit_run",
-        lambda run_id, _session_factory, _runtime: submitted.append(run_id),
+        lambda run_id, _session_factory, _runtime, _receipt: submitted.append(run_id),
     )
 
     denied = client.post(
@@ -251,7 +253,7 @@ def test_execution_refuses_when_a_name_changes_to_multiple_hosts(
     )
     monkeypatch.setattr(runner_module, "system_resolver", lambda _hostname: next(resolutions))
     monkeypatch.setattr(
-        runner_module, "submit_run", lambda _run_id, _session_factory, _runtime: None
+        runner_module, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
     )
     created = client.post(
         f"/api/dockyards/{dockyard_id}/discoveries",
@@ -268,7 +270,10 @@ def test_execution_refuses_when_a_name_changes_to_multiple_hosts(
     monkeypatch.setattr(NmapAdapter, "run", should_not_run)
     from app.database import SessionLocal
 
-    runner_module.execute_run(created["id"], SessionLocal)
+    runner_module.execute_run(
+        created["id"], SessionLocal,
+        discovery_receipt(SessionLocal, created["id"]), LOCAL_WORKFLOW_POLICY,
+    )
 
     run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{created['id']}").json()
     assert run["status"] == "denied"
@@ -294,7 +299,7 @@ def test_execution_rechecks_revocation_before_adapter_runs(
     monkeypatch.setattr(
         runner_module,
         "submit_run",
-        lambda run_id, _session_factory, _runtime: submitted.append(run_id),
+        lambda run_id, _session_factory, _runtime, _receipt: submitted.append(run_id),
     )
     created = client.post(
         f"/api/dockyards/{dockyard_id}/discoveries",
@@ -316,7 +321,10 @@ def test_execution_rechecks_revocation_before_adapter_runs(
     monkeypatch.setattr(NmapAdapter, "run", should_not_run)
     from app.database import SessionLocal
 
-    runner_module.execute_run(created["id"], SessionLocal)
+    runner_module.execute_run(
+        created["id"], SessionLocal,
+        discovery_receipt(SessionLocal, created["id"]), LOCAL_WORKFLOW_POLICY,
+    )
     run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{created['id']}").json()
     assert run["status"] == "denied"
     assert run["decision"] == "denied_policy"

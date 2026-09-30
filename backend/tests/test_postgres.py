@@ -1063,6 +1063,77 @@ def test_postgresql_migrations_and_crud(
             session.delete(stored)
             session.commit()
 
+        # Duplicate delivery must have one database-wide winner, even when
+        # both workers read pending before either attempts its claim.
+        from app.authorization import LOCAL_AUTHORIZATION
+        from app.discovery import registry as discovery_registry
+        from app.discovery import runner as discovery_runner
+        from app.models import DiscoveryRun, ScopeEntry, SecurityAuditEvent
+        from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+        from tests.test_discovery import StubAdapter
+
+        discovery_adapter = StubAdapter()
+        monkeypatch.setattr(discovery_registry, "get_adapter", lambda _: discovery_adapter)
+        with app.database.SessionLocal() as session:
+            dockyard = Dockyard(name=f"Discovery claim {uuid4()}")
+            session.add(dockyard)
+            session.flush()
+            session.add(ScopeEntry(
+                dockyard_id=dockyard.id, rule="include", kind="ipv4", value="127.0.0.1",
+            ))
+            session.commit()
+            discovery_dockyard_id = dockyard.id
+            run, _, receipt = discovery_runner.create_run(
+                session, dockyard.id, "127.0.0.1", "stub", "safe",
+                authorization=LOCAL_AUTHORIZATION, policy=LOCAL_WORKFLOW_POLICY,
+            )
+            discovery_run_id = run.id
+
+        claim_barrier = Barrier(2)
+        from sqlalchemy.orm import Session as OrmSession
+
+        original_get = OrmSession.get
+
+        def synchronized_run_read(session, entity, ident, **kwargs):
+            result = original_get(session, entity, ident, **kwargs)
+            if entity is DiscoveryRun and ident == discovery_run_id:
+                claim_barrier.wait(timeout=15)
+            return result
+
+        with monkeypatch.context() as claim_patch:
+            claim_patch.setattr(OrmSession, "get", synchronized_run_read)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                claims = [executor.submit(
+                    discovery_runner.execute_run, discovery_run_id,
+                    app.database.SessionLocal, receipt, LOCAL_WORKFLOW_POLICY,
+                ) for _ in range(2)]
+                for claim in claims:
+                    claim.result(timeout=30)
+        assert len(discovery_adapter.requests) == 1
+        with app.database.SessionLocal() as session:
+            assert session.get(DiscoveryRun, discovery_run_id).status == "completed"
+            events = list(session.scalars(select(SecurityAuditEvent).where(
+                SecurityAuditEvent.action == "discovery.execute",
+                SecurityAuditEvent.target_id == str(discovery_run_id),
+            )))
+            assert len(events) == 1
+            assert events[0].outcome == "success"
+            revoked_run, _, revoked_receipt = discovery_runner.create_run(
+                session, discovery_dockyard_id, "127.0.0.1", "stub", "safe",
+                authorization=LOCAL_AUTHORIZATION, policy=LOCAL_WORKFLOW_POLICY,
+            )
+            revoked_run_id = revoked_run.id
+            session.get(Membership, 1).status = "disabled"
+            session.commit()
+        discovery_runner.execute_run(
+            revoked_run_id, app.database.SessionLocal, revoked_receipt, LOCAL_WORKFLOW_POLICY,
+        )
+        with app.database.SessionLocal() as session:
+            assert session.get(DiscoveryRun, revoked_run_id).status == "denied"
+            assert len(discovery_adapter.requests) == 1
+            session.get(Membership, 1).status = "active"
+            session.commit()
+
         # Exercise reporting against the real server: another connection
         # commits a scope change after source capture starts. The report must
         # retain the earlier snapshot across its subsequent SELECT statements.

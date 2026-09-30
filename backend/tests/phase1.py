@@ -8,9 +8,19 @@ about detection and keeps them off the network.
 
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Asset, DiscoveryRun, EvidenceRecord, Observation, Service
+from app.models import Asset, DiscoveryRun, EvidenceRecord, Observation, SecurityAuditEvent, Service
+
+
+def discovery_receipt(factory, run_id: int) -> int:
+    with factory() as session:
+        return session.scalars(select(SecurityAuditEvent.id).where(
+            SecurityAuditEvent.action == "discovery.request",
+            SecurityAuditEvent.target_type == "discovery_run",
+            SecurityAuditEvent.target_id == str(run_id),
+        )).one()
 
 BASE_TIME = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 

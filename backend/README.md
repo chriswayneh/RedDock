@@ -251,6 +251,17 @@ Shutdown drains accepted work in a worker thread before closing authentication,
 provider, limiter, or primary database resources. Compose allows 12 minutes for
 bounded discovery to finish; forced termination still needs restart recovery.
 
+Discovery admission commits a structured requester audit event with the run.
+The queue carries its exact receipt ID, never browser credentials or a cached
+role. Workers resolve the receipt against the run and organization, then recheck
+the configured issuer, organization, active user, membership, and current role
+before scope resolution and immediately before adapter contact. A conditional
+database update gives duplicate deliveries one winner. Final admission is audited
+and committed before adapter contact; revocation after that boundary does not
+cancel an already admitted operation. Restart recovery fails interrupted work
+instead of replaying receipts. Other workflow and approval actor integration,
+database-wide capacity admission, and server deployment acceptance remain open.
+
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
 client bucket, limiting attacker-created rows. Client addresses are normalized

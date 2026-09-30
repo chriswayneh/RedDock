@@ -12,10 +12,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app import lab
+from app.authorization import AuthorizationContext, AuthorizationDenied
 from app.config import get_settings
 from app.database import SessionFactory
 from app.discovery import registry
@@ -33,9 +34,15 @@ from app.discovery.base import (
 from app.dockguard import Decision, Evaluation, evaluate, system_resolver
 from app.evidence import EVIDENCE_SCHEMA, EvidenceStore
 from app.inventory import record_observation, upsert_asset, upsert_service
-from app.models import DiscoveryRun, EvidenceRecord
+from app.models import DiscoveryRun, Dockyard, EvidenceRecord
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 from app.services import scope_rules
 from app.targets import Target, TargetKind, normalize_target
+from app.workflow_authorization import (
+    WorkflowExecutionPolicy,
+    current_workflow_actor,
+    discovery_execution_actor,
+)
 
 logger = logging.getLogger("reddock.discovery")
 
@@ -57,10 +64,11 @@ class DiscoveryUnavailable(RuntimeError):
 class DiscoveryRuntime:
     """Own one pool and drain it before its exact database factory is closed."""
 
-    def __init__(self, session_factory: SessionFactory) -> None:
-        if not callable(session_factory):
-            raise ValueError("an application-owned session factory is required")
+    def __init__(self, session_factory: SessionFactory, policy: WorkflowExecutionPolicy) -> None:
+        if not callable(session_factory) or not isinstance(policy, WorkflowExecutionPolicy):
+            raise ValueError("an application-owned session factory and policy are required")
         self.__session_factory = session_factory
+        self.__policy = policy
         self.__executor = ThreadPoolExecutor(
             max_workers=_settings.max_concurrent_runs, thread_name_prefix="reddock-discovery",
         )
@@ -68,19 +76,28 @@ class DiscoveryRuntime:
         self.__closed = False
         self.__pending: set[Future] = set()
 
-    def owns(self, session_factory: SessionFactory) -> bool:
+    @property
+    def policy(self) -> WorkflowExecutionPolicy:
+        return self.__policy
+
+    def owns(self, session_factory: SessionFactory, mode: str) -> bool:
         with self.__lock:
-            return not self.__closed and session_factory is self.__session_factory
+            return (
+                not self.__closed and session_factory is self.__session_factory
+                and mode == self.__policy.mode
+            )
 
     def _completed(self, future: Future) -> None:
         with self.__lock:
             self.__pending.discard(future)
 
-    def submit(self, run_id: int, session_factory: SessionFactory) -> None:
+    def submit(self, run_id: int, session_factory: SessionFactory, request_event_id: int) -> None:
         with self.__lock:
             if self.__closed or session_factory is not self.__session_factory:
                 raise DiscoveryUnavailable("Discovery unavailable")
-            future = self.__executor.submit(execute_run, run_id, self.__session_factory)
+            future = self.__executor.submit(
+                execute_run, run_id, self.__session_factory, request_event_id, self.__policy,
+            )
             self.__pending.add(future)
         # An already-completed future invokes this callback immediately, so do
         # not register it while holding the pool's admission lock.
@@ -100,11 +117,15 @@ def create_run(
     requested_target: str,
     adapter_name: str,
     profile_name: str,
-) -> tuple[DiscoveryRun, Evaluation]:
+    *, authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> tuple[DiscoveryRun, Evaluation, int]:
     """Serialize the fixed history cap with admission of the next run."""
 
     with _admission_lock:
-        return _create_run(session, dockyard_id, requested_target, adapter_name, profile_name)
+        return _create_run(
+            session, dockyard_id, requested_target, adapter_name, profile_name,
+            authorization=authorization, policy=policy,
+        )
 
 
 def _create_run(
@@ -113,12 +134,22 @@ def _create_run(
     requested_target: str,
     adapter_name: str,
     profile_name: str,
-) -> tuple[DiscoveryRun, Evaluation]:
+    *, authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> tuple[DiscoveryRun, Evaluation, int]:
     """Evaluate a request and persist it, allowed or denied.
 
     A denied request is still recorded: an audit trail that only contains the
     requests that succeeded is not an audit trail.
     """
+    organization_id = session.scalar(select(Dockyard.organization_id).where(
+        Dockyard.id == dockyard_id, Dockyard.organization_id == authorization.organization_id,
+    ))
+    actor = current_workflow_actor(
+        session, policy, organization_id=authorization.organization_id,
+        user_id=authorization.user_id, membership_id=authorization.membership_id,
+    ) if organization_id is not None else None
+    if actor is None:
+        raise AuthorizationDenied("Permission denied")
     retained = session.scalar(
         select(func.count())
         .select_from(DiscoveryRun)
@@ -180,7 +211,7 @@ def _create_run(
     session.flush()
     if profile.requires_lab_authorization:
         if evaluation.allowed:
-            policy = lab.check_capability(
+            lab_policy = lab.check_capability(
                 session,
                 dockyard_id,
                 profile.capability or "",
@@ -188,7 +219,7 @@ def _create_run(
                 discovery_run_id=run.id,
             )
         else:
-            policy = lab.record_denial(
+            lab_policy = lab.record_denial(
                 session,
                 dockyard_id,
                 profile.capability or "",
@@ -196,19 +227,27 @@ def _create_run(
                 reason=evaluation.reason,
                 discovery_run_id=run.id,
             )
-        if not policy.allowed and evaluation.allowed:
+        if not lab_policy.allowed and evaluation.allowed:
             evaluation = replace(
                 evaluation,
                 decision=Decision.DENIED_POLICY,
-                reason=policy.reason,
+                reason=lab_policy.reason,
             )
             run.status = str(RunStatus.DENIED)
             run.decision = str(evaluation.decision)
             run.decision_reason = evaluation.reason[:500]
             run.completed_at = now
+    receipt = append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.DISCOVERY_REQUEST,
+        outcome=SecurityOutcome.SUCCESS if evaluation.allowed else SecurityOutcome.DENIED,
+        target_type="discovery_run", target_id=str(run.id),
+        reason_code="discovery_admitted" if evaluation.allowed else "scope_or_policy_denied",
+    )
+    request_event_id = receipt.id
     session.commit()
     session.refresh(run)
-    return run, evaluation
+    return run, evaluation, request_event_id
 
 
 def active_run_count(session: Session) -> int:
@@ -241,31 +280,80 @@ def get_run(session: Session, dockyard_id: int, run_id: int) -> DiscoveryRun | N
     )
 
 
-def submit_run(run_id: int, session_factory: SessionFactory, runtime: DiscoveryRuntime) -> None:
+def submit_run(
+    run_id: int, session_factory: SessionFactory, runtime: DiscoveryRuntime, request_event_id: int,
+) -> None:
     """Execute a run on the bounded background pool."""
-    runtime.submit(run_id, session_factory)
+    runtime.submit(run_id, session_factory, request_event_id)
 
 
-def execute_run(run_id: int, session_factory: SessionFactory) -> None:
+def execute_run(
+    run_id: int, session_factory: SessionFactory,
+    request_event_id: int, policy: WorkflowExecutionPolicy,
+) -> None:
     """Run one allowed discovery to completion. Never raises."""
     with session_factory() as session:
         run = session.get(DiscoveryRun, run_id)
         if run is None or run.status != str(RunStatus.PENDING):
             return
-        run.status = str(RunStatus.RUNNING)
-        run.started_at = datetime.now(UTC)
-        session.commit()
-
+        owns_claim = False
         try:
-            _perform(session, run)
+            claimed = session.execute(update(DiscoveryRun).where(
+                DiscoveryRun.id == run_id, DiscoveryRun.status == str(RunStatus.PENDING),
+            ).values(status=str(RunStatus.RUNNING), started_at=datetime.now(UTC)))
+            if not claimed.rowcount:
+                session.rollback()
+                return
+            session.commit()
+            owns_claim = True
+            if not _authorize_execution(session, run, request_event_id, policy, final=False):
+                return
+            session.commit()
+            _perform(session, run, request_event_id, policy)
         except AdapterError as error:
             _fail(session, run, str(error))
         except Exception:  # a background run must not die silently
             logger.exception("Discovery run %s failed unexpectedly", run_id)
-            _fail(session, run, "Discovery failed unexpectedly; see the RedDock container log")
+            if owns_claim:
+                _fail(session, run, "Discovery failed unexpectedly; see the RedDock container log")
+            else:
+                session.rollback()
 
 
-def _perform(session: Session, run: DiscoveryRun) -> None:
+def _authorize_execution(
+    session: Session, run: DiscoveryRun, request_event_id: int,
+    policy: WorkflowExecutionPolicy, *, final: bool,
+) -> bool:
+    organization_id = session.scalar(select(Dockyard.organization_id).where(
+        Dockyard.id == run.dockyard_id,
+    ))
+    actor = discovery_execution_actor(
+        session, policy, request_event_id=request_event_id,
+        run_id=run.id, organization_id=organization_id,
+    ) if organization_id is not None else None
+    if actor is None:
+        run.status = str(RunStatus.DENIED)
+        run.decision = str(Decision.DENIED_POLICY)
+        run.decision_reason = "Execution authorization denied"
+        run.completed_at = datetime.now(UTC)
+    if (actor is None or final) and organization_id is not None:
+        append_security_event(
+            session, organization_id=organization_id, actor=actor,
+            action=SecurityAction.DISCOVERY_EXECUTE,
+            outcome=SecurityOutcome.SUCCESS if actor is not None else SecurityOutcome.DENIED,
+            target_type="discovery_run", target_id=str(run.id),
+            reason_code=(
+                "execution_admitted" if actor is not None else "execution_authorization_denied"
+            ),
+        )
+    if actor is None:
+        session.commit()
+    return actor is not None
+
+
+def _perform(
+    session: Session, run: DiscoveryRun, request_event_id: int, policy: WorkflowExecutionPolicy,
+) -> None:
     adapter = registry.get_adapter(run.adapter)
     if adapter is None:
         raise AdapterError(f"Adapter {run.adapter} is no longer available")
@@ -316,16 +404,16 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
         return
 
     if profile.requires_lab_authorization:
-        policy = lab.check_capability(
+        lab_policy = lab.check_capability(
             session,
             run.dockyard_id,
             profile.capability or "",
             action="execute",
             discovery_run_id=run.id,
         )
-        if not policy.allowed:
+        if not lab_policy.allowed:
             run.decision = str(Decision.DENIED_POLICY)
-            run.decision_reason = policy.reason[:500]
+            run.decision_reason = lab_policy.reason[:500]
             run.status = str(RunStatus.DENIED)
             run.completed_at = datetime.now(UTC)
             session.commit()
@@ -338,6 +426,14 @@ def _perform(session: Session, run: DiscoveryRun) -> None:
         excluded_addresses=evaluation.excluded_addresses,
         timeout_seconds=get_settings().max_run_seconds,
     )
+    session.refresh(run, attribute_names=["status"])
+    if run.status != str(RunStatus.RUNNING) or not _authorize_execution(
+        session, run, request_event_id, policy, final=True,
+    ):
+        return
+    # Commit the final identity decision before contact, releasing identity locks.
+    # Revocation after this boundary does not cancel an already admitted operation.
+    session.commit()
     result = adapter.run(request)
     observed_at = datetime.now(UTC)
     observations = list(result.observations)

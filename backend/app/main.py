@@ -39,6 +39,7 @@ from app.request_authentication import (
 )
 from app.response_security import ResponseSecurityMiddleware
 from app.validation.runner import recover_interrupted_runs as recover_interrupted_validations
+from app.workflow_authorization import WorkflowExecutionPolicy, workflow_execution_policy
 
 STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 
@@ -82,7 +83,9 @@ def build_lifespan(
         [DormantServerRuntimeConfig, OidcProvider, RateLimiterRuntime, Engine],
         AuthenticationRuntime,
     ] = create_authentication_runtime,
-    discovery_factory: Callable[[SessionFactory], DiscoveryRuntime] = DiscoveryRuntime,
+    discovery_factory: Callable[
+        [SessionFactory, WorkflowExecutionPolicy], DiscoveryRuntime
+    ] = DiscoveryRuntime,
 ):
     """Own future server resources once per application process and lifespan."""
 
@@ -164,7 +167,9 @@ def build_lifespan(
                     AuthenticationRequestBinding(database_binding, authentication_runtime),
                 )
                 authentication_binding_installed = True
-            discovery_runtime = discovery_factory(request_session_factory)
+            discovery_runtime = discovery_factory(
+                request_session_factory, workflow_execution_policy(server_config),
+            )
             setattr(application.state, DISCOVERY_RUNTIME_STATE, discovery_runtime)
             yield
         finally:

@@ -230,9 +230,12 @@ def test_configured_lifespan_starts_and_closes_capabilities_in_exact_order(
         events.append("authentication.create")
         return OrderedAuthentication(config, provider, limiter, engine)
 
-    def discovery_factory(session_factory):
+    def discovery_factory(session_factory, policy):
         events.append("discovery.create")
-        return OrderedDiscovery(session_factory)
+        assert policy.mode == "server"
+        assert policy.issuer == config.oidc_issuer
+        assert policy.organization_slug == config.organization_slug
+        return OrderedDiscovery(session_factory, policy)
 
     monkeypatch.setattr(
         app.main,
