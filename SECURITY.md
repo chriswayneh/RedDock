@@ -160,8 +160,9 @@ deployment is secure.
   or profile claim and resolve only a pre-provisioned issuer/subject identity.
   No authentication route is registered, and server mode still fails startup.
 - A dormant authentication coordinator composes these controls in fail-closed
-  order. A future HTTP adapter must supply the canonical client address from
-  trusted ingress. Login limiting precedes provider discovery and state
+  order. Dormant login/callback HTTP adapters supply only the canonical client
+  address from trusted ingress and require the exact database/authentication
+  pairing. Login requires one exact Origin before limiting, provider discovery and state
   creation. Callback limiting precedes one-use state consumption, and the state
   is burned before provider token exchange, preventing callback replay from
   repeating that exchange. The matching user and membership rows are locked
@@ -169,7 +170,9 @@ deployment is secure.
   an audited hash-only session. Post-burn provider exchange and ID-token
   validation failures make a best-effort attempt to record bounded denial
   events, and expected failures reveal no provider, database, identity, or
-  session detail. No auth route or UI calls this code, and server mode
+  session detail. The isolated HTTP harness tests secure cookies, no-store CSRF
+  responses, no-referrer headers, duplicate parameters, browser binding, and
+  failure cleanup. No auth route is registered in the running app, and server mode
   remains disabled. The configured dormant lifespan builds an owned primary
   database runtime from the same validated server configuration and gives its
   engine to the coordinator. Startup verifies the effective login, database,

@@ -233,14 +233,7 @@ class AuthenticationRuntime:
         """
         if self.__closed:
             raise RequestAuthenticationUnavailable("Authentication unavailable")
-        hosts = request.headers.getlist("host")
-        if request.url.scheme != "https" or len(hosts) != 1 or not origin_matches(
-            "https://" + hosts[0], self.__origin,
-        ):
-            return None
-        try:
-            client_subject(getattr(request.state, "reddock_client_ip", None))
-        except (ValueError, TypeError):
+        if self.verified_browser_client(request) is None:
             return None
         credentials = browser_request_credentials(request, self.__origin)
         if credentials is None:
@@ -264,6 +257,27 @@ class AuthenticationRuntime:
             return result.context
         except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
             raise RequestAuthenticationUnavailable("Authentication unavailable") from None
+
+    def verified_browser_client(
+        self, request: Request, *, require_origin: bool = False,
+    ) -> str | None:
+        """Accept only canonical ingress metadata and, for login, one exact Origin."""
+
+        hosts = request.headers.getlist("host")
+        if self.__closed or request.url.scheme != "https" or len(hosts) != 1:
+            return None
+        if not origin_matches("https://" + hosts[0], self.__origin):
+            return None
+        if require_origin:
+            origins = request.headers.getlist("origin")
+            if len(origins) != 1 or not origin_matches(origins[0], self.__origin):
+                return None
+        client_ip = getattr(request.state, "reddock_client_ip", None)
+        try:
+            client_subject(client_ip)
+        except (ValueError, TypeError):
+            return None
+        return client_ip
 
     def close(self) -> None:
         """Disable this facade without taking ownership of shared resources."""

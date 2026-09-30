@@ -183,7 +183,8 @@ Core sign-in pieces now connect behind a dormant process-owned coordinator.
 Protected request dependencies now resolve hash-only browser sessions through
 the same owned database, recheck active membership and role, and require exact
 Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
-Sign-in and logout are not registered as HTTP routes. Session renewal, workflow
+Sign-in and callback adapters are tested in an isolated HTTP harness and remain
+unregistered in the app. Logout, session renewal, workflow
 actor checks, administration, and end-to-end team access still need integration.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
@@ -296,8 +297,14 @@ These primitives are not an enabled authentication system:
   It receives only database connect, `public` schema usage, bucket-table
   changes, and sequence usage. Operators provision and rotate it outside
   RedDock migrations.
-- The next enablement checkpoint still needs HTTP sign-in, callback, logout,
-  cookie, and error handling; session renewal and workflow actor propagation;
+- A dormant HTTP router now connects sign-in and callback to the exact owned
+  authentication/database pair. Login requires trusted HTTPS ingress and one
+  exact Origin. Callback requires one state, code, and browser-binding cookie;
+  it issues the secure bearer cookie and a no-store CSRF response. Failures are
+  generic, and trusted callback outcomes clear the transaction cookie. The
+  running app does not register this router.
+- The next enablement checkpoint still needs logout and session renewal HTTP
+  adapters; a frontend sign-in flow and callback handling; workflow actor propagation;
   administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
   capacity planning; forced-interruption exercises; and end-to-end authenticated
