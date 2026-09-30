@@ -64,7 +64,13 @@ def test_audit_metadata_refuses_free_form_content(session: Session, field: str):
         )
 
 
-@pytest.mark.parametrize("limit", [0, 1_001])
+@pytest.mark.parametrize("limit", [0, 1_001, True, 1.5, "1"])
 def test_audit_read_limit_is_bounded(session: Session, limit: int):
     with pytest.raises(ValueError, match="between 1 and 1000"):
         list_security_events(session, 1, limit=limit)
+
+
+@pytest.mark.parametrize("before_id", [0, -1, True, 1.5, "1", 9_223_372_036_854_775_808])
+def test_audit_cursor_is_bounded(session: Session, before_id):
+    with pytest.raises(ValueError, match="positive database identifier"):
+        list_security_events(session, 1, before_id=before_id)

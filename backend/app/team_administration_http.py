@@ -26,6 +26,7 @@ TEAM_ROUTE_PERMISSIONS = MappingProxyType(
         ("POST", "/api/team/members"): Permission.MEMBERSHIP_MANAGE,
         ("PATCH", "/api/team/members/{membership_id}"): Permission.MEMBERSHIP_MANAGE,
         ("POST", "/api/team/ownership"): Permission.ORGANIZATION_TRANSFER,
+        ("GET", "/api/team/audit"): Permission.AUDIT_READ,
     }
 )
 
@@ -107,6 +108,19 @@ def build_team_administration_router() -> APIRouter:
     """Build an isolated, explicitly protected adapter without enabling team access."""
 
     router = APIRouter(prefix="/api/team", route_class=_ProtectedTeamRoute, include_in_schema=False)
+
+    @router.get("/audit")
+    def audit(
+        authority: TeamAuthority,
+        session: TeamSession,
+        limit: Annotated[int, Query(ge=1, le=100)] = 100,
+        before_id: Annotated[int | None, Query(ge=1, le=9_223_372_036_854_775_807)] = None,
+    ) -> Response:
+        actor, policy = authority
+        page = team.audit_history(
+            session, authorization=actor, policy=policy, limit=limit, before_id=before_id
+        )
+        return JSONResponse(jsonable_encoder(page))
 
     @router.get("/members")
     def members(
