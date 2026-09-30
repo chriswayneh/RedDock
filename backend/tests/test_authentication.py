@@ -2,12 +2,17 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from pydantic import SecretBytes, SecretStr
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.authentication import AuthenticationFailure, AuthenticationRuntime
+from app.authentication_http import build_authentication_router
+from app.browser_security import OIDC_TRANSACTION_COOKIE_NAME, SESSION_COOKIE_NAME
 from app.config import DormantServerRuntimeConfig
+from app.database import DATABASE_REQUEST_BINDING_STATE, DatabaseRequestBinding
 from app.models import (
     BrowserSession,
     Membership,
@@ -18,6 +23,11 @@ from app.models import (
 )
 from app.oidc import OidcError, VerifiedIdentity
 from app.rate_limits import RateLimitDecision, RateLimitUnavailable
+from app.request_authentication import (
+    AUTHENTICATION_REQUEST_BINDING_STATE,
+    AuthenticationRequestBinding,
+)
+from app.trusted_ingress import TrustedIngressMiddleware
 
 
 def _config() -> DormantServerRuntimeConfig:
@@ -460,3 +470,241 @@ def test_closed_runtime_and_unverified_client_values_fail_without_detail(
         )
     assert len(_limiter.calls) == limiter_call_count
     assert len(_provider.calls) == provider_call_count
+
+
+@pytest.fixture()
+def authentication_http_setup(authentication_setup):
+    database, config, limiter, provider, runtime, membership_id = authentication_setup
+    application = FastAPI()
+    binding = DatabaseRequestBinding("server", database.SessionLocal)
+    setattr(application.state, DATABASE_REQUEST_BINDING_STATE, binding)
+    setattr(
+        application.state, AUTHENTICATION_REQUEST_BINDING_STATE,
+        AuthenticationRequestBinding(binding, runtime),
+    )
+    application.include_router(build_authentication_router())
+    application.add_middleware(
+        TrustedIngressMiddleware, public_origin=config.public_origin,
+        trusted_proxy_cidrs=("10.0.0.5/32",),
+    )
+    with TestClient(
+        application, base_url=config.public_origin, client=("10.0.0.5", 1234),
+        follow_redirects=False,
+    ) as client:
+        client.headers.update({
+            "X-Forwarded-For": "203.0.113.10",
+            "X-Forwarded-Host": "reddock.example",
+            "X-Forwarded-Proto": "https",
+        })
+        yield client, application, authentication_setup
+
+
+def _http_login(client):
+    response = client.post("/api/auth/login", headers={"Origin": "https://reddock.example"})
+    assert response.status_code == 303
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    cookie = response.headers["set-cookie"]
+    for attribute in ("Secure", "HttpOnly", "SameSite=lax", "Path=/", "Max-Age=600"):
+        assert attribute in cookie
+    assert "Domain=" not in cookie
+    assert SESSION_COOKIE_NAME not in cookie
+    return parse_qs(urlsplit(response.headers["location"]).query)["state"][0]
+
+
+def test_http_login_callback_issues_session_and_replay_fails(authentication_http_setup):
+    client, _application, setup = authentication_http_setup
+    database, _config, limiter, provider, runtime, _membership_id = setup
+    state = _http_login(client)
+    response = client.get("/api/auth/callback", params={
+        "state": state, "code": "private-code", "session_state": "provider-extension",
+        "next": "https://other.example",
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"csrf_token", "expires_at"}
+    bearer = client.cookies.get(SESSION_COOKIE_NAME)
+    assert bearer and bearer not in response.text
+    assert "private-code" not in response.text and state not in response.text
+    cookies = response.headers.get_list("set-cookie")
+    assert len(cookies) == 2
+    assert "Max-Age=28800" in cookies[0]
+    assert "Max-Age=0" in cookies[1]
+    for cookie in cookies:
+        for attribute in ("Secure", "HttpOnly", "SameSite=lax", "Path=/"):
+            assert attribute in cookie
+        assert "Domain=" not in cookie
+    assert client.cookies.get(OIDC_TRANSACTION_COOKIE_NAME) is None
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert "location" not in response.headers
+    assert "provider-extension" not in response.text and "other.example" not in response.text
+    with database.SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(BrowserSession)) == 1
+    # The issued credentials actually authorize through the existing capability.
+    from starlette.requests import Request
+
+    request = Request({
+        "type": "http", "method": "POST", "scheme": "https", "path": "/api/test",
+        "headers": [
+            (b"host", b"reddock.example"), (b"origin", b"https://reddock.example"),
+            (b"cookie", f"{SESSION_COOKIE_NAME}={bearer}".encode()),
+            (b"x-reddock-csrf", body["csrf_token"].encode()),
+        ], "state": {"reddock_client_ip": "203.0.113.10"},
+    })
+    assert runtime.authorize_browser_request(request) is not None
+    exchange_count = len(provider.calls)
+    replay = client.get("/api/auth/callback", params={"state": state, "code": "private-code"})
+    assert replay.status_code == 401
+    assert replay.json() == {"detail": "Authentication failed"}
+    assert len(provider.calls) == exchange_count
+    assert client.cookies.get(SESSION_COOKIE_NAME) == bearer
+    assert limiter.calls[-1][0].action.value == "oidc.callback"
+
+
+@pytest.mark.parametrize("origin", [None, "null", "https://other.example"])
+def test_http_login_rejects_origin_before_admission(authentication_http_setup, origin):
+    client, _application, setup = authentication_http_setup
+    headers = {} if origin is None else {"Origin": origin}
+    response = client.post("/api/auth/login", headers=headers)
+    assert response.status_code == 401
+    assert "set-cookie" not in response.headers
+    assert setup[2].calls == [] and setup[3].calls == []
+
+
+def test_http_login_rejects_duplicate_origin(authentication_http_setup):
+    client, _application, setup = authentication_http_setup
+    response = client.post("/api/auth/login", headers=[
+        ("Origin", "https://reddock.example"), ("Origin", "https://reddock.example"),
+    ])
+    assert response.status_code == 401
+    assert setup[2].calls == []
+
+
+@pytest.mark.parametrize("binding_failure", ["missing", "local", "different", "closed"])
+def test_http_adapter_requires_exact_live_pair(authentication_http_setup, binding_failure):
+    client, application, setup = authentication_http_setup
+    if binding_failure == "missing":
+        delattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE)
+    elif binding_failure == "closed":
+        setup[4].close()
+    else:
+        mode = "local" if binding_failure == "local" else "server"
+        setattr(application.state, DATABASE_REQUEST_BINDING_STATE,
+                DatabaseRequestBinding(mode, setup[0].SessionLocal))
+    for method, path in (("POST", "/api/auth/login"), ("GET", "/api/auth/callback")):
+        response = client.request(method, path, headers={"Origin": "https://reddock.example"})
+        assert response.status_code == 401
+        assert "set-cookie" not in response.headers
+    assert setup[2].calls == [] and setup[3].calls == []
+
+
+@pytest.mark.parametrize("query", [
+    "state=x&state=y&code=c", "state=x&code=c&code=d", "state=x",
+    "state=x&code=c&error=access_denied", "error=access_denied&error_description=private",
+])
+def test_http_malformed_callback_is_limited_and_generic(authentication_http_setup, query):
+    client, _application, setup = authentication_http_setup
+    _http_login(client)
+    provider_count = len(setup[3].calls)
+    response = client.get("/api/auth/callback?" + query)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication failed"}
+    assert setup[2].calls[-1][0].action.value == "oidc.callback"
+    assert len(setup[3].calls) == provider_count
+    assert client.cookies.get(OIDC_TRANSACTION_COOKIE_NAME) is None
+    with setup[0].SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(BrowserSession)) == 0
+
+
+@pytest.mark.parametrize("failure", ["throttled", "limiter", "provider", "membership"])
+def test_http_callback_denial_never_sets_bearer(authentication_http_setup, failure):
+    client, _application, setup = authentication_http_setup
+    database, _config, limiter, provider, _runtime, membership_id = setup
+    state = _http_login(client)
+    if failure == "throttled":
+        limiter.decision = RateLimitDecision(allowed=False, retry_after_seconds=37)
+    elif failure == "limiter":
+        limiter.error = RateLimitUnavailable("private database detail")
+    elif failure == "provider":
+        provider.exchange_error = OidcError("private provider detail")
+    else:
+        with database.SessionLocal() as session:
+            session.get(Membership, membership_id).status = "disabled"
+            session.commit()
+    response = client.get("/api/auth/callback", params={"state": state, "code": "private-code"})
+    assert response.status_code == (429 if failure == "throttled" else 401)
+    assert response.json() == {"detail": "Authentication failed"}
+    assert response.headers.get("retry-after") == ("37" if failure == "throttled" else None)
+    assert SESSION_COOKIE_NAME not in response.headers["set-cookie"]
+    assert client.cookies.get(OIDC_TRANSACTION_COOKIE_NAME) is None
+    with database.SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(BrowserSession)) == 0
+
+
+def test_http_adapter_not_registered_in_supported_application(client):
+    from app.main import app
+
+    assert not any(getattr(route, "path", "").startswith("/api/auth/") for route in app.routes)
+    assert client.get("/api/auth/callback?state=x&code=y").status_code == 404
+    assert client.post("/api/auth/login").status_code == 405
+
+
+@pytest.mark.parametrize("cookie", ["missing", "wrong", "duplicate"])
+def test_http_callback_requires_one_matching_browser_cookie(authentication_http_setup, cookie):
+    client, _application, setup = authentication_http_setup
+    state = _http_login(client)
+    browser_token = client.cookies.get(OIDC_TRANSACTION_COOKIE_NAME)
+    client.cookies.clear()
+    headers = {}
+    if cookie == "wrong":
+        headers["Cookie"] = f"{OIDC_TRANSACTION_COOKIE_NAME}={'x' * 43}"
+    elif cookie == "duplicate":
+        headers["Cookie"] = (
+            f"{OIDC_TRANSACTION_COOKIE_NAME}={browser_token}; "
+            f"{OIDC_TRANSACTION_COOKIE_NAME}={browser_token}"
+        )
+    provider_count = len(setup[3].calls)
+    response = client.get(
+        "/api/auth/callback", params={"state": state, "code": "private-code"}, headers=headers,
+    )
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication failed"}
+    assert setup[2].calls[-1][0].action.value == "oidc.callback"
+    assert len(setup[3].calls) == provider_count
+
+
+def test_http_adapter_without_ingress_marker_denies_before_admission(authentication_setup):
+    database, _config, limiter, provider, runtime, _membership_id = authentication_setup
+    application = FastAPI()
+    binding = DatabaseRequestBinding("server", database.SessionLocal)
+    setattr(application.state, DATABASE_REQUEST_BINDING_STATE, binding)
+    setattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE,
+            AuthenticationRequestBinding(binding, runtime))
+    application.include_router(build_authentication_router())
+    with TestClient(application, base_url="https://reddock.example") as client:
+        for method, path in (("POST", "/api/auth/login"), ("GET", "/api/auth/callback")):
+            response = client.request(method, path, headers={
+                "Origin": "https://reddock.example", "X-Forwarded-For": "203.0.113.10",
+            })
+            assert response.status_code == 401
+            assert "set-cookie" not in response.headers
+    assert limiter.calls == [] and provider.calls == []
+
+
+def test_http_login_provider_and_limit_failures_are_generic(authentication_http_setup):
+    client, _application, setup = authentication_http_setup
+    limiter, provider = setup[2:4]
+    provider.discovery_error = OidcError("private provider detail")
+    response = client.post("/api/auth/login", headers={"Origin": "https://reddock.example"})
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication failed"}
+    assert "set-cookie" not in response.headers
+    provider_count = len(provider.calls)
+    limiter.decision = RateLimitDecision(allowed=False, retry_after_seconds=37)
+    response = client.post("/api/auth/login", headers={"Origin": "https://reddock.example"})
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == "37"
+    assert response.json() == {"detail": "Authentication failed"}
+    assert "set-cookie" not in response.headers
+    assert len(provider.calls) == provider_count

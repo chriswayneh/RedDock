@@ -125,8 +125,9 @@ exact pre-provisioned issuer/subject membership, locked through session
 issuance, before an audited hash-only session is created. Post-burn provider
 exchange and ID-token validation failures make a best-effort attempt to record
 bounded denial events. Expected failures are generic, with a retry interval
-only for a durable rate-limit denial. No HTTP sign-in route or UI invokes this
-coordinator, and server mode remains disabled. The primary runtime verifies its effective login, database,
+only for a durable rate-limit denial. A dormant HTTP router invokes this
+coordinator in an isolated harness; the running app does not register it or
+provide a sign-in UI, and server mode remains disabled. The primary runtime verifies its effective login, database,
 fixed search path, and timeout policy; owns its engine and session factory for
 the application lifespan; bounds connection, checkout, statement, lock,
 idle-transaction, and transaction waits; and disposes the engine at shutdown.
@@ -226,10 +227,15 @@ removing role change.
   CSRF/origin failures, and approval-time role changes.
 - PostgreSQL race coverage confirms concurrent session issuance, touch,
   rotation, revocation, cleanup, and one-winner callback consumption while the
-  lifecycle and coordinator remain disconnected from routes.
+  lifecycle and coordinator remain disconnected from the running app's routes.
 - Authentication orchestration tests cover admission order, generic failures,
   provider outages, replay, unprovisioned identities, process lifecycle, and
   one-winner PostgreSQL callback concurrency.
+- Isolated HTTP adapter tests cover trusted ingress, exact live capability
+  pairing, exact login Origin, one-use browser-bound callbacks, secure cookies,
+  CSRF delivery, no-store/no-referrer headers, denial cleanup, replay, and
+  duplicate parameters/cookies. The callback returns JSON with a CSRF proof and
+  expiry; frontend handling and access-log redaction still need integration.
 - Primary database tests cover exact-config construction, effective session
   policy, bounded timeout options, serialized startup, owned session and engine
   lifecycle, and cleanup after partial startup failure.

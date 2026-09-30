@@ -38,6 +38,7 @@ app/reporting/      deterministic reports, evidence manifests, and DockPack expo
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
 app/authentication.py dormant login and callback coordinator; no HTTP routes
+app/authentication_http.py isolated login/callback router factory; not registered
 app/database.py      local persistence plus dormant owned PostgreSQL runtimes
 app/oidc.py         dormant OIDC protocol and identity-resolution boundary
 app/rate_limits.py  dormant cross-worker authentication throttling
@@ -175,10 +176,26 @@ pre-provisioned identity may receive one audited hash-only session. Provider
 exchange and token-validation failures make a best-effort attempt to record a
 bounded, typed denial event. Expected failures return one generic
 authentication error; only a
-durable rate-limit denial may carry a retry interval. This coordinator has no
-route or UI and does not authenticate current requests. It receives the engine
+durable rate-limit denial may carry a retry interval. An isolated HTTP harness
+now invokes this coordinator through `build_authentication_router`. The running
+application does not register that router or provide a sign-in UI. It receives the engine
 owned by the same exact-config primary database runtime, so it cannot be paired
 with an unrelated ambient database engine.
+
+The dormant router defines `POST /api/auth/login` and `GET /api/auth/callback`.
+Both require the exact live database/authentication pairing and canonical trusted
+HTTPS ingress. Login also requires one exact public Origin before admission.
+Its `303` destination comes only from the constrained provider runtime.
+Callback accepts one state and code, ignores unknown provider extensions without
+using them as destinations or response fields, and rejects ambiguous browser-binding
+cookies, and passes malformed/provider-error callbacks through durable admission
+without consuming a valid attempt. Success returns only the CSRF proof and
+absolute expiry as JSON, with the bearer in its secure host-only cookie. Every
+trusted callback outcome clears the transaction cookie; failures preserve an
+existing session. Responses use no-store and no-referrer policies and generic
+errors, with Retry-After only for durable denial. There is no caller-selected
+redirect. Frontend callback handling, logout, renewal, and deployment access-log
+redaction remain integration gates. Server mode remains blocked.
 
 The dormant primary database runtime is constructed directly from the validated
 server configuration. It owns the main PostgreSQL engine and session factory
