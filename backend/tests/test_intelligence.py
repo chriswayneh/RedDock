@@ -7,6 +7,8 @@ from threading import Event
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from tests.phase1 import LOCAL_WORKFLOW
+
 
 @dataclass
 class FakeProvider:
@@ -46,7 +48,7 @@ class BlockingProvider(FakeProvider):
         return super().analyze(packet)
 
 
-def _prepared(recorder, session: Session, dockyard_id: int) -> None:
+def _prepared(recorder, session: Session, dockyard_id: int, *, workflow=LOCAL_WORKFLOW) -> None:
     recorder.identified_service(
         "127.0.0.1", 23, service_name="telnet", product="Example daemon", version="1.0"
     )
@@ -54,8 +56,8 @@ def _prepared(recorder, session: Session, dockyard_id: int) -> None:
     from app.correlation.runner import start_correlation
     from app.detection.runner import start_detection
 
-    assert start_detection(session, dockyard_id).status == "completed"
-    assert start_correlation(session, dockyard_id).status == "completed"
+    assert start_detection(session, dockyard_id, **workflow).status == "completed"
+    assert start_correlation(session, dockyard_id, **workflow).status == "completed"
 
 
 def test_intelligence_requires_configuration(client: TestClient, dockyard_id: int):
@@ -190,7 +192,7 @@ def test_packet_excludes_findings_created_after_its_correlation_snapshot(
     _prepared(recorder, session, dockyard_id)
     snapshot_ids = {item.id for item in session.query(Finding).all()}
     recorder.identified_service("127.0.0.2", 21, service_name="ftp")
-    assert start_detection(session, dockyard_id).status == "completed"
+    assert start_detection(session, dockyard_id, **LOCAL_WORKFLOW).status == "completed"
     current_ids = {item.id for item in session.query(Finding).all()}
     assert current_ids > snapshot_ids
 

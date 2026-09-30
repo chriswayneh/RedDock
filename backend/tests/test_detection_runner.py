@@ -31,7 +31,7 @@ from app.detection.base import (
 )
 from app.detection.fingerprint import fingerprint
 from app.models import Finding, FindingEvidence, Observation
-from tests.phase1 import Recorder
+from tests.phase1 import LOCAL_WORKFLOW, Recorder
 
 
 class StubDetector(Detector):
@@ -88,7 +88,9 @@ def install(monkeypatch: pytest.MonkeyPatch, *detectors: Detector) -> None:
 
 
 def detect(recorder: Recorder):
-    return detection_runner.start_detection(recorder.session, recorder.dockyard_id)
+    return detection_runner.start_detection(
+        recorder.session, recorder.dockyard_id, **LOCAL_WORKFLOW,
+    )
 
 
 def findings_of(recorder: Recorder) -> list[Finding]:
@@ -393,7 +395,7 @@ class TestFingerprintAndDeduplication:
         other = client.post("/api/dockyards", json={"name": "Other"}).json()["id"]
         outsider = Recorder(endpoint.session, other)
         outsider.http_endpoint("https://127.0.0.1:8443", headers={})
-        detection_runner.start_detection(outsider.session, other)
+        detection_runner.start_detection(outsider.session, other, **LOCAL_WORKFLOW)
 
         rows = list(endpoint.session.scalars(select(Finding).order_by(Finding.id)))
         assert len(rows) == 2

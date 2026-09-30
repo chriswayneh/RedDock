@@ -202,6 +202,12 @@ deployment is secure.
   Grants remain workspace policy until expiry, supersession, or explicit
   revocation, independently of later changes to their original grantor's role.
   Discovery separately rechecks the current execution actor and lab policy.
+- Detection, correlation, and report creation record the requester and recheck
+  current permission before publishing results. Detection and correlation commit
+  findings/relationships, evidence references, and the publication audit together.
+  Permission, audit, or evidence failure rolls back unpublished results. Reporting
+  retains its consistent source snapshot and checks current permission after
+  rendering, before publication. These checks do not enable server deployment.
 - Dormant renewal and logout adapters require exact Origin and matching CSRF,
   then consume durable membership admission before mutation. Renewal rechecks
   active identity, rotates both proofs when due, and preserves absolute expiry.

@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from app.detection import runner as detection_runner
 from app.models import Finding
-from tests.phase1 import Recorder
+from tests.phase1 import LOCAL_WORKFLOW, Recorder
 
 
 def test_startup_recovers_running_validations_and_preserves_pending(
@@ -107,7 +107,7 @@ def test_detection_repairs_a_legacy_missing_evidence_link(
     assert expected_record is not None
     link.evidence_record_id = None
     db.commit()
-    detection_runner.start_detection(db, dockyard_id)
+    detection_runner.start_detection(db, dockyard_id, **LOCAL_WORKFLOW)
     db.refresh(link)
     assert link.evidence_record_id == expected_record
 
@@ -147,7 +147,7 @@ def header_finding(
 ) -> Finding:
     add_scope(dockyard_id, origin)
     recorder.http_endpoint(origin, headers={})
-    detection_runner.start_detection(recorder.session, dockyard_id)
+    detection_runner.start_detection(recorder.session, dockyard_id, **LOCAL_WORKFLOW)
     return recorder.session.scalar(
         select(Finding).where(
             Finding.dockyard_id == dockyard_id,
@@ -240,7 +240,7 @@ def test_a_non_http_finding_has_no_validation_profile(
     client: TestClient, recorder: Recorder, dockyard_id: int
 ):
     recorder.identified_service("127.0.0.1", 23, service_name="telnet")
-    detection_runner.start_detection(recorder.session, dockyard_id)
+    detection_runner.start_detection(recorder.session, dockyard_id, **LOCAL_WORKFLOW)
     finding = recorder.session.scalar(
         select(Finding).where(Finding.detector == "service.rules")
     )

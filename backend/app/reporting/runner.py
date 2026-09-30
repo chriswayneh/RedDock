@@ -20,6 +20,7 @@ from zipfile import ZIP_STORED, ZipFile, ZipInfo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission
 from app.config import get_settings
 from app.coverage import assessment_coverage
 from app.evidence import (
@@ -47,6 +48,8 @@ from app.models import (
     Service,
     ValidationRun,
 )
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 REPORT_SCHEMA = "reddock.reporting/3"
 MANIFEST_SCHEMA = "reddock.evidence-manifest/1"
@@ -82,13 +85,20 @@ class VerifiedArtifact:
         return self.reference.expected_sha256
 
 
-def start_report(session: Session, dockyard_id: int) -> ReportRun:
+def start_report(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> ReportRun:
     """Create one complete reporting snapshot under the single-process lock."""
     with _CREATE_LOCK:
-        return _start_report(session, dockyard_id)
+        return _start_report(session, dockyard_id, authorization=authorization, policy=policy)
 
 
-def _start_report(session: Session, dockyard_id: int) -> ReportRun:
+def _start_report(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> ReportRun:
+    require_workflow_actor(session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN)
     settings = get_settings()
     count = (
         session.scalar(
@@ -109,6 +119,15 @@ def _start_report(session: Session, dockyard_id: int) -> ReportRun:
 
     run = ReportRun(dockyard_id=dockyard_id, status="running", report_schema=REPORT_SCHEMA)
     session.add(run)
+    session.flush()
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.REPORT_REQUEST, outcome=SecurityOutcome.SUCCESS,
+        target_type="report_run", target_id=str(run.id), reason_code="report_requested",
+    )
     session.commit()
     session.refresh(run)
 
@@ -194,10 +213,21 @@ def _start_report(session: Session, dockyard_id: int) -> ReportRun:
         run.source_counts = snapshot["counts"]
         run.status = "completed"
         run.completed_at = datetime.now(UTC)
+        actor = require_workflow_actor(
+            session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+        )
+        append_security_event(
+            session, organization_id=actor.organization_id, actor=actor,
+            action=SecurityAction.REPORT_PUBLISH, outcome=SecurityOutcome.SUCCESS,
+            target_type="report_run", target_id=str(run.id), reason_code="report_published",
+        )
         session.commit()
         session.refresh(run)
         return run
-    except (EvidenceError, ReportRejected, OSError, ValueError, json.JSONDecodeError) as error:
+    except (
+        EvidenceError, ReportRejected, AuthorizationDenied, OSError, ValueError,
+        json.JSONDecodeError,
+    ) as error:
         session.rollback()
         _remove_partial_report(store, dockyard_id, run.id)
         failed = session.get(ReportRun, run.id)

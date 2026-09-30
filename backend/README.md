@@ -283,6 +283,16 @@ explicit revocation; changing the original grantor's role does not revoke it.
 Discovery still independently rechecks its execution actor and lab policy before
 contact. The deployment-owned lab opt-in remains required.
 
+Detection, correlation, and report creation also require the paired workflow
+policy. Each run commits requester attribution before processing and rechecks
+current permission at publication. Detection and correlation now publish their
+result rows, evidence references, and publication audit in one transaction;
+evidence, audit, or permission failure leaves previous results intact and marks
+the run failed. Reporting preserves its consistent source snapshot, then checks
+current authority before publishing artifacts; failed publication removes its
+partial report package. Failed runs never expose a successful publication event.
+Sensitive edits, export auditing, and team administration remain separate gates.
+
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
 client bucket, limiting attacker-created rows. Client addresses are normalized

@@ -16,6 +16,7 @@ from app.models import (
     FrameworkMapping,
     Observation,
 )
+from tests.phase1 import LOCAL_WORKFLOW
 
 
 def _prepared(recorder, session: Session, dockyard_id: int) -> None:
@@ -25,7 +26,7 @@ def _prepared(recorder, session: Session, dockyard_id: int) -> None:
     recorder.http_endpoint("http://127.0.0.1:8080", headers={"server": "example"}, port=8080)
     from app.detection.runner import start_detection
 
-    detected = start_detection(session, dockyard_id)
+    detected = start_detection(session, dockyard_id, **LOCAL_WORKFLOW)
     assert detected.status == "completed"
 
 
@@ -34,7 +35,7 @@ def test_correlation_builds_only_hashed_explainable_relationships(
 ):
     _prepared(recorder, session, dockyard_id)
 
-    run = runner.start_correlation(session, dockyard_id)
+    run = runner.start_correlation(session, dockyard_id, **LOCAL_WORKFLOW)
 
     assert run.status == "completed"
     assert run.asset_relationship_count == 1
@@ -131,7 +132,7 @@ def test_asset_relationship_requires_the_exact_response_address(
     response.detail = {**response.detail, "address": "127.0.0.2"}
     session.commit()
 
-    run = runner.start_correlation(session, dockyard_id)
+    run = runner.start_correlation(session, dockyard_id, **LOCAL_WORKFLOW)
     assert run.status == "completed"
     assert run.asset_relationship_count == 0
 
@@ -144,7 +145,7 @@ def test_edge_limit_fails_the_snapshot_before_dense_correlation(
     _prepared(recorder, session, dockyard_id)
     monkeypatch.setattr(get_settings(), "max_correlation_edges", 1)
 
-    run = runner.start_correlation(session, dockyard_id)
+    run = runner.start_correlation(session, dockyard_id, **LOCAL_WORKFLOW)
 
     assert run.status == "failed"
     assert run.error == "Correlation would create more than 1 edges"

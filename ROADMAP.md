@@ -191,7 +191,9 @@ rechecks current membership before execution and immediately before adapter cont
 Validation and intelligence now record separate request and approval actors and
 recheck the approver's current permission before external contact. Lab grant and
 revocation changes also record the current actor and serialize workspace mutations.
-The remaining stored-data workflows and team administration still need integration.
+Detection, correlation, and report creation also record their actors and recheck
+current permission before publishing results. Sensitive edits, export audit,
+and team administration still need integration.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
