@@ -225,6 +225,16 @@ no-store with fixed browser security headers. Transfer invalidates both members'
 existing cookies and requires a new login. The running app registers none of
 these routes; administration UI and server deployment remain unfinished.
 
+The same dormant router exposes security history only with current `audit:read`
+permission. Owner/admin/auditor roles can read it; this does not grant auditors
+access to the identity roster or member changes. Reads return at most 100
+structured event snapshots with explicit UTC timestamps and a descending ID
+cursor, without names, OIDC subjects, or credentials. The organization comes
+only from rechecked authority, never from a query parameter. New events do not
+shift subsequent cursor pages. Reads retain historical actor-role snapshots and
+nullable actor IDs, emit no recursive audit events, and use the same no-store
+response hardening. Retention and restricted archival export remain open.
+
 Workspace creation, scope mutations, and finding-status edits require current
 permission and commit actor attribution with the mutation. Scope mutations use
 workspace locking before identity locks, preserving duplicate and count bounds

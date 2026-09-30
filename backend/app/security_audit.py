@@ -89,14 +89,23 @@ def list_security_events(
     organization_id: int,
     *,
     limit: int = 100,
+    before_id: int | None = None,
 ) -> list[SecurityAuditEvent]:
-    if not 1 <= limit <= 1_000:
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1_000:
         raise ValueError("Audit event limit must be between 1 and 1000")
+    if before_id is not None and (
+        isinstance(before_id, bool) or not isinstance(before_id, int)
+        or not 1 <= before_id <= 9_223_372_036_854_775_807
+    ):
+        raise ValueError("Audit cursor must be a positive database identifier")
+    statement = select(SecurityAuditEvent).where(
+        SecurityAuditEvent.organization_id == organization_id,
+    )
+    if before_id is not None:
+        statement = statement.where(SecurityAuditEvent.id < before_id)
     return list(
         session.scalars(
-            select(SecurityAuditEvent)
-            .where(SecurityAuditEvent.organization_id == organization_id)
-            .order_by(SecurityAuditEvent.id.desc())
+            statement.order_by(SecurityAuditEvent.id.desc())
             .limit(limit)
         )
     )

@@ -199,6 +199,9 @@ ownership with atomic audit records and session revocation. Its dormant HTTP
 adapters enforce exact browser authority and reviewed route permissions in an
 isolated harness. The administration UI, audit retention, and end-to-end access
 integration remain open; no team routes are registered in the running app.
+The dormant team audit endpoint restricts history to current owners, admins,
+and auditors, returns at most 100 structured events, and pages by event ID so
+new writes do not repeat previously reviewed events.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.

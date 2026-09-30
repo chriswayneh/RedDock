@@ -6,6 +6,7 @@ excluded; the first owner still comes only from the offline bootstrap command.
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from threading import Lock
 
@@ -16,7 +17,12 @@ from sqlalchemy.orm import Session
 from app.authorization import AuthorizationContext, AuthorizationDenied, Permission, Role
 from app.config import ConfigurationError, canonical_oidc_issuer
 from app.models import Membership, Organization, User
-from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.security_audit import (
+    SecurityAction,
+    SecurityOutcome,
+    append_security_event,
+    list_security_events,
+)
 from app.session_auth import revoke_membership_sessions
 from app.workflow_authorization import WorkflowExecutionPolicy, current_workflow_actor
 
@@ -42,6 +48,27 @@ class MemberSnapshot:
     role: Role
     status: MemberStatus
     user_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class AuditSnapshot:
+    id: int
+    actor_user_id: int | None
+    actor_membership_id: int | None
+    actor_role: str | None
+    action: str
+    outcome: str
+    target_type: str | None
+    target_id: str | None
+    reason_code: str | None
+    request_id: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class AuditPage:
+    items: tuple[AuditSnapshot, ...]
+    next_before_id: int | None
 
 
 def _snapshot(member: Membership, user: User) -> MemberSnapshot:
@@ -220,6 +247,44 @@ def list_members(
             .limit(limit)
         ).all()
         return [_snapshot(member, user) for member, user in rows]
+
+
+def audit_history(
+    session: Session,
+    *,
+    authorization: AuthorizationContext,
+    policy: WorkflowExecutionPolicy,
+    limit: int = 100,
+    before_id: int | None = None,
+) -> AuditPage:
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        raise TeamAdministrationRejected("Invalid audit window")
+    with _administration(session, policy, authorization, Permission.AUDIT_READ) as actor:
+        try:
+            rows = list_security_events(
+                session, actor.organization_id, limit=limit + 1, before_id=before_id
+            )
+        except ValueError:
+            raise TeamAdministrationRejected("Invalid audit window") from None
+        items = tuple(
+            AuditSnapshot(
+                row.id,
+                row.actor_user_id,
+                row.actor_membership_id,
+                row.actor_role,
+                row.action,
+                row.outcome,
+                row.target_type,
+                row.target_id,
+                row.reason_code,
+                row.request_id,
+                row.created_at.replace(tzinfo=UTC)
+                if row.created_at.tzinfo is None
+                else row.created_at.astimezone(UTC),
+            )
+            for row in rows[:limit]
+        )
+        return AuditPage(items, items[-1].id if len(rows) > limit else None)
 
 
 def provision_member(
