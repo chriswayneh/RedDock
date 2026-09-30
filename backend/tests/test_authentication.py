@@ -516,7 +516,10 @@ def test_http_login_callback_issues_session_and_replay_fails(authentication_http
     client, _application, setup = authentication_http_setup
     database, _config, limiter, provider, runtime, _membership_id = setup
     state = _http_login(client)
-    response = client.get("/api/auth/callback", params={"state": state, "code": "private-code"})
+    response = client.get("/api/auth/callback", params={
+        "state": state, "code": "private-code", "session_state": "provider-extension",
+        "next": "https://other.example",
+    })
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {"csrf_token", "expires_at"}
@@ -534,6 +537,8 @@ def test_http_login_callback_issues_session_and_replay_fails(authentication_http
     assert client.cookies.get(OIDC_TRANSACTION_COOKIE_NAME) is None
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["referrer-policy"] == "no-referrer"
+    assert "location" not in response.headers
+    assert "provider-extension" not in response.text and "other.example" not in response.text
     with database.SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(BrowserSession)) == 1
     # The issued credentials actually authorize through the existing capability.
@@ -596,7 +601,7 @@ def test_http_adapter_requires_exact_live_pair(authentication_http_setup, bindin
 
 @pytest.mark.parametrize("query", [
     "state=x&state=y&code=c", "state=x&code=c&code=d", "state=x",
-    "state=x&code=c&next=https://other.example", "error=access_denied&error_description=private",
+    "state=x&code=c&error=access_denied", "error=access_denied&error_description=private",
 ])
 def test_http_malformed_callback_is_limited_and_generic(authentication_http_setup, query):
     client, _application, setup = authentication_http_setup

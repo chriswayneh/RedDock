@@ -186,7 +186,8 @@ The dormant router defines `POST /api/auth/login` and `GET /api/auth/callback`.
 Both require the exact live database/authentication pairing and canonical trusted
 HTTPS ingress. Login also requires one exact public Origin before admission.
 Its `303` destination comes only from the constrained provider runtime.
-Callback accepts exactly one state and code, rejects ambiguous browser-binding
+Callback accepts one state and code, ignores unknown provider extensions without
+using them as destinations or response fields, and rejects ambiguous browser-binding
 cookies, and passes malformed/provider-error callbacks through durable admission
 without consuming a valid attempt. Success returns only the CSRF proof and
 absolute expiry as JSON, with the bearer in its secure host-only cookie. Every

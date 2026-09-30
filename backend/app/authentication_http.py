@@ -75,13 +75,15 @@ def build_authentication_router() -> APIRouter:
             return _harden(_failure())
         parameters = request.query_params
         valid = (
-            set(parameters) == {"state", "code"}
+            "error" not in parameters
             and len(parameters.getlist("state")) == 1
             and len(parameters.getlist("code")) == 1
         )
         try:
             # Malformed and provider-error callbacks still pass durable admission
             # before credential validation, but cannot consume a valid attempt.
+            # RFC 6749 requires ignoring unknown response parameters. None can
+            # select a provider, redirect destination, or field in our response.
             issued = runtime.complete_callback(
                 client_ip,
                 state=parameters["state"] if valid else "",
