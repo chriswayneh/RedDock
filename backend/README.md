@@ -262,6 +262,17 @@ cancel an already admitted operation. Restart recovery fails interrupted work
 instead of replaying receipts. Other workflow and approval actor integration,
 database-wide capacity admission, and server deployment acceptance remain open.
 
+Validation and intelligence requests and approvals now receive an immutable
+workflow policy paired with the exact request database binding. They record
+requester and approver separately in structured security events. Approval checks
+current authority before verification and again when committing its atomic claim
+and audit, before contacting the target or provider. Permission or audit failure
+rolls back the claim; no contact occurs. Another currently authorized member can
+approve an existing request even if its requester is revoked. Existing local
+pending requests remain approvable without inventing historical requester records.
+Revocation after committed admission cannot cancel a probe or retract a provider
+disclosure. These changes do not enable server mode or a sign-in UI.
+
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
 client bucket, limiting attacker-created rows. Client addresses are normalized

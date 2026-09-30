@@ -188,6 +188,9 @@ HTTP harness and remain unregistered in the app. Frontend session handling,
 the remaining workflow actor checks, administration, and end-to-end team access
 still need integration. Discovery now carries a durable requester receipt and
 rechecks current membership before execution and immediately before adapter contact.
+Validation and intelligence now record separate request and approval actors and
+recheck the approver's current permission before external contact. Lab grants,
+the remaining stored-data workflows, and team administration still need integration.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.

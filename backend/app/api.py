@@ -115,6 +115,8 @@ from app.services import (
 )
 from app.targets import TargetError
 from app.validation import runner as validation_runner
+from app.workflow_authorization import WorkflowExecutionPolicy
+from app.workflow_requests import request_workflow_policy
 
 router = APIRouter(
     prefix="/api",
@@ -799,11 +801,16 @@ def create_intelligence_run(
     dockyard_id: int,
     payload: IntelligenceCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> IntelligenceRunRead:
     """Create and retain the exact packet; do not contact a provider."""
     require_dockyard(dockyard_id, session)
     try:
-        return intelligence_runner.create_run(session, dockyard_id)
+        return intelligence_runner.create_run(
+            session, dockyard_id, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except intelligence_runner.RunRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
@@ -817,11 +824,17 @@ def approve_intelligence_run(
     run_id: int,
     payload: IntelligenceApprovalCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> IntelligenceRunRead:
     """Approve sending only the retained packet to its bound provider."""
     require_dockyard(dockyard_id, session)
     try:
-        return intelligence_runner.approve_run(session, dockyard_id, run_id, payload.note)
+        return intelligence_runner.approve_run(
+            session, dockyard_id, run_id, payload.note,
+            authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except intelligence_runner.RunRejected as error:
         message = str(error)
         code = (
@@ -944,6 +957,7 @@ def request_validation(
     finding_id: int,
     payload: ValidationRequestCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> ValidationRunRead:
     """Request, but do not yet run, a finding's one safe validation profile."""
     require_dockyard(dockyard_id, session)
@@ -951,7 +965,11 @@ def request_validation(
     if finding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
     try:
-        return validation_runner.create_run(session, dockyard_id, finding)
+        return validation_runner.create_run(
+            session, dockyard_id, finding, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except validation_runner.ValidationRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
@@ -979,11 +997,17 @@ def approve_validation(
     run_id: int,
     payload: ValidationApprovalCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> Response | ValidationRunRead:
     """Apply the explicit local approval gate, then re-evaluate DockGuard."""
     require_dockyard(dockyard_id, session)
     try:
-        run = validation_runner.approve_run(session, dockyard_id, run_id, payload.note)
+        run = validation_runner.approve_run(
+            session, dockyard_id, run_id, payload.note,
+            authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except validation_runner.ValidationRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     if run.status == validation_runner.DENIED:

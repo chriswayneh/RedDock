@@ -188,6 +188,13 @@ deployment is secure.
   Audit failure prevents contact. Revocation after final committed admission
   does not cancel an already admitted operation; other workflow and approval
   actor integration remains a server-deployment gate.
+- Validation and intelligence approvals recheck the current approver after
+  scope or packet verification and commit a structured actor audit with the
+  one-winner approval claim before external contact. Failed permission or audit
+  checks roll back that claim. The approver need not be the original requester;
+  both actions retain separate actor records. No browser credential or approval
+  note is copied into the security event. Revocation after committed admission
+  cannot cancel a probe or retract a packet already admitted for disclosure.
 - Dormant renewal and logout adapters require exact Origin and matching CSRF,
   then consume durable membership admission before mutation. Renewal rechecks
   active identity, rotates both proofs when due, and preserves absolute expiry.

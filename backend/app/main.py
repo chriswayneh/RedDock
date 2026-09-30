@@ -40,6 +40,7 @@ from app.request_authentication import (
 from app.response_security import ResponseSecurityMiddleware
 from app.validation.runner import recover_interrupted_runs as recover_interrupted_validations
 from app.workflow_authorization import WorkflowExecutionPolicy, workflow_execution_policy
+from app.workflow_requests import WORKFLOW_REQUEST_BINDING_STATE, WorkflowRequestBinding
 
 STATIC_DIRECTORY = Path(__file__).resolve().parents[2] / "static"
 
@@ -98,7 +99,7 @@ def build_lifespan(
             raise RuntimeError("database request capability is already installed")
         if hasattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE) or hasattr(
             application.state, DISCOVERY_RUNTIME_STATE,
-        ):
+        ) or hasattr(application.state, WORKFLOW_REQUEST_BINDING_STATE):
             raise RuntimeError("request capability is already installed")
         primary_database = None
         provider = None
@@ -110,6 +111,7 @@ def build_lifespan(
         instance_lock = None
         discovery_runtime = None
         authentication_binding_installed = False
+        workflow_binding_installed = False
         try:
             if server_config is not None:
                 primary_database = primary_database_factory(server_config)
@@ -167,9 +169,11 @@ def build_lifespan(
                     AuthenticationRequestBinding(database_binding, authentication_runtime),
                 )
                 authentication_binding_installed = True
-            discovery_runtime = discovery_factory(
-                request_session_factory, workflow_execution_policy(server_config),
-            )
+            workflow_policy = workflow_execution_policy(server_config)
+            setattr(application.state, WORKFLOW_REQUEST_BINDING_STATE,
+                    WorkflowRequestBinding(database_binding, workflow_policy))
+            workflow_binding_installed = True
+            discovery_runtime = discovery_factory(request_session_factory, workflow_policy)
             setattr(application.state, DISCOVERY_RUNTIME_STATE, discovery_runtime)
             yield
         finally:
@@ -182,6 +186,8 @@ def build_lifespan(
                         delattr(application.state, DISCOVERY_RUNTIME_STATE)
                     if authentication_binding_installed:
                         delattr(application.state, AUTHENTICATION_REQUEST_BINDING_STATE)
+                    if workflow_binding_installed:
+                        delattr(application.state, WORKFLOW_REQUEST_BINDING_STATE)
                     if request_capability_installed:
                         delattr(application.state, DATABASE_REQUEST_BINDING_STATE)
                 finally:

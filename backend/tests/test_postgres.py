@@ -1134,6 +1134,8 @@ def test_postgresql_migrations_and_crud(
             session.get(Membership, 1).status = "active"
             session.commit()
 
+        _postgres_approval_races(monkeypatch)
+
         # Exercise reporting against the real server: another connection
         # commits a scope change after source capture starts. The report must
         # retain the earlier snapshot across its subsequent SELECT statements.
@@ -1178,6 +1180,102 @@ def test_postgresql_migrations_and_crud(
         monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'after-postgres.db'}")
         app.config.get_settings.cache_clear()
         app.database.configure_engine()
+
+
+def _postgres_approval_races(monkeypatch):
+    from app.authorization import LOCAL_AUTHORIZATION, AuthorizationDenied
+    from app.database import SessionLocal
+    from app.intelligence import runner as intelligence
+    from app.models import Dockyard, Finding, Membership, ScopeEntry, SecurityAuditEvent
+    from app.validation import runner as validation
+    from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+    from tests.phase1 import Recorder
+    from tests.test_intelligence import FakeProvider, _prepared
+
+    provider = FakeProvider()
+    monkeypatch.setattr(intelligence, "get_provider", lambda: provider)
+    probes = []
+
+    def probe(*args):
+        probes.append(args)
+        return validation.ValidationResult("confirmed", "high", "Confirmed", {}, b"{}")
+
+    monkeypatch.setattr(validation, "_validate", probe)
+    with SessionLocal() as session:
+        dockyard = Dockyard(name=f"Approval races {uuid4()}")
+        session.add(dockyard)
+        session.commit()
+        dockyard_id = dockyard.id
+        _prepared(Recorder(session, dockyard_id), session, dockyard_id)
+        session.add(ScopeEntry(
+            dockyard_id=dockyard_id, rule="include", kind="url", value="http://127.0.0.1:8080",
+        ))
+        session.commit()
+        finding_id = session.scalar(select(Finding.id).where(
+            Finding.dockyard_id == dockyard_id, Finding.rule_id == "plaintext-http",
+        ))
+
+    actor_args = {"authorization": LOCAL_AUTHORIZATION, "policy": LOCAL_WORKFLOW_POLICY}
+    for kind, runner, verify_name, calls, rejected in (
+        ("validation", validation, "_evaluate", probes, validation.ValidationRejected),
+        ("intelligence", intelligence, "_verify_retained_packet", provider.calls,
+         intelligence.RunRejected),
+    ):
+        def create():
+            with SessionLocal() as session:
+                args = [session, dockyard_id]
+                if kind == "validation":
+                    args.append(session.get(Finding, finding_id))
+                return runner.create_run(*args, **actor_args).id
+
+        run_id = create()
+        original_verify = getattr(runner, verify_name)
+        barrier = Barrier(2)
+
+        def synchronize(*args):
+            result = original_verify(*args)
+            barrier.wait(timeout=15)
+            return result
+
+        def approve():
+            with SessionLocal() as session:
+                try:
+                    return runner.approve_run(
+                        session, dockyard_id, run_id, "Reviewed approval", **actor_args,
+                    ).status
+                except rejected:
+                    return "claim_lost"
+
+        with monkeypatch.context() as race_patch:
+            race_patch.setattr(runner, verify_name, synchronize)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                results = list(executor.map(lambda _: approve(), range(2)))
+        assert sorted(results) == ["claim_lost", "completed"]
+        assert len(calls) == 1
+        with SessionLocal() as session:
+            events = list(session.scalars(select(SecurityAuditEvent).where(
+                SecurityAuditEvent.action == f"{kind}.approve",
+                SecurityAuditEvent.target_id == str(run_id),
+            )))
+            assert len(events) == 1
+            assert events[0].actor_membership_id == 1
+
+        run_id = create()
+
+        def revoke(*args):
+            result = original_verify(*args)
+            with SessionLocal.begin() as writer:
+                writer.get(Membership, 1).status = "disabled"
+            return result
+
+        with monkeypatch.context() as revoke_patch:
+            revoke_patch.setattr(runner, verify_name, revoke)
+            with pytest.raises(AuthorizationDenied):
+                approve()
+        with SessionLocal.begin() as session:
+            assert runner.get_run(session, dockyard_id, run_id).status == "pending_approval"
+            session.get(Membership, 1).status = "active"
+        assert len(calls) == 1
 
 
 def test_postgresql_primary_database_runtime_serializes_startup_and_bounds_locks():
