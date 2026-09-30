@@ -3,13 +3,14 @@ from http.cookies import SimpleCookie
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.browser_security import CSRF_HEADER_NAME, SESSION_COOKIE_NAME
 from app.database import DATABASE_REQUEST_BINDING_STATE, DatabaseRequestBinding
 from app.models import BrowserSession, Membership, Organization, SecurityAuditEvent, User
 from app.rate_limits import RateLimitDecision, RateLimitUnavailable
 from app.request_authentication import AUTHENTICATION_REQUEST_BINDING_STATE
-from app.session_auth import SessionUnavailable, create_browser_session, use_browser_session
+from app.session_auth import create_browser_session, use_browser_session
 from tests.test_authentication import authentication_http_setup as authentication_http_setup
 from tests.test_authentication import authentication_setup as authentication_setup
 
@@ -146,9 +147,10 @@ def test_failed_admission_or_commit_preserves_cookie_and_session(
         limiter.error = RateLimitUnavailable("private database error")
     else:
         def unavailable(*args, **kwargs):
-            raise SessionUnavailable("private database error")
-        name = "use_browser_session" if operation == "renew" else "logout_proven_browser_session"
-        monkeypatch.setattr(f"app.authentication.{name}", unavailable)
+            raise SQLAlchemyError("private database error")
+        # Fail after session mutation is staged, proving the lifecycle transaction
+        # rolls it back instead of merely testing a failure before database work.
+        monkeypatch.setattr("app.session_auth.append_security_event", unavailable)
     response = client.post(f"/api/auth/{operation}", headers=headers)
     assert response.status_code == (429 if failure == "denied" else 401)
     assert response.json() == {"detail": "Authentication failed"}
