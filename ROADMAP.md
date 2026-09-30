@@ -195,8 +195,10 @@ Detection, correlation, and report creation also record their actors and recheck
 current permission before publishing results. Workspace, scope, finding-status,
 and export actions now also record current actors. A dormant administration core
 now provisions exact configured identities, changes member access, and transfers
-ownership with atomic audit records and session revocation. Its HTTP adapters
-and UI, audit retention, and end-to-end access integration remain open.
+ownership with atomic audit records and session revocation. Its dormant HTTP
+adapters enforce exact browser authority and reviewed route permissions in an
+isolated harness. The administration UI, audit retention, and end-to-end access
+integration remain open; no team routes are registered in the running app.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
