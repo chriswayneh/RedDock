@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import compare_digest
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -616,24 +616,23 @@ def revoke_membership_sessions(
     )
     if membership is None:
         return 0
-    records = list(
-        session.scalars(
-            select(BrowserSession)
-            .where(BrowserSession.membership_id == membership_id)
-            .order_by(BrowserSession.id)
-            .with_for_update(of=BrowserSession)
+    # Session issuance and rotation take the same membership lock. Count current
+    # leaves and revoke retained lineage without loading all historical rows.
+    active_families = session.scalar(
+        select(func.count()).select_from(BrowserSession).where(
+            BrowserSession.membership_id == membership_id,
+            BrowserSession.replaced_at.is_(None),
+            BrowserSession.revoked_at.is_(None),
         )
     )
-    active_families = {
-        item.family_hash
-        for item in records
-        if item.replaced_at is None and item.revoked_at is None
-    }
-    for item in records:
-        if item.family_hash in active_families and item.revoked_at is None:
-            item.revoked_at = revoked_at
+    session.execute(
+        update(BrowserSession).where(
+            BrowserSession.membership_id == membership_id,
+            BrowserSession.revoked_at.is_(None),
+        ).values(revoked_at=revoked_at).execution_options(synchronize_session="evaluate")
+    )
     session.flush()
-    return len(active_families)
+    return active_families
 
 
 def purge_inactive_browser_sessions(

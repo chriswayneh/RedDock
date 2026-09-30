@@ -199,7 +199,20 @@ and the publication event become visible together. A failed check or evidence
 write rolls back unpublished results while retaining a failed run. Reporting
 preserves its independent consistent snapshot transaction, then checks current
 permission at publication and removes partial artifacts on failure. Team
-administration, audit retention, and full deployment acceptance remain open.
+administration integration, audit retention, and full deployment acceptance remain open.
+
+The dormant team administration core requires a current configured owner/admin
+and a fresh, operation-owned transaction. It provisions an exact issuer/subject
+without signup or silently attaching existing identities, with at most 1,000
+retained memberships and 100 entries per roster page. Ordinary edits cannot
+assign or modify an owner. Explicit owner-only transfer requires exactly one
+retained owner and an active recipient; the former owner becomes an admin.
+Access changes and transfer revoke all affected browser-session lineage and
+commit structured audit events in the same transaction. The organization row
+serializes administration before identity and session locks across PostgreSQL
+workers; SQLite tests also use a process mutex. Audit failure rolls back the
+identities and revocations together. Administration HTTP adapters and UI remain
+unregistered/unimplemented; this core does not enable server deployment.
 
 Workspace creation, scope mutations, and finding-status edits require current
 permission and commit actor attribution with the mutation. Scope mutations use
