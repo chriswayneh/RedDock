@@ -181,6 +181,13 @@ deployment is secure.
   the owned engine. This does not narrow the main role, which still runs
   migrations and accesses application data. It does not enable a route, UI, or
   server mode.
+- Discovery queues an exact committed requester audit receipt. Workers reject
+  mismatched run/organization receipts and re-read configured issuer, active
+  identity, membership, and current role before scope resolution and adapter
+  contact. A database claim prevents duplicate delivery from repeating contact.
+  Audit failure prevents contact. Revocation after final committed admission
+  does not cancel an already admitted operation; other workflow and approval
+  actor integration remains a server-deployment gate.
 - Dormant renewal and logout adapters require exact Origin and matching CSRF,
   then consume durable membership admission before mutation. Renewal rechecks
   active identity, rotates both proofs when due, and preserves absolute expiry.

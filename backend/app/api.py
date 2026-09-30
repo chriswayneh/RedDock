@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import lab
+from app.authorization import AuthorizationDenied
 from app.authorization_dependencies import authorize_request, request_authorization
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
@@ -610,9 +611,12 @@ def start_discovery(
     """
     require_dockyard(dockyard_id, session)
     try:
-        run, evaluation = discovery_runner.create_run(
-            session, dockyard_id, payload.target, payload.adapter, payload.profile
+        run, evaluation, request_event_id = discovery_runner.create_run(
+            session, dockyard_id, payload.target, payload.adapter, payload.profile,
+            authorization=request_authorization(), policy=discovery_runtime.policy,
         )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except discovery_runner.RunRejected as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
@@ -624,7 +628,7 @@ def start_discovery(
             status_code=status.HTTP_403_FORBIDDEN,
         )
     try:
-        discovery_runner.submit_run(run.id, session_factory, discovery_runtime)
+        discovery_runner.submit_run(run.id, session_factory, discovery_runtime, request_event_id)
     except discovery_runner.DiscoveryUnavailable:
         run.status = "failed"
         run.error = "Discovery unavailable"

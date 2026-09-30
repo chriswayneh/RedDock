@@ -9,7 +9,7 @@ def request_discovery_runtime(request: Request) -> DiscoveryRuntime:
     runtime = getattr(request.app.state, DISCOVERY_RUNTIME_STATE, None)
     if (
         binding is None or not isinstance(runtime, DiscoveryRuntime)
-        or not runtime.owns(binding.session_factory)
+        or not runtime.owns(binding.session_factory, binding.mode)
     ):
         raise HTTPException(status_code=503, detail="Discovery unavailable")
     return runtime

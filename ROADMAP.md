@@ -185,7 +185,9 @@ the same owned database, recheck active membership and role, and require exact
 Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
 Sign-in, callback, logout, and session-renewal adapters are tested in an isolated
 HTTP harness and remain unregistered in the app. Frontend session handling,
-workflow actor checks, administration, and end-to-end team access still need integration.
+the remaining workflow actor checks, administration, and end-to-end team access
+still need integration. Discovery now carries a durable requester receipt and
+rechecks current membership before execution and immediately before adapter contact.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.

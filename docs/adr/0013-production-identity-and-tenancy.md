@@ -158,8 +158,19 @@ closed, or mismatched runtimes reject admission. Shutdown drains accepted work
 before closing authentication, provider, limiter, and primary database resources.
 Compose gives the bounded discovery work 12 minutes to finish. Forced termination
 still requires interrupted-work recovery on restart. HTTP session renewal,
-sign-in/logout, and workflow actor rechecks are not enabled. Server mode remains
-disabled until those integrations and the other deployment gates are complete.
+sign-in/logout, and the remaining workflow actor rechecks are not enabled.
+Server mode remains disabled until those integrations and the other deployment
+gates are complete.
+
+Discovery commits a requester audit receipt with admission and queues that exact
+receipt alongside the run ID. Execution validates its action, successful outcome,
+run, and organization, and re-reads current user and membership authority under
+the lifespan's immutable issuer/organization policy. A conditional pending-to-running
+update gives duplicate delivery one database-wide winner. Authority is checked
+before scope resolution and again immediately before adapter contact; the final
+decision and audit commit before contact. Revocation after that boundary does not
+cancel an admitted external operation. Receipts are not replayed on restart, and
+this claim does not make capacity admission database-wide.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
