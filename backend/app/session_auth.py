@@ -46,6 +46,7 @@ class IssuedSession:
 class SessionUseResult:
     context: AuthorizationContext
     session_id: int
+    expires_at: datetime
     replacement: IssuedSession | None = field(default=None, repr=False)
 
 
@@ -444,20 +445,17 @@ def use_browser_session(
                 )
                 if context is None:
                     raise SessionRejected("Browser session is invalid")
-                session_id = (
-                    replacement.session_id
-                    if replacement is not None
-                    else lifecycle_session.scalar(
-                        select(BrowserSession.id).where(
-                            BrowserSession.token_hash == _digest(active_token)
-                        )
+                record = lifecycle_session.scalar(
+                    select(BrowserSession).where(
+                        BrowserSession.token_hash == _digest(active_token)
                     )
                 )
-                if session_id is None:
+                if record is None:
                     raise SessionRejected("Browser session is invalid")
                 result = SessionUseResult(
                     context=context,
-                    session_id=session_id,
+                    session_id=record.id,
+                    expires_at=_as_utc(record.expires_at),
                     replacement=replacement,
                 )
         return result
@@ -521,6 +519,67 @@ def revoke_browser_session(
         ),
     )
     return True
+
+
+def resolve_browser_logout_membership(
+    session: Session,
+    token: str,
+    csrf_token: str,
+    *,
+    expected_issuer: str,
+    expected_organization_slug: str,
+) -> int | None:
+    """Lock and prove family ownership, including retained inactive generations.
+
+    This is revocation authority only, never request authentication. A disabled
+    identity or an expired/replaced token may still close its own family.
+    """
+
+    if not is_browser_session_token(token) or not is_browser_session_token(csrf_token):
+        return None
+    locked = _locked_family(session, _digest(token))
+    if locked is None:
+        return None
+    presented, membership, user, _family = locked
+    if user.oidc_issuer != expected_issuer or not csrf_token_matches(
+        csrf_token, presented.csrf_token_hash,
+    ):
+        return None
+    if session.scalar(select(Organization.id).where(
+        Organization.id == membership.organization_id,
+        Organization.slug == expected_organization_slug,
+    )) is None:
+        return None
+    return membership.id
+
+
+def logout_proven_browser_session(
+    lifecycle_engine: Engine,
+    token: str,
+    csrf_token: str,
+    *,
+    expected_issuer: str,
+    expected_organization_slug: str,
+    now: datetime | None = None,
+) -> bool:
+    """Recheck browser proof under family locks and commit idempotent revocation."""
+
+    if not isinstance(lifecycle_engine, Engine):
+        raise ValueError("a dedicated lifecycle engine is required")
+    try:
+        with Session(lifecycle_engine) as lifecycle_session:
+            with lifecycle_session.begin():
+                membership_id = resolve_browser_logout_membership(
+                    lifecycle_session, token, csrf_token,
+                    expected_issuer=expected_issuer,
+                    expected_organization_slug=expected_organization_slug,
+                )
+                if membership_id is None:
+                    return False
+                revoke_browser_session(lifecycle_session, token, now=now)
+                return True
+    except SQLAlchemyError as error:
+        raise SessionUnavailable("browser session store is unavailable") from error
 
 
 def logout_browser_session(

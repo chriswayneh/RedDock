@@ -9,6 +9,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from app.authentication import AuthenticationFailure, AuthenticationRuntime
 from app.browser_security import (
+    clear_browser_session_cookie,
     clear_oidc_transaction_cookie,
     oidc_transaction_cookie,
     set_browser_session_cookie,
@@ -94,12 +95,48 @@ def build_authentication_router() -> APIRouter:
                 "csrf_token": issued.csrf_token,
                 "expires_at": issued.expires_at.isoformat(),
             })
-            set_browser_session_cookie(response, issued.token)
+            set_browser_session_cookie(response, issued.token, expires_at=issued.expires_at)
         except AuthenticationFailure as error:
             response = _failure(error)
         # Every trusted callback outcome ends this browser transaction. Preserve
         # any pre-existing session on denial; only successful issuance replaces it.
         clear_oidc_transaction_cookie(response)
+        return _harden(response)
+
+    @router.post("/renew")
+    def renew(request: Request) -> Response:
+        runtime = _runtime(request)
+        if runtime is None:
+            return _harden(_failure())
+        try:
+            result = runtime.renew_browser_session(request)
+            replacement = result.replacement
+            response = JSONResponse({
+                "rotated": replacement is not None,
+                "expires_at": result.expires_at.isoformat(),
+                "csrf_token": replacement.csrf_token if replacement is not None else None,
+            })
+            if replacement is not None:
+                set_browser_session_cookie(
+                    response, replacement.token, expires_at=replacement.expires_at,
+                )
+        except AuthenticationFailure as error:
+            response = _failure(error)
+        # A losing concurrent renewal must not clear or overwrite the winner's cookie.
+        return _harden(response)
+
+    @router.post("/logout")
+    def logout(request: Request) -> Response:
+        runtime = _runtime(request)
+        if runtime is None:
+            return _harden(_failure())
+        try:
+            runtime.logout_browser_request(request)
+            response = Response(status_code=204)
+            clear_browser_session_cookie(response)
+            clear_oidc_transaction_cookie(response)
+        except AuthenticationFailure as error:
+            response = _failure(error)
         return _harden(response)
 
     return router

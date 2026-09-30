@@ -758,7 +758,7 @@ def test_postgresql_migrations_and_crud(
             SESSION_ROTATION_INTERVAL,
             SESSION_TOUCH_INTERVAL,
             create_browser_session,
-            logout_browser_session,
+            logout_proven_browser_session,
             purge_inactive_browser_sessions,
             revoke_membership_sessions,
             use_browser_session,
@@ -855,6 +855,14 @@ def test_postgresql_migrations_and_crud(
 
         clear_browser_sessions()
         logout_source, logout_time = rotatable_session(timedelta(hours=4))
+        with app.database.SessionLocal() as session:
+            logout_issuer = session.get(User, 1).oidc_issuer
+            logout_organization = session.get(Organization, 1).slug
+        assert not logout_proven_browser_session(
+            app.database.engine, logout_source.token, "x" * 43,
+            expected_issuer=logout_issuer, expected_organization_slug=logout_organization,
+            now=logout_time,
+        )
         logout_barrier = Barrier(2)
 
         def rotate_during_logout():
@@ -869,9 +877,12 @@ def test_postgresql_migrations_and_crud(
 
         def logout_during_rotation() -> bool:
             logout_barrier.wait(timeout=15)
-            return logout_browser_session(
+            return logout_proven_browser_session(
                 app.database.engine,
                 logout_source.token,
+                logout_source.csrf_token,
+                expected_issuer=logout_issuer,
+                expected_organization_slug=logout_organization,
                 now=logout_time,
             )
 

@@ -160,7 +160,7 @@ deployment is secure.
   or profile claim and resolve only a pre-provisioned issuer/subject identity.
   No authentication route is registered, and server mode still fails startup.
 - A dormant authentication coordinator composes these controls in fail-closed
-  order. Dormant login/callback HTTP adapters supply only the canonical client
+  order. Dormant authentication HTTP adapters supply only the canonical client
   address from trusted ingress and require the exact database/authentication
   pairing. Login requires one exact Origin before limiting, provider discovery and state
   creation. Callback limiting precedes one-use state consumption, and the state
@@ -181,6 +181,14 @@ deployment is secure.
   the owned engine. This does not narrow the main role, which still runs
   migrations and accesses application data. It does not enable a route, UI, or
   server mode.
+- Dormant renewal and logout adapters require exact Origin and matching CSRF,
+  then consume durable membership admission before mutation. Renewal rechecks
+  active identity, rotates both proofs when due, and preserves absolute expiry.
+  Logout rechecks its proof under family locks; retained predecessor credentials
+  can revoke a successor but cannot authenticate requests or renew. Disabled
+  identities may still revoke their own family. Failed admission or storage
+  leaves cookies intact. HTTP and PostgreSQL tests cover rotation/logout races.
+  These routes remain unregistered in the running app.
 - One immutable lifespan binding selects the database session factory for each
   request. Local requests use global `SessionLocal` only through an explicit
   local binding. Configured requests use `PrimaryDatabaseRuntime.session`; a

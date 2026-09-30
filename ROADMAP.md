@@ -183,9 +183,9 @@ Core sign-in pieces now connect behind a dormant process-owned coordinator.
 Protected request dependencies now resolve hash-only browser sessions through
 the same owned database, recheck active membership and role, and require exact
 Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
-Sign-in and callback adapters are tested in an isolated HTTP harness and remain
-unregistered in the app. Logout, session renewal, workflow
-actor checks, administration, and end-to-end team access still need integration.
+Sign-in, callback, logout, and session-renewal adapters are tested in an isolated
+HTTP harness and remain unregistered in the app. Frontend session handling,
+workflow actor checks, administration, and end-to-end team access still need integration.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
@@ -303,8 +303,13 @@ These primitives are not an enabled authentication system:
   it issues the secure bearer cookie and a no-store CSRF response. Failures are
   generic, and trusted callback outcomes clear the transaction cookie. The
   running app does not register this router.
-- The next enablement checkpoint still needs logout and session renewal HTTP
-  adapters; a frontend sign-in flow and callback handling; workflow actor propagation;
+- Dormant renewal and logout adapters require exact Origin, CSRF, and durable
+  membership admission before mutation. Renewal rechecks identity under the
+  session lifecycle, rotates both proofs when due, and preserves absolute
+  expiry. Logout rechecks the browser proof under family locks, so a retained
+  predecessor can revoke a concurrently rotated family. Denials preserve cookies.
+- The next enablement checkpoint still needs frontend sign-in, callback, session
+  recovery, renewal, and logout handling; workflow actor propagation;
   administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
   capacity planning; forced-interruption exercises; and end-to-end authenticated

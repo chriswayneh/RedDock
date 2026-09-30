@@ -15,7 +15,12 @@ from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from app.authorization import AuthorizationContext
-from app.browser_security import browser_request_credentials, origin_matches, parse_public_origin
+from app.browser_security import (
+    BrowserRequestCredentials,
+    browser_request_credentials,
+    origin_matches,
+    parse_public_origin,
+)
 from app.config import DormantServerRuntimeConfig
 from app.models import Organization
 from app.oidc import (
@@ -39,8 +44,12 @@ from app.session_auth import (
     IssuedSession,
     SessionRejected,
     SessionUnavailable,
+    SessionUseResult,
     is_browser_session_token,
     issue_browser_session,
+    logout_proven_browser_session,
+    resolve_browser_logout_membership,
+    resolve_browser_session,
     use_browser_session,
 )
 
@@ -257,6 +266,71 @@ class AuthenticationRuntime:
             return result.context
         except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
             raise RequestAuthenticationUnavailable("Authentication unavailable") from None
+
+    def _admit_session_mutation(
+        self, request: Request, *, logout: bool, now: datetime | None,
+    ) -> BrowserRequestCredentials:
+        if request.method != "POST" or self.verified_browser_client(request) is None:
+            raise AuthenticationFailure()
+        credentials = browser_request_credentials(request, self.__origin)
+        if credentials is None or credentials.csrf_token is None:
+            raise AuthenticationFailure()
+        # Release primary-pool connections and row locks before limiter I/O.
+        # Admission never touches, rotates, or revokes a session.
+        with Session(self.__lifecycle_engine) as session:
+            if logout:
+                membership_id = resolve_browser_logout_membership(
+                    session, credentials.token, credentials.csrf_token,
+                    expected_issuer=self.__config.oidc_issuer,
+                    expected_organization_slug=self.__config.organization_slug,
+                )
+            else:
+                context = resolve_browser_session(
+                    session, credentials.token, csrf_token=credentials.csrf_token, now=now,
+                    expected_issuer=self.__config.oidc_issuer,
+                    expected_organization_slug=self.__config.organization_slug,
+                )
+                membership_id = context.membership_id if context is not None else None
+        if membership_id is None:
+            raise AuthenticationFailure()
+        decision = self.__limiter.enforce(
+            REQUEST_MUTATION_PLAN, subject=membership_subject(membership_id), now=now,
+        )
+        if not decision.allowed:
+            raise AuthenticationFailure(retry_after_seconds=decision.retry_after_seconds)
+        return credentials
+
+    def renew_browser_session(
+        self, request: Request, *, now: datetime | None = None,
+    ) -> SessionUseResult:
+        """Admit renewal before the isolated, identity-rechecking rotation transaction."""
+
+        try:
+            credentials = self._admit_session_mutation(request, logout=False, now=now)
+            result = use_browser_session(
+                self.__lifecycle_engine, credentials.token, csrf_token=credentials.csrf_token,
+                rotate_if_due=True, now=now, expected_issuer=self.__config.oidc_issuer,
+                expected_organization_slug=self.__config.organization_slug,
+            )
+            if result is None:
+                raise AuthenticationFailure()
+            return result
+        except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
+            raise AuthenticationFailure() from None
+
+    def logout_browser_request(self, request: Request, *, now: datetime | None = None) -> None:
+        """Admit and revoke a proven family, even if rotation won after admission."""
+
+        try:
+            credentials = self._admit_session_mutation(request, logout=True, now=now)
+            if not logout_proven_browser_session(
+                self.__lifecycle_engine, credentials.token, credentials.csrf_token,
+                expected_issuer=self.__config.oidc_issuer,
+                expected_organization_slug=self.__config.organization_slug, now=now,
+            ):
+                raise AuthenticationFailure()
+        except (SessionUnavailable, RateLimitUnavailable, SQLAlchemyError):
+            raise AuthenticationFailure() from None
 
     def verified_browser_client(
         self, request: Request, *, require_origin: bool = False,

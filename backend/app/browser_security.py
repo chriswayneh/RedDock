@@ -6,7 +6,9 @@ enabled.
 """
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from hmac import compare_digest
+from math import ceil
 from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
@@ -151,14 +153,23 @@ def browser_request_credentials(
     return BrowserRequestCredentials(token, csrf_token)
 
 
-def set_browser_session_cookie(response: Response, token: str) -> None:
+def set_browser_session_cookie(
+    response: Response, token: str, *, expires_at: datetime | None = None,
+) -> None:
     """Set the bearer cookie with an invariant ``__Host-`` security policy."""
     if not is_browser_session_token(token):
         raise BrowserSecurityError("Browser session token is malformed")
+    max_age = SESSION_COOKIE_MAX_AGE
+    if expires_at is not None:
+        if expires_at.tzinfo is None:
+            raise BrowserSecurityError("Browser session expiry must be timezone-aware")
+        expires_at = expires_at.astimezone(UTC)
+        max_age = max(0, min(max_age, ceil((expires_at - datetime.now(UTC)).total_seconds())))
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
-        max_age=SESSION_COOKIE_MAX_AGE,
+        max_age=max_age,
+        expires=expires_at,
         path="/",
         secure=True,
         httponly=True,
