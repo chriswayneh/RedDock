@@ -194,8 +194,10 @@ absolute expiry as JSON, with the bearer in its secure host-only cookie. Every
 trusted callback outcome clears the transaction cookie; failures preserve an
 existing session. Responses use no-store and no-referrer policies and generic
 errors, with Retry-After only for durable denial. There is no caller-selected
-redirect. Frontend handling and deployment access-log redaction remain integration
-gates. Server mode remains blocked.
+redirect. The packaged image disables Uvicorn request access logs, and the
+Compose proxy emits fixed request categories and metrics without request paths,
+queries, headers, or client addresses. Frontend handling and future TLS-proxy
+acceptance remain integration gates. Server mode remains blocked.
 
 The same dormant router defines `POST /api/auth/renew` and `POST /api/auth/logout`.
 Both require trusted HTTPS ingress, the exact database/authentication pair, one

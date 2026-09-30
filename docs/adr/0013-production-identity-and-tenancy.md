@@ -348,7 +348,17 @@ removing role change.
   pairing, exact login Origin, one-use browser-bound callbacks, secure cookies,
   CSRF delivery, no-store/no-referrer headers, denial cleanup, replay, and
   duplicate parameters/cookies. The callback returns JSON with a CSRF proof and
-  expiry; frontend handling and access-log redaction still need integration.
+  expiry; frontend handling still needs integration. Both packaged Uvicorn
+  entrypoints disable raw request access logs. The Compose proxy logs only fixed
+  route/method categories, time, status, byte count, and duration. Request-level
+  Nginx error logs are suppressed because they can append a raw request URI;
+  master startup diagnostics remain on stderr. Diagnose HTTP failures through
+  status metrics, readiness, and application diagnostics. Native container CI
+  checks synthetic secrets in paths, queries, and headers against success,
+  rejection, oversized-body, and upstream-unavailable responses. A future TLS
+  ingress must preserve and reverify this boundary. See the official
+  [Nginx log format](https://nginx.org/en/docs/http/ngx_http_log_module.html#log_format)
+  and [error log](https://nginx.org/en/docs/ngx_core_module.html#error_log) contracts.
 - Primary database tests cover exact-config construction, effective session
   policy, bounded timeout options, serialized startup, owned session and engine
   lifecycle, and cleanup after partial startup failure.

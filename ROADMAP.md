@@ -176,6 +176,10 @@ multi-architecture container images.
 - **Orderly discovery shutdown:** each application owns its worker pool and
   finishes accepted discovery work before closing its database. Compose allows
   up to 12 minutes for this; forced interruption is recorded on restart.
+- **Private request logs:** packaged Uvicorn access logs are disabled. The
+  Compose proxy records fixed categories and metrics without raw URLs, headers,
+  or client addresses. Request-level proxy errors are suppressed to avoid URI
+  disclosure; startup diagnostics and HTTP status metrics remain available.
 
 ### Foundations built but not enabled
 

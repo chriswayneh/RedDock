@@ -142,3 +142,4 @@ def test_container_disables_implicit_uvicorn_proxy_header_trust():
     dockerfile = (REPOSITORY / "Dockerfile").read_text(encoding="utf-8")
 
     assert '"--no-proxy-headers"' in dockerfile
+    assert '"--no-access-log"' in dockerfile
