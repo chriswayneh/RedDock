@@ -211,8 +211,19 @@ Access changes and transfer revoke all affected browser-session lineage and
 commit structured audit events in the same transaction. The organization row
 serializes administration before identity and session locks across PostgreSQL
 workers; SQLite tests also use a process mutex. Audit failure rolls back the
-identities and revocations together. Administration HTTP adapters and UI remain
-unregistered/unimplemented; this core does not enable server deployment.
+identities and revocations together.
+
+Dormant administration adapters expose a bounded roster, provisioning, member
+access edits, and ownership transfer only in an isolated HTTP harness. Their
+separate immutable route manifest requires membership management or owner-only
+transfer permission. They use the exact database/authentication/workflow
+capability pairing, trusted HTTPS ingress, and current browser authority;
+mutations require Origin, CSRF, and durable membership admission. The core
+rechecks permissions after request admission. Expected failures are generic,
+input errors do not echo identity fields, and success/error responses are
+no-store with fixed browser security headers. Transfer invalidates both members'
+existing cookies and requires a new login. The running app registers none of
+these routes; administration UI and server deployment remain unfinished.
 
 Workspace creation, scope mutations, and finding-status edits require current
 permission and commit actor attribution with the mutation. Scope mutations use
