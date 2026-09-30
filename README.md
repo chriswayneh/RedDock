@@ -398,7 +398,7 @@ The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its 
 
 ### Phase 8 progress
 
-Phase 8 remains in development. Current work improves the local operator boundary, first-run guidance, check coverage, and orderly discovery shutdown. Dormant team-access foundations connect sessions to protected request checks and test sign-in/callback HTTP adapters in isolation. No authentication route is registered in the running app. Server mode and shared-user deployment remain unsupported. See the [roadmap](ROADMAP.md#phase-8-production-polish) for completed checkpoints and remaining gates.
+Phase 8 remains in development. Current work improves the local operator boundary, first-run guidance, check coverage, and orderly discovery shutdown. Dormant team-access foundations connect sessions to protected request checks and test sign-in, callback, renewal, and logout HTTP adapters in isolation. No authentication route is registered in the running app. Server mode and shared-user deployment remain unsupported. See the [roadmap](ROADMAP.md#phase-8-production-polish) for completed checkpoints and remaining gates.
 
 ## Contributing and Security
 

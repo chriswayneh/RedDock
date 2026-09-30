@@ -38,7 +38,7 @@ app/reporting/      deterministic reports, evidence manifests, and DockPack expo
 app/authorization.py reviewed role/permission contract for the future authenticated mode
 app/identity_admin.py offline first-owner bootstrap for the future authenticated mode
 app/authentication.py dormant login and callback coordinator; no HTTP routes
-app/authentication_http.py isolated login/callback router factory; not registered
+app/authentication_http.py isolated sign-in, callback, renewal, logout router; not registered
 app/database.py      local persistence plus dormant owned PostgreSQL runtimes
 app/oidc.py         dormant OIDC protocol and identity-resolution boundary
 app/rate_limits.py  dormant cross-worker authentication throttling
@@ -194,8 +194,29 @@ absolute expiry as JSON, with the bearer in its secure host-only cookie. Every
 trusted callback outcome clears the transaction cookie; failures preserve an
 existing session. Responses use no-store and no-referrer policies and generic
 errors, with Retry-After only for durable denial. There is no caller-selected
-redirect. Frontend callback handling, logout, renewal, and deployment access-log
-redaction remain integration gates. Server mode remains blocked.
+redirect. Frontend handling and deployment access-log redaction remain integration
+gates. Server mode remains blocked.
+
+The same dormant router defines `POST /api/auth/renew` and `POST /api/auth/logout`.
+Both require trusted HTTPS ingress, the exact database/authentication pair, one
+session cookie, exact Origin, and matching CSRF proof. Admission uses the durable
+membership mutation limiter without touching session state or holding primary
+database connections during limiter I/O. The mutation transaction rechecks the
+proof and configured issuer/organization after admission.
+
+Renewal also requires active membership, user, and session. It touches activity
+and rotates the bearer/CSRF pair only when due. Its JSON reports `rotated`, the
+original absolute `expires_at`, and a replacement `csrf_token` only on rotation.
+Otherwise CSRF is null and the client must retain its existing proof. Replacement
+cookies expire no later than the original family deadline. A losing concurrent
+renewal returns a generic denial without overwriting the winner's cookie.
+Logout accepts a retained predecessor and matching proof solely for family
+revocation, including after expiry or membership disablement. Under family locks,
+it rechecks the proof and revokes all generations atomically with the audit event.
+Successful and already-revoked retained families return `204` and clear browser
+and login-transaction cookies. Invalid proofs, limit denials, or store failures
+do not clear cookies or claim logout succeeded. No provider-wide logout occurs.
+Frontend session recovery and multi-tab handling still need integration.
 
 The dormant primary database runtime is constructed directly from the validated
 server configuration. It owns the main PostgreSQL engine and session factory
@@ -276,8 +297,8 @@ actual total process count across the deployment. RedDock can verify the role
 limit against that declaration, but it cannot discover the orchestrator's
 actual process count.
 
-Before server mode can be enabled, HTTP sign-in, callback, logout, cookie, and
-error handling; session renewal and workflow actor propagation;
+Before server mode can be enabled, frontend sign-in, callback, session recovery,
+renewal, logout, and error handling; workflow actor propagation;
 a packaged TLS proxy;
 administration; metrics; forced-interruption and capacity exercises; and
 authenticated end-to-end tests remain release blockers.

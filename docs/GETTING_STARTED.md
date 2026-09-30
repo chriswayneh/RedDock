@@ -185,4 +185,4 @@ For help, collect the error and your Docker version. Review logs and screenshots
 
 ## What comes next?
 
-Try the local demo before adding real, explicitly authorized targets. RedDock is currently best used in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8-production-polish) still has known work around authentication and production operations. Working accounts, SSO, and shared-user deployments are not available yet. Sign-in/callback adapters are tested only in an isolated harness and are not registered in the running app.
+Try the local demo before adding real, explicitly authorized targets. RedDock is currently best used in small, controlled environments. [Phase 8](../ROADMAP.md#phase-8-production-polish) still has known work around authentication and production operations. Working accounts, SSO, and shared-user deployments are not available yet. Sign-in, callback, renewal, and logout adapters are tested only in an isolated harness and are not registered in the running app.

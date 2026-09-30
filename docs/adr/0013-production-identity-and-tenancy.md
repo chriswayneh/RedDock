@@ -171,8 +171,20 @@ logout operations own short isolated transactions. Lower-level revocation can
 instead join an identity or membership change so both commit or roll back
 together. Cleanup is bounded, and its PostgreSQL locking must remain safe beside
 concurrent refresh. PostgreSQL tests cover issuance, touch, rotation, logout,
-membership revocation, and cleanup races. These primitives are not connected to
-routes, and server mode remains disabled.
+membership revocation, and cleanup races. These primitives now connect to dormant
+HTTP adapters in an isolated harness. The running app registers no authentication
+route, and server mode remains disabled.
+
+Renewal and logout require trusted ingress, one exact Origin, and matching CSRF
+proof before durable membership admission. Admission releases primary database
+connections before limiter I/O and does not touch or mutate the session. Renewal
+then rechecks active identity and rotates under the existing lifecycle transaction;
+cookies and response expiry retain the original absolute deadline. Logout rechecks
+the presented generation's proof and configured issuer/organization under family
+locks before revoking. Inactive membership or a retained predecessor grants only
+this revocation authority. Already-revoked retained families can complete logout
+idempotently. Denials never clear or overwrite cookies. Frontend session recovery,
+multi-tab behavior, and full authentication acceptance remain separate gates.
 
 ## Ownership model
 
