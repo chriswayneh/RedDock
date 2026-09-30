@@ -410,11 +410,12 @@ def use_browser_session(
     *,
     csrf_token: str | None = None,
     rotate_if_due: bool = False,
+    touch: bool = True,
     now: datetime | None = None,
     expected_issuer: str | None = None,
     expected_organization_slug: str | None = None,
 ) -> SessionUseResult | None:
-    """Resolve, touch, and optionally rotate inside one isolated transaction."""
+    """Resolve and optionally touch/rotate inside one isolated transaction."""
 
     if not isinstance(lifecycle_engine, Engine):
         raise ValueError("a dedicated lifecycle engine is required")
@@ -439,7 +440,7 @@ def use_browser_session(
                     active_token,
                     csrf_token=active_csrf,
                     now=checked_at,
-                    touch=True,
+                    touch=touch,
                     expected_issuer=expected_issuer,
                     expected_organization_slug=expected_organization_slug,
                 )

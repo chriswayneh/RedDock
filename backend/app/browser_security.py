@@ -27,6 +27,7 @@ MAX_PUBLIC_ORIGIN_LENGTH = 512
 SESSION_COOKIE_NAME = "__Host-reddock_session"
 OIDC_TRANSACTION_COOKIE_NAME = "__Host-reddock_oidc"
 CSRF_HEADER_NAME = "X-RedDock-CSRF"
+SESSION_RECOVERY_HEADER_NAME = "X-RedDock-Session"
 SESSION_COOKIE_MAX_AGE = int(SESSION_LIFETIME.total_seconds())
 OIDC_TRANSACTION_COOKIE_MAX_AGE = 10 * 60
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -151,6 +152,28 @@ def browser_request_credentials(
     if not origin_matches(origin, expected_origin) or not is_browser_session_token(csrf_token):
         return None
     return BrowserRequestCredentials(token, csrf_token)
+
+
+def session_recovery_credentials(
+    request: Request, expected_origin: PublicOrigin,
+) -> BrowserRequestCredentials | None:
+    """Accept a same-origin script read without requiring the proof it recovers.
+
+    The non-safelisted header excludes navigations/forms and requires a CORS
+    preflight for foreign scripts. No authentication endpoint enables CORS.
+    Fetch Metadata independently excludes cross-site and sibling-origin reads.
+    """
+    if (
+        request.method != "GET"
+        or request.headers.getlist(SESSION_RECOVERY_HEADER_NAME) != ["recover"]
+        or request.headers.getlist("sec-fetch-site") != ["same-origin"]
+    ):
+        return None
+    origins = request.headers.getlist("origin")
+    if origins and (len(origins) != 1 or not origin_matches(origins[0], expected_origin)):
+        return None
+    token = _session_cookie(request)
+    return BrowserRequestCredentials(token) if token is not None else None
 
 
 def set_browser_session_cookie(

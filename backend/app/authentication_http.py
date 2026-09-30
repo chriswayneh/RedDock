@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from app.authentication import AuthenticationFailure, AuthenticationRuntime
+from app.authorization import permissions_for
 from app.browser_security import (
     clear_browser_session_cookie,
     clear_oidc_transaction_cookie,
@@ -48,6 +49,23 @@ def build_authentication_router() -> APIRouter:
     """Build reviewed login/callback routes without registering them anywhere."""
 
     router = APIRouter(prefix="/api/auth", include_in_schema=False)
+
+    @router.get("/session")
+    def session_state(request: Request) -> Response:
+        runtime = _runtime(request)
+        if runtime is None:
+            return _harden(_failure())
+        try:
+            recovered = runtime.recover_browser_session(request)
+            response = JSONResponse({
+                "role": recovered.context.role.value,
+                "permissions": sorted(permissions_for(recovered.context.role)),
+                "expires_at": recovered.expires_at.isoformat(),
+                "csrf_token": recovered.csrf_token,
+            })
+        except AuthenticationFailure as error:
+            response = _failure(error)
+        return _harden(response)
 
     @router.post("/login")
     def login(request: Request) -> Response:

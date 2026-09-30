@@ -321,6 +321,10 @@ These primitives are not an enabled authentication system:
   session lifecycle, rotates both proofs when due, and preserves absolute
   expiry. Logout rechecks the browser proof under family locks, so a retained
   predecessor can revoke a concurrently rotated family. Denials preserve cookies.
+- Dormant session recovery restores current role, permissions, expiry, and the
+  browser's CSRF proof after reload. It requires a same-origin script request,
+  rechecks identity after durable admission, and neither touches idle activity
+  nor rotates tokens. Responses never expose the bearer cookie or cache proofs.
 - The next enablement checkpoint still needs frontend sign-in, callback, session
   recovery, renewal, and logout handling;
   administration; a
