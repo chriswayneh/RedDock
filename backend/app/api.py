@@ -9,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app import lab
-from app.authorization import AuthorizationDenied
+from app.authorization import AuthorizationDenied, Permission
 from app.authorization_dependencies import authorize_request, request_authorization
 from app.config import get_settings
 from app.correlation import runner as correlation_runner
@@ -104,6 +104,7 @@ from app.schemas import (
     ValidationRunRead,
     VersionRead,
 )
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 from app.services import (
     add_scope_entry,
     create_dockyard,
@@ -115,7 +116,7 @@ from app.services import (
 )
 from app.targets import TargetError
 from app.validation import runner as validation_runner
-from app.workflow_authorization import WorkflowExecutionPolicy
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 from app.workflow_requests import request_workflow_policy
 
 router = APIRouter(
@@ -356,13 +357,22 @@ def read_dockyards(session: Session = Depends(get_session)) -> list[DockyardRead
 
 
 @router.post("/dockyards", response_model=DockyardRead, status_code=status.HTTP_201_CREATED)
-def add_dockyard(payload: DockyardCreate, session: Session = Depends(get_session)) -> DockyardRead:
+def add_dockyard(
+    payload: DockyardCreate, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
+) -> DockyardRead:
     if not payload.name.strip():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Name is required",
         )
-    return create_dockyard(session, request_authorization().organization_id, payload)
+    try:
+        return create_dockyard(
+            session, request_authorization().organization_id, payload,
+            authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
 
 
 @router.get("/dockyards/{dockyard_id}", response_model=DockyardRead)
@@ -474,10 +484,15 @@ def add_scope(
     dockyard_id: int,
     payload: ScopeEntryCreate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> ScopeEntryRead:
     require_dockyard(dockyard_id, session)
     try:
-        return add_scope_entry(session, dockyard_id, payload)
+        return add_scope_entry(
+            session, dockyard_id, payload, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except (TargetError, ScopeRejected) as error:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)
@@ -486,10 +501,17 @@ def add_scope(
 
 @router.delete("/dockyards/{dockyard_id}/scope/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scope(
-    dockyard_id: int, entry_id: int, session: Session = Depends(get_session)
+    dockyard_id: int, entry_id: int, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> Response:
     require_dockyard(dockyard_id, session)
-    if not remove_scope_entry(session, dockyard_id, entry_id):
+    try:
+        removed = remove_scope_entry(
+            session, dockyard_id, entry_id, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
+    if not removed:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scope entry not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -499,8 +521,21 @@ def evaluate_scope(
     dockyard_id: int,
     payload: ScopeEvaluateRequest,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> ScopeEvaluationRead:
     require_dockyard(dockyard_id, session)
+    try:
+        actor = require_workflow_actor(
+            session, policy, request_authorization(), dockyard_id, Permission.SCOPE_MANAGE,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.SCOPE_EVALUATE, outcome=SecurityOutcome.SUCCESS,
+        target_type="dockyard", target_id=str(dockyard_id), reason_code="scope_evaluation_admitted",
+    )
+    session.commit()
     evaluation = evaluate(
         payload.target,
         scope_rules(session, dockyard_id),
@@ -917,38 +952,56 @@ def read_report(
     return run
 
 
-def _report_artifact(dockyard_id: int, run_id: int, artifact: str, session: Session):
+def _report_artifact(
+    dockyard_id: int, run_id: int, artifact: str, session: Session, policy: WorkflowExecutionPolicy,
+):
     require_dockyard(dockyard_id, session)
     run = reporting_runner.get_run(session, dockyard_id, run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report run not found")
     try:
-        return reporting_runner.artifact_path(run, artifact)
+        return reporting_runner.authorized_artifact(
+            session, run, artifact, authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     except reporting_runner.ReportRejected as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/technical")
-def read_technical_report(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
-    path = _report_artifact(dockyard_id, run_id, "technical", session)
+def read_technical_report(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
+):
+    path = _report_artifact(dockyard_id, run_id, "technical", session, policy)
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/executive")
-def read_executive_report(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
-    path = _report_artifact(dockyard_id, run_id, "executive", session)
+def read_executive_report(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
+):
+    path = _report_artifact(dockyard_id, run_id, "executive", session, policy)
     return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/manifest")
-def read_report_manifest(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
-    path = _report_artifact(dockyard_id, run_id, "manifest", session)
+def read_report_manifest(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
+):
+    path = _report_artifact(dockyard_id, run_id, "manifest", session, policy)
     return FileResponse(path, media_type="application/json")
 
 
 @router.get("/dockyards/{dockyard_id}/reports/{run_id}/dockpack")
-def download_dockpack(dockyard_id: int, run_id: int, session: Session = Depends(get_session)):
-    path = _report_artifact(dockyard_id, run_id, "dockpack", session)
+def download_dockpack(
+    dockyard_id: int, run_id: int, session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
+):
+    path = _report_artifact(dockyard_id, run_id, "dockpack", session, policy)
     return FileResponse(
         path,
         media_type="application/zip",
@@ -1109,6 +1162,7 @@ def update_finding(
     finding_id: int,
     payload: FindingStatusUpdate,
     session: Session = Depends(get_session),
+    policy: WorkflowExecutionPolicy = Depends(request_workflow_policy),
 ) -> FindingDetailRead:
     """Record an operator decision about a finding.
 
@@ -1119,7 +1173,13 @@ def update_finding(
     finding = get_finding(session, dockyard_id, finding_id)
     if finding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
-    set_status(session, finding, payload.status, payload.note)
+    try:
+        set_status(
+            session, finding, payload.status, payload.note,
+            authorization=request_authorization(), policy=policy,
+        )
+    except AuthorizationDenied:
+        raise HTTPException(status_code=403, detail="Permission denied") from None
     return read_finding(dockyard_id, finding_id, session)
 
 

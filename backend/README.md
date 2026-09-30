@@ -259,8 +259,8 @@ before scope resolution and immediately before adapter contact. A conditional
 database update gives duplicate deliveries one winner. Final admission is audited
 and committed before adapter contact; revocation after that boundary does not
 cancel an already admitted operation. Restart recovery fails interrupted work
-instead of replaying receipts. Other workflow and approval actor integration,
-database-wide capacity admission, and server deployment acceptance remain open.
+instead of replaying receipts. Database-wide capacity admission and server
+deployment acceptance remain open.
 
 Validation and intelligence requests and approvals now receive an immutable
 workflow policy paired with the exact request database binding. They record
@@ -291,7 +291,18 @@ evidence, audit, or permission failure leaves previous results intact and marks
 the run failed. Reporting preserves its consistent source snapshot, then checks
 current authority before publishing artifacts; failed publication removes its
 partial report package. Failed runs never expose a successful publication event.
-Sensitive edits, export auditing, and team administration remain separate gates.
+Audit retention and team administration remain separate gates.
+
+Workspace creation, scope changes, and finding-status edits now recheck current
+permission and commit structured actor records with their mutations. Scope
+changes serialize per workspace in PostgreSQL and per process in local SQLite,
+including duplicate and count checks. Scope evaluation commits actor admission
+before optional DNS resolution. Report exports recheck `report:export` after
+artifact verification and commit an admission event before serving the file.
+That event proves authorization to serve, not successful receipt by the client;
+later revocation cannot retract an admitted download. Security events retain
+opaque object IDs and fixed reasons, not workspace names, targets, or user notes.
+Audit retention and team administration remain server-deployment gates.
 
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
@@ -340,7 +351,7 @@ limit against that declaration, but it cannot discover the orchestrator's
 actual process count.
 
 Before server mode can be enabled, frontend sign-in, callback, session recovery,
-renewal, logout, and error handling; workflow actor propagation;
+renewal, logout, and error handling;
 a packaged TLS proxy;
 administration; metrics; forced-interruption and capacity exercises; and
 authenticated end-to-end tests remain release blockers.

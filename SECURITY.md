@@ -186,8 +186,8 @@ deployment is secure.
   identity, membership, and current role before scope resolution and adapter
   contact. A database claim prevents duplicate delivery from repeating contact.
   Audit failure prevents contact. Revocation after final committed admission
-  does not cancel an already admitted operation; other workflow and approval
-  actor integration remains a server-deployment gate.
+  does not cancel an already admitted operation. End-to-end authenticated
+  deployment acceptance remains a server-deployment gate.
 - Validation and intelligence approvals recheck the current approver after
   scope or packet verification and commit a structured actor audit with the
   one-winner approval claim before external contact. Failed permission or audit
@@ -208,6 +208,13 @@ deployment is secure.
   Permission, audit, or evidence failure rolls back unpublished results. Reporting
   retains its consistent source snapshot and checks current permission after
   rendering, before publication. These checks do not enable server deployment.
+- Workspace creation, scope changes, and finding-status edits commit current
+  actor attribution with the mutation. Scope duplicate and history bounds are
+  serialized by workspace in PostgreSQL. Scope evaluation records admission
+  before optional DNS contact. Export permission is rechecked after artifact
+  verification, and audit failure prevents serving the artifact. Export events
+  record admission, not completed delivery. Opaque IDs and fixed reasons keep
+  names, targets, and user notes out of structured security events.
 - Dormant renewal and logout adapters require exact Origin and matching CSRF,
   then consume durable membership admission before mutation. Renewal rechecks
   active identity, rotates both proofs when due, and preserves absolute expiry.

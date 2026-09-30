@@ -17,12 +17,15 @@ from datetime import datetime
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission
 from app.detection.base import (
     OPERATOR_OWNED_STATUSES,
     DetectedFinding,
     FindingStatus,
 )
 from app.models import EvidenceRecord, Finding, FindingEvidence, Observation
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 #: Most severe first, so a findings list opens on what matters.
 _SEVERITY_ORDER = {
@@ -219,17 +222,31 @@ def open_finding_count(session: Session, dockyard_id: int) -> int:
 
 
 def set_status(
-    session: Session, finding: Finding, status: FindingStatus, note: str | None
+    session: Session, finding: Finding, status: FindingStatus, note: str | None, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
 ) -> Finding:
     """Apply an operator decision.
 
     Reopening clears `resolved_at`, because a finding that is open was not
     resolved. Suppressing or accepting does not clear it: that history stays.
     """
+    finding = session.scalar(select(Finding).where(
+        Finding.id == finding.id, Finding.dockyard_id == finding.dockyard_id,
+    ).with_for_update().execution_options(populate_existing=True))
+    if finding is None:
+        raise AuthorizationDenied("Permission denied")
+    actor = require_workflow_actor(
+        session, policy, authorization, finding.dockyard_id, Permission.FINDING_UPDATE,
+    )
     finding.status = str(status)
     finding.status_note = note
     if status is FindingStatus.OPEN:
         finding.resolved_at = None
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.FINDING_UPDATE, outcome=SecurityOutcome.SUCCESS,
+        target_type="finding", target_id=str(finding.id), reason_code="finding_status_updated",
+    )
     session.commit()
     session.refresh(finding)
     return finding

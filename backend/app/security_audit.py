@@ -11,6 +11,12 @@ _BOUNDED_IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,63}")
 
 
 class SecurityAction(StrEnum):
+    DOCKYARD_CREATE = "dockyard.create"
+    SCOPE_ADD = "scope.add"
+    SCOPE_REMOVE = "scope.remove"
+    SCOPE_EVALUATE = "scope.evaluate"
+    FINDING_UPDATE = "finding.update"
+    REPORT_EXPORT = "report.export"
     DETECTION_REQUEST = "detection.request"
     DETECTION_PUBLISH = "detection.publish"
     CORRELATION_REQUEST = "correlation.request"

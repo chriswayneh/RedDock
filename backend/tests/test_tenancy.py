@@ -6,6 +6,20 @@ from app.authorization_dependencies import current_authorization
 from app.models import Dockyard, Membership, Organization, User
 from app.schemas import DockyardCreate
 from app.services import create_dockyard, get_dockyard, list_dockyards
+from app.workflow_authorization import WorkflowExecutionPolicy
+from tests.phase1 import LOCAL_WORKFLOW
+
+
+def _workflow(session: Session, organization_id: int) -> dict:
+    member = session.scalars(select(Membership).where(
+        Membership.organization_id == organization_id,
+    )).one()
+    user = session.get(User, member.user_id)
+    organization = session.get(Organization, organization_id)
+    return {
+        "authorization": AuthorizationContext(organization_id, user.id, member.id, Role.OWNER),
+        "policy": WorkflowExecutionPolicy("server", user.oidc_issuer, organization.slug),
+    }
 
 
 def _second_organization(session: Session) -> int:
@@ -30,11 +44,12 @@ def _second_organization(session: Session) -> int:
 
 def test_dockyard_loaders_never_cross_organizations(session: Session):
     other_organization_id = _second_organization(session)
-    local = create_dockyard(session, 1, DockyardCreate(name="Local"))
+    local = create_dockyard(session, 1, DockyardCreate(name="Local"), **LOCAL_WORKFLOW)
     other = create_dockyard(
         session,
         other_organization_id,
         DockyardCreate(name="Other"),
+        **_workflow(session, other_organization_id),
     )
 
     assert [dockyard.id for dockyard in list_dockyards(session, 1)] == [local.id]
@@ -66,11 +81,12 @@ def test_request_context_selects_exactly_one_organization(client, session: Sessi
     from app.main import app
 
     other_organization_id = _second_organization(session)
-    local = create_dockyard(session, 1, DockyardCreate(name="Local"))
+    local = create_dockyard(session, 1, DockyardCreate(name="Local"), **LOCAL_WORKFLOW)
     other = create_dockyard(
         session,
         other_organization_id,
         DockyardCreate(name="Other"),
+        **_workflow(session, other_organization_id),
     )
     app.dependency_overrides[current_authorization] = lambda: AuthorizationContext(
         organization_id=other_organization_id,
@@ -97,6 +113,7 @@ def test_every_foreign_dockyard_get_route_returns_the_same_not_found(client, ses
         session,
         other_organization_id,
         DockyardCreate(name="Foreign"),
+        **_workflow(session, other_organization_id),
     )
     identifiers = {
         "dockyard_id": foreign.id,

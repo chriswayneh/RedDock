@@ -274,6 +274,29 @@ def get_run(session: Session, dockyard_id: int, run_id: int) -> ReportRun | None
     )
 
 
+def authorized_artifact(
+    session: Session, run: ReportRun, artifact: str, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> Path:
+    require_workflow_actor(
+        session, policy, authorization, run.dockyard_id, Permission.REPORT_EXPORT,
+    )
+    session.commit()
+    path = artifact_path(run, artifact)
+    actor = require_workflow_actor(
+        session, policy, authorization, run.dockyard_id, Permission.REPORT_EXPORT,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.REPORT_EXPORT, outcome=SecurityOutcome.SUCCESS,
+        target_type="report_run", target_id=str(run.id), reason_code=f"{artifact}_export_admitted",
+    )
+    # This records admission to serve the artifact, not proof of client receipt.
+    # Later revocation cannot retract a download already admitted for delivery.
+    session.commit()
+    return path
+
+
 def artifact_path(run: ReportRun, artifact: str) -> Path:
     """Return a completed report artifact only after rechecking its digest."""
     choices = {
