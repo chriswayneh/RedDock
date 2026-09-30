@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import DormantServerRuntimeConfig
 from app.database import DATABASE_REQUEST_BINDING_STATE
 from app.main import build_lifespan, create_app
+from app.workflow_requests import WORKFLOW_REQUEST_BINDING_STATE
 
 
 def _config() -> DormantServerRuntimeConfig:
@@ -149,11 +150,16 @@ def test_configured_lifespan_owns_exactly_one_provider_per_application(
             assert first.lifecycle_engine is primary_factory.created[-1].engine
             assert first.config is not None
             assert application.state.primary_database_runtime is primary_factory.created[-1]
+            workflow = getattr(application.state, WORKFLOW_REQUEST_BINDING_STATE)
+            assert workflow.database is getattr(application.state, DATABASE_REQUEST_BINDING_STATE)
+            assert workflow.policy.mode == "server"
+            assert workflow.policy.issuer == _config().oidc_issuer
             assert not hasattr(application.state, "oidc_provider")
             assert not hasattr(application.state, "rate_limiter")
         assert not hasattr(application.state, "authentication_runtime")
         assert not hasattr(application.state, "primary_database_runtime")
         assert not hasattr(application.state, DATABASE_REQUEST_BINDING_STATE)
+        assert not hasattr(application.state, WORKFLOW_REQUEST_BINDING_STATE)
 
     assert len(primary_factory.created) == 2
     assert len(created) == 2

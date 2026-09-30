@@ -83,7 +83,13 @@ def test_stale_approval_loses_atomic_claim_without_probing(
     monkeypatch.setattr(runner, "_validate", unexpected_probe)
     with SessionLocal() as db:
         with pytest.raises(runner.ValidationRejected, match="pending"):
-            runner.approve_run(db, dockyard_id, run_id, "Losing approval")
+            from app.authorization import LOCAL_AUTHORIZATION
+            from app.workflow_authorization import LOCAL_WORKFLOW_POLICY
+
+            runner.approve_run(
+                db, dockyard_id, run_id, "Losing approval",
+                authorization=LOCAL_AUTHORIZATION, policy=LOCAL_WORKFLOW_POLICY,
+            )
     with SessionLocal() as db:
         assert db.get(ValidationRun, run_id).approval_note == "Winning approval"
 

@@ -17,11 +17,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, Permission
 from app.config import get_settings
 from app.correlation.runner import latest_completed
 from app.evidence import EVIDENCE_SCHEMA, INTELLIGENCE_SCOPE, NORMALIZED_FILE, EvidenceStore
 from app.intelligence.providers import IntelligenceProvider, OpenAICompatibleProvider, ProviderError
 from app.models import CorrelationRun, EvidenceRecord, Finding, FindingEvidence, IntelligenceRun
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 logger = logging.getLogger("reddock.intelligence")
 ACTIVE_STATUSES = ("pending_approval", "running")
@@ -111,15 +114,23 @@ def get_provider() -> IntelligenceProvider | None:
     )
 
 
-def create_run(session: Session, dockyard_id: int) -> IntelligenceRun:
+def create_run(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> IntelligenceRun:
     # The supported deployment is one Uvicorn process. Serializing this short
     # reservation makes the active and retained-run bounds exact across its
     # request threads rather than check-then-insert races.
     with _CREATE_LOCK:
-        return _create_run(session, dockyard_id)
+        return _create_run(session, dockyard_id, authorization=authorization, policy=policy)
 
 
-def _create_run(session: Session, dockyard_id: int) -> IntelligenceRun:
+def _create_run(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> IntelligenceRun:
+    require_workflow_actor(session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN)
+    session.commit()
     provider = get_provider()
     if provider is None:
         raise RunRejected("Intelligence is disabled until an operator configures a model provider")
@@ -171,12 +182,27 @@ def _create_run(session: Session, dockyard_id: int) -> IntelligenceRun:
     stored = store.write_normalized(dockyard_id, run.id, packet, INTELLIGENCE_SCOPE)
     run.evidence_path = store.relative_run_path(dockyard_id, run.id, INTELLIGENCE_SCOPE)
     run.input_sha256 = stored.sha256
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.INTELLIGENCE_REQUEST, outcome=SecurityOutcome.SUCCESS,
+        target_type="intelligence_run", target_id=str(run.id), reason_code="packet_requested",
+    )
     session.commit()
     session.refresh(run)
     return run
 
 
-def approve_run(session: Session, dockyard_id: int, run_id: int, note: str) -> IntelligenceRun:
+def approve_run(
+    session: Session, dockyard_id: int, run_id: int, note: str, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> IntelligenceRun:
+    require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.INTELLIGENCE_APPROVE,
+    )
+    session.commit()
     run = get_run(session, dockyard_id, run_id)
     if run is None:
         raise RunRejected("Intelligence run not found")
@@ -212,6 +238,16 @@ def approve_run(session: Session, dockyard_id: int, run_id: int, note: str) -> I
     if claimed.rowcount != 1:
         session.rollback()
         raise RunRejected("Only a pending intelligence run can be approved")
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.INTELLIGENCE_APPROVE,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.INTELLIGENCE_APPROVE, outcome=SecurityOutcome.SUCCESS,
+        target_type="intelligence_run", target_id=str(run.id), reason_code="provider_admitted",
+    )
+    # Commit the final permission decision and audit before any packet leaves
+    # RedDock. Revocation after admission cannot retract a provider disclosure.
     session.commit()
     session.refresh(run)
     try:

@@ -1,4 +1,4 @@
-"""Durable request attribution and current authority for queued discovery work."""
+"""Current workflow authority and durable attribution for queued discovery."""
 
 from dataclasses import dataclass
 from typing import Literal
@@ -6,9 +6,9 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.authorization import AuthorizationContext, Permission, Role
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission, Role
 from app.config import DormantServerRuntimeConfig
-from app.models import Membership, Organization, SecurityAuditEvent, User
+from app.models import Dockyard, Membership, Organization, SecurityAuditEvent, User
 from app.security_audit import SecurityAction, SecurityOutcome
 
 
@@ -35,6 +35,7 @@ def workflow_execution_policy(
 def current_workflow_actor(
     session: Session, policy: WorkflowExecutionPolicy, *,
     organization_id: int, user_id: int | None, membership_id: int | None,
+    permission: Permission = Permission.WORKFLOW_RUN,
 ) -> AuthorizationContext | None:
     """Lock and re-read identity; never reuse a queued role or browser credential."""
 
@@ -70,7 +71,25 @@ def current_workflow_actor(
         )
     except ValueError:
         return None
-    return actor if actor.allows(Permission.WORKFLOW_RUN) else None
+    return actor if actor.allows(permission) else None
+
+
+def require_workflow_actor(
+    session: Session, policy: WorkflowExecutionPolicy, authorization: AuthorizationContext,
+    dockyard_id: int, permission: Permission,
+) -> AuthorizationContext:
+    """Require current authority within the exact workspace organization."""
+    organization_id = session.scalar(select(Dockyard.organization_id).where(
+        Dockyard.id == dockyard_id, Dockyard.organization_id == authorization.organization_id,
+    ))
+    actor = current_workflow_actor(
+        session, policy, organization_id=authorization.organization_id,
+        user_id=authorization.user_id, membership_id=authorization.membership_id,
+        permission=permission,
+    ) if organization_id is not None else None
+    if actor is None:
+        raise AuthorizationDenied("Permission denied")
+    return actor
 
 
 def discovery_execution_actor(

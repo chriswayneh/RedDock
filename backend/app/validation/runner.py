@@ -15,14 +15,17 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, Permission
 from app.config import get_settings
 from app.discovery.base import AdapterRequest
 from app.discovery.http_probe import HttpProbeAdapter
 from app.dockguard import Evaluation, evaluate, system_resolver
 from app.evidence import EVIDENCE_SCHEMA, VALIDATION_SCOPE, EvidenceStore
 from app.models import Asset, Finding, ValidationRun
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
 from app.services import scope_rules
 from app.targets import Target, TargetKind, normalize_target
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 PENDING_APPROVAL = "pending_approval"
 RUNNING = "running"
@@ -85,12 +88,18 @@ def validation_target(session: Session, finding: Finding) -> Target:
     return target
 
 
-def create_run(session: Session, dockyard_id: int, finding: Finding) -> ValidationRun:
+def create_run(
+    session: Session, dockyard_id: int, finding: Finding, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> ValidationRun:
     """Persist a validation request and its first DockGuard decision.
 
     Denied requests are retained. They prove that a requested recheck did not
     reach a target; a missing row would not provide that assurance.
     """
+    require_workflow_actor(session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN)
+    # Release identity locks before scope resolution; recheck before committing.
+    session.commit()
     if finding.dockyard_id != dockyard_id:
         raise ValidationRejected("Finding does not belong to this Dockyard")
     if finding.status != "open":
@@ -111,15 +120,29 @@ def create_run(session: Session, dockyard_id: int, finding: Finding) -> Validati
         completed_at=None if evaluation.allowed else now,
     )
     session.add(run)
+    session.flush()
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.VALIDATION_REQUEST,
+        outcome=SecurityOutcome.SUCCESS if evaluation.allowed else SecurityOutcome.DENIED,
+        target_type="validation_run", target_id=str(run.id),
+        reason_code="validation_requested" if evaluation.allowed else "scope_denied",
+    )
     session.commit()
     session.refresh(run)
     return run
 
 
 def approve_run(
-    session: Session, dockyard_id: int, run_id: int, approval_note: str
+    session: Session, dockyard_id: int, run_id: int, approval_note: str, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
 ) -> ValidationRun:
     """Apply the second, explicit approval gate and perform one safe recheck."""
+    require_workflow_actor(session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN)
+    session.commit()
     run = get_run(session, dockyard_id, run_id)
     if run is None:
         raise ValidationRejected("Validation run not found")
@@ -152,6 +175,18 @@ def approve_run(
     if claimed.rowcount != 1:
         session.rollback()
         raise ValidationRejected("Only a pending validation may be approved")
+    actor = require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.VALIDATION_APPROVE,
+        outcome=SecurityOutcome.SUCCESS if evaluation.allowed else SecurityOutcome.DENIED,
+        target_type="validation_run", target_id=str(run.id),
+        reason_code="validation_admitted" if evaluation.allowed else "scope_denied",
+    )
+    # This commit is the final admission boundary. Later revocation does not
+    # cancel an already admitted probe; no identity lock spans network contact.
     session.commit()
     session.refresh(run)
     if not evaluation.allowed:

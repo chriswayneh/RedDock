@@ -172,6 +172,16 @@ decision and audit commit before contact. Revocation after that boundary does no
 cancel an admitted external operation. Receipts are not replayed on restart, and
 this claim does not make capacity admission database-wide.
 
+Validation and intelligence carry a separate immutable workflow-policy binding
+paired by identity with the request database capability. Requests record their
+actor; approvals independently resolve the current approver and their required
+permission both before verification and at the final claim. The claim and actor
+audit commit together before target or provider contact. Another authorized
+member can approve a retained request after its requester loses access. Historical
+local pending requests remain usable, with no fabricated requester attribution.
+PostgreSQL races verify one-winner approval and final revocation checks. This does
+not complete lab grants, stored-data workflows, administration, or server acceptance.
+
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the
 bearer token and CSRF proof together after one hour. Rotation preserves the
