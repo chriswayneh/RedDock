@@ -265,7 +265,16 @@ no authentication endpoint grants CORS access. Recovery uses the shared durable
 membership request budget and rechecks identity after admission. It does not
 touch idle activity, extend expiry, rotate tokens, emit session events, or set
 cookies. Its no-store response contains no bearer, subject, or user identifier.
-Frontend session recovery,
+The dormant frontend session client stores the recovered CSRF proof only in
+private page memory, exposes immutable role/permission/expiry state, and relies
+on the browser's HttpOnly cookie. It coordinates recovery, renewal, logout, and
+mutations within one page; concurrent reads cannot erase newer session state.
+Discarding page state prevents late recovery from restoring it. Business API
+requests use same-origin credentials, reject redirects, omit proofs on reads,
+and never replay failed writes automatically. Logout is only reported as
+confirmed after the server returns its success response. A cross-tab token
+change requires explicit recovery after denial, without replaying the action.
+This client is not instantiated by the local UI. Frontend session recovery,
 multi-tab behavior, and full authentication acceptance remain separate gates.
 
 ## Ownership model

@@ -325,6 +325,11 @@ These primitives are not an enabled authentication system:
   browser's CSRF proof after reload. It requires a same-origin script request,
   rechecks identity after durable admission, and neither touches idle activity
   nor rotates tokens. Responses never expose the bearer cookie or cache proofs.
+- A dormant browser session client keeps server CSRF proofs only in page memory,
+  coordinates recovery/renewal/logout with writes, and rejects stale responses
+  after state is discarded. It sends protected requests only to same-origin API
+  paths and never automatically retries a write. The local UI does not create
+  this client; sign-in and administration screens still need integration.
 - The next enablement checkpoint still needs frontend sign-in, callback, session
   recovery, renewal, and logout handling;
   administration; a
