@@ -273,6 +273,16 @@ pending requests remain approvable without inventing historical requester record
 Revocation after committed admission cannot cancel a probe or retract a provider
 disclosure. These changes do not enable server mode or a sign-in UI.
 
+Lab grants and revocations require the paired workflow policy and current
+`lab:authorize` permission. Structured actor events commit atomically with the
+grant and lab-policy audit. A process mutex handles local SQLite concurrency;
+PostgreSQL locks the workspace row before identity checks and mutations, so
+independent workers cannot create overlapping active grants or exceed the lab
+history limit. A grant belongs to its workspace until expiry, supersession, or
+explicit revocation; changing the original grantor's role does not revoke it.
+Discovery still independently rechecks its execution actor and lab policy before
+contact. The deployment-owned lab opt-in remains required.
+
 The dormant rate limiter uses atomic PostgreSQL updates so all workers share an
 exact fixed-window decision. A mandatory global bucket is consumed before any
 client bucket, limiting attacker-created rows. Client addresses are normalized

@@ -1135,6 +1135,7 @@ def test_postgresql_migrations_and_crud(
             session.commit()
 
         _postgres_approval_races(monkeypatch)
+        _postgres_lab_races(monkeypatch)
 
         # Exercise reporting against the real server: another connection
         # commits a scope change after source capture starts. The report must
@@ -1180,6 +1181,95 @@ def test_postgresql_migrations_and_crud(
         monkeypatch.setenv("REDDOCK_DATABASE_URL", f"sqlite:///{tmp_path / 'after-postgres.db'}")
         app.config.get_settings.cache_clear()
         app.database.configure_engine()
+
+
+def _postgres_lab_races(monkeypatch):
+    from contextlib import nullcontext
+
+    from app import lab
+    from app.authorization import AuthorizationContext, Role
+    from app.config import get_settings
+    from app.database import SessionLocal
+    from app.lab_capabilities import EXTENDED_SERVICE_DISCOVERY, LAB_ACKNOWLEDGEMENT
+    from app.models import (
+        Dockyard,
+        LabAuthorization,
+        Membership,
+        Organization,
+        SecurityAuditEvent,
+        User,
+    )
+    from app.workflow_authorization import WorkflowExecutionPolicy
+
+    issuer = "https://lab-identity.example"
+    with SessionLocal() as session:
+        organization = Organization(slug=f"lab-{uuid4().hex}", name="Lab race team")
+        session.add(organization)
+        session.flush()
+        policy = WorkflowExecutionPolicy("server", issuer, organization.slug)
+        dockyard = Dockyard(organization_id=organization.id, name="Lab grant races")
+        session.add(dockyard)
+        actors = []
+        for index in range(2):
+            user = User(oidc_issuer=issuer, oidc_subject=f"lab-{uuid4().hex}",
+                        display_name=f"Grantor {index}", status="active")
+            session.add(user)
+            session.flush()
+            member = Membership(organization_id=organization.id, user_id=user.id,
+                                role="operator", status="active")
+            session.add(member)
+            session.flush()
+            actors.append(AuthorizationContext(organization.id, user.id, member.id, Role.OPERATOR))
+        session.commit()
+        dockyard_id = dockyard.id
+
+    barrier = Barrier(2)
+
+    def authorize(actor):
+        barrier.wait(timeout=15)
+        with SessionLocal() as session:
+            try:
+                grant, decision = lab.create_authorization(
+                    session, dockyard_id, EXTENDED_SERVICE_DISCOVERY, LAB_ACKNOWLEDGEMENT,
+                    "Reviewed lab grant", 30, authorization=actor, policy=policy,
+                )
+                assert decision.allowed
+                return grant.id
+            except ValueError as error:
+                assert "history limit" in str(error)
+                return None
+
+    try:
+        with monkeypatch.context() as race_patch:
+            settings = get_settings().model_copy(update={
+                "lab_mode_enabled": True, "max_lab_authorizations_per_dockyard": 3,
+            })
+            race_patch.setattr(lab, "get_settings", lambda: settings)
+            # Independent processes do not share the local SQLite mutex.
+            race_patch.setattr(lab, "_MUTATION_LOCK", nullcontext())
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                granted = list(executor.map(authorize, actors))
+            assert all(granted)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                bounded = list(executor.map(authorize, actors))
+            assert sum(item is not None for item in bounded) == 1
+            with SessionLocal() as session:
+                grants = list(session.scalars(select(LabAuthorization).where(
+                    LabAuthorization.dockyard_id == dockyard_id,
+                )))
+                assert len(grants) == 3
+                assert [grant.status for grant in grants].count("active") == 1
+                assert [grant.status for grant in grants].count("superseded") == 2
+                events = list(session.scalars(select(SecurityAuditEvent).where(
+                    SecurityAuditEvent.organization_id == actors[0].organization_id,
+                    SecurityAuditEvent.action == "lab.authorize",
+                )))
+                assert len(events) == 3
+                assert {event.actor_membership_id for event in events} == {
+                    actor.membership_id for actor in actors
+                }
+    finally:
+        get_settings.cache_clear()
 
 
 def _postgres_approval_races(monkeypatch):

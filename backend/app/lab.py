@@ -8,13 +8,19 @@ denial and the second check immediately before execution.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from threading import Lock
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.authorization import AuthorizationContext, AuthorizationDenied, Permission
 from app.config import get_settings
 from app.lab_capabilities import LAB_ACKNOWLEDGEMENT, capability
-from app.models import LabAuditEvent, LabAuthorization
+from app.models import Dockyard, LabAuditEvent, LabAuthorization
+from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
+from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
+
+_MUTATION_LOCK = Lock()
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,8 +37,38 @@ def create_authorization(
     acknowledgement: str,
     note: str,
     duration_minutes: int,
+    *, authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> tuple[LabAuthorization, PolicyDecision]:
+    # SQLite local mode uses one process; PostgreSQL also takes a workspace row
+    # lock so grants and revocations serialize across application processes.
+    with _MUTATION_LOCK:
+        return _create_authorization(
+            session, dockyard_id, capability_id, acknowledgement, note, duration_minutes,
+            authorization=authorization, policy=policy,
+        )
+
+
+def _mutation_actor(
+    session: Session, dockyard_id: int, authorization: AuthorizationContext,
+    policy: WorkflowExecutionPolicy,
+) -> AuthorizationContext:
+    workspace = session.scalar(select(Dockyard.id).where(
+        Dockyard.id == dockyard_id, Dockyard.organization_id == authorization.organization_id,
+    ).with_for_update())
+    if workspace is None:
+        raise AuthorizationDenied("Permission denied")
+    return require_workflow_actor(
+        session, policy, authorization, dockyard_id, Permission.LAB_AUTHORIZE,
+    )
+
+
+def _create_authorization(
+    session: Session, dockyard_id: int, capability_id: str, acknowledgement: str,
+    note: str, duration_minutes: int, *, authorization: AuthorizationContext,
+    policy: WorkflowExecutionPolicy,
 ) -> tuple[LabAuthorization, PolicyDecision]:
     """Persist an authorization decision; deployment-disabled attempts are audited."""
+    actor = _mutation_actor(session, dockyard_id, authorization, policy)
     settings = get_settings()
     now = datetime.now(UTC)
     if capability(capability_id) is None:
@@ -54,7 +90,7 @@ def create_authorization(
     )
     if enabled:
         _supersede_active_authorizations(session, dockyard_id, capability_id, now)
-    authorization = LabAuthorization(
+    grant = LabAuthorization(
         dockyard_id=dockyard_id,
         capability=capability_id,
         status="active" if enabled else "denied",
@@ -62,7 +98,7 @@ def create_authorization(
         note=note,
         expires_at=now + timedelta(minutes=duration_minutes) if enabled else now,
     )
-    session.add(authorization)
+    session.add(grant)
     session.flush()
     _record(
         session,
@@ -71,11 +107,18 @@ def create_authorization(
         action="authorize",
         decision="allowed" if enabled else "denied",
         reason=reason,
-        authorization_id=authorization.id,
+        authorization_id=grant.id,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.LAB_AUTHORIZE,
+        outcome=SecurityOutcome.SUCCESS if enabled else SecurityOutcome.DENIED,
+        target_type="lab_authorization", target_id=str(grant.id),
+        reason_code="lab_authorized" if enabled else "deployment_disabled",
     )
     session.commit()
-    session.refresh(authorization)
-    return authorization, PolicyDecision(enabled, reason, authorization.id if enabled else None)
+    session.refresh(grant)
+    return grant, PolicyDecision(enabled, reason, grant.id if enabled else None)
 
 
 def check_capability(
@@ -142,31 +185,48 @@ def record_denial(
 
 
 def revoke_authorization(
-    session: Session, dockyard_id: int, authorization_id: int
+    session: Session, dockyard_id: int, authorization_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
 ) -> LabAuthorization | None:
-    authorization = session.scalar(
+    with _MUTATION_LOCK:
+        return _revoke_authorization(
+            session, dockyard_id, authorization_id, authorization=authorization, policy=policy,
+        )
+
+
+def _revoke_authorization(
+    session: Session, dockyard_id: int, authorization_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> LabAuthorization | None:
+    actor = _mutation_actor(session, dockyard_id, authorization, policy)
+    grant = session.scalar(
         select(LabAuthorization).where(
             LabAuthorization.id == authorization_id,
             LabAuthorization.dockyard_id == dockyard_id,
         )
     )
-    if authorization is None:
+    if grant is None:
         return None
-    if authorization.status == "active":
-        authorization.status = "revoked"
-        authorization.revoked_at = datetime.now(UTC)
+    if grant.status == "active":
+        grant.status = "revoked"
+        grant.revoked_at = datetime.now(UTC)
     _record(
         session,
         dockyard_id=dockyard_id,
-        capability_id=authorization.capability,
+        capability_id=grant.capability,
         action="revoke",
         decision="allowed",
-        reason=f"Lab authorization {authorization.id} revoked",
-        authorization_id=authorization.id,
+        reason=f"Lab authorization {grant.id} revoked",
+        authorization_id=grant.id,
+    )
+    append_security_event(
+        session, organization_id=actor.organization_id, actor=actor,
+        action=SecurityAction.LAB_REVOKE, outcome=SecurityOutcome.SUCCESS,
+        target_type="lab_authorization", target_id=str(grant.id), reason_code="lab_revoked",
     )
     session.commit()
-    session.refresh(authorization)
-    return authorization
+    session.refresh(grant)
+    return grant
 
 
 def list_authorizations(
