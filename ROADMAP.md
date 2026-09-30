@@ -193,8 +193,10 @@ recheck the approver's current permission before external contact. Lab grant and
 revocation changes also record the current actor and serialize workspace mutations.
 Detection, correlation, and report creation also record their actors and recheck
 current permission before publishing results. Workspace, scope, finding-status,
-and export actions now also record current actors. Team administration, audit
-retention, and end-to-end access integration remain open.
+and export actions now also record current actors. A dormant administration core
+now provisions exact configured identities, changes member access, and transfers
+ownership with atomic audit records and session revocation. Its HTTP adapters
+and UI, audit retention, and end-to-end access integration remain open.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.

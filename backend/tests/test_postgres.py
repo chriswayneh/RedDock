@@ -1139,6 +1139,7 @@ def test_postgresql_migrations_and_crud(
         _postgres_approval_races(monkeypatch)
         lab_workspace, lab_actors, lab_policy = _postgres_lab_races(monkeypatch)
         _postgres_scope_races(monkeypatch, lab_workspace, lab_actors, lab_policy)
+        _postgres_team_administration_races(monkeypatch)
         _postgres_stored_actor_rechecks(monkeypatch, tmp_path)
 
         # Exercise reporting against the real server: another connection
@@ -1267,6 +1268,119 @@ def _postgres_stored_actor_rechecks(monkeypatch, tmp_path):
             SecurityAuditEvent.action == "report.export",
             SecurityAuditEvent.target_id == str(report_id),
         )) is None
+
+
+def _postgres_team_administration_races(monkeypatch):
+    from contextlib import nullcontext
+    from datetime import UTC, datetime
+
+    from app import team_administration as team
+    from app.authorization import AuthorizationContext, AuthorizationDenied, Role
+    from app.database import SessionLocal
+    from app.models import BrowserSession, Membership, Organization, SecurityAuditEvent, User
+    from app.session_auth import (
+        SESSION_ROTATION_INTERVAL,
+        SessionRejected,
+        issue_browser_session,
+        rotate_browser_session,
+    )
+    from app.workflow_authorization import WorkflowExecutionPolicy
+
+    with SessionLocal() as session:
+        organization = Organization(slug=f"admin-{uuid4().hex}", name="Administration races")
+        user = User(oidc_issuer="https://admin-identity.example", oidc_subject=uuid4().hex,
+                    display_name="Owner", status="active")
+        session.add_all([organization, user])
+        session.flush()
+        member = Membership(organization_id=organization.id, user_id=user.id,
+                            role="owner", status="active")
+        session.add(member)
+        session.flush()
+        original = AuthorizationContext(organization.id, user.id, member.id, Role.OWNER)
+        policy = WorkflowExecutionPolicy("server", user.oidc_issuer, organization.slug)
+        session.commit()
+    workflow = {"authorization": original, "policy": policy}
+    targets = []
+    for index in range(2):
+        with SessionLocal() as session:
+            targets.append(team.provision_member(session, subject=f"candidate-{index}",
+                display_name="Candidate", role="admin", **workflow))
+
+    barrier = Barrier(2)
+
+    def provision(index):
+        barrier.wait(timeout=15)
+        with SessionLocal() as session:
+            try:
+                return team.provision_member(session, subject=f"bounded-{index}",
+                    display_name="Bounded member", role="viewer", **workflow).id
+            except team.TeamAdministrationRejected as error:
+                assert "limit" in str(error)
+                return None
+
+    def transfer(target):
+        barrier.wait(timeout=15)
+        with SessionLocal() as session:
+            try:
+                return team.transfer_ownership(session, target.id, **workflow).id
+            except AuthorizationDenied:
+                return None
+
+    with monkeypatch.context() as race_patch:
+        # These calls share no process lock, as with independent server workers.
+        race_patch.setattr(team, "_TEAM_LOCK", nullcontext())
+        race_patch.setattr(team, "MAX_TEAM_MEMBERS", 4)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            bounded = list(executor.map(provision, range(2)))
+        assert sum(item is not None for item in bounded) == 1
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            transferred = list(executor.map(transfer, targets))
+        assert sum(item is not None for item in transferred) == 1
+        winner_id = next(item for item in transferred if item is not None)
+        winner = next(item for item in targets if item.id == winner_id)
+        loser = next(item for item in targets if item.id != winner_id)
+        current_owner = AuthorizationContext(original.organization_id, winner.user_id,
+                                              winner.id, Role.OWNER)
+        issued_at = datetime.now(UTC)
+        with SessionLocal() as session:
+            token = issue_browser_session(session, loser.id, now=issued_at)
+            session.commit()
+
+        def rotate():
+            barrier.wait(timeout=15)
+            with SessionLocal() as session:
+                try:
+                    successor = rotate_browser_session(session, token.token, token.csrf_token,
+                        now=issued_at + SESSION_ROTATION_INTERVAL)
+                    session.commit()
+                    return successor
+                except SessionRejected:
+                    return None
+
+        def disable():
+            barrier.wait(timeout=15)
+            with SessionLocal() as session:
+                return team.change_member(session, loser.id, role="admin", status="disabled",
+                    authorization=current_owner, policy=policy)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rotating, disabling = executor.submit(rotate), executor.submit(disable)
+            rotating.result(timeout=20)
+            assert disabling.result(timeout=20).status == "disabled"
+
+    with SessionLocal() as session:
+        owners = list(session.scalars(select(Membership.id).where(
+            Membership.organization_id == original.organization_id, Membership.role == "owner")))
+        assert owners == [winner.id]
+        sessions = session.scalars(select(BrowserSession).where(
+            BrowserSession.membership_id == loser.id))
+        assert all(row.revoked_at is not None for row in sessions)
+        changes = list(session.scalars(select(SecurityAuditEvent).where(
+            SecurityAuditEvent.organization_id == original.organization_id,
+            SecurityAuditEvent.action == "membership.change")))
+        assert len(changes) == 6  # three provisions, two transfer records, one disable
+        received = [item for item in changes if item.reason_code == "ownership_received"]
+        assert len(received) == 1 and received[0].target_id == str(winner.id)
 
 
 def _postgres_scope_races(monkeypatch, dockyard_id, actors, policy):
