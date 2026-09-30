@@ -76,12 +76,15 @@ def current_workflow_actor(
 
 def require_workflow_actor(
     session: Session, policy: WorkflowExecutionPolicy, authorization: AuthorizationContext,
-    dockyard_id: int, permission: Permission,
+    dockyard_id: int, permission: Permission, *, lock_workspace: bool = False,
 ) -> AuthorizationContext:
     """Require current authority within the exact workspace organization."""
-    organization_id = session.scalar(select(Dockyard.organization_id).where(
+    statement = select(Dockyard.organization_id).where(
         Dockyard.id == dockyard_id, Dockyard.organization_id == authorization.organization_id,
-    ))
+    )
+    if lock_workspace:
+        statement = statement.with_for_update()
+    organization_id = session.scalar(statement)
     actor = current_workflow_actor(
         session, policy, organization_id=authorization.organization_id,
         user_id=authorization.user_id, membership_id=authorization.membership_id,

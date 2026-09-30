@@ -158,7 +158,7 @@ closed, or mismatched runtimes reject admission. Shutdown drains accepted work
 before closing authentication, provider, limiter, and primary database resources.
 Compose gives the bounded discovery work 12 minutes to finish. Forced termination
 still requires interrupted-work recovery on restart. HTTP session renewal,
-sign-in/logout, and the remaining workflow actor rechecks are not enabled.
+and sign-in/logout routes remain unregistered in the running application.
 Server mode remains disabled until those integrations and the other deployment
 gates are complete.
 
@@ -180,7 +180,7 @@ audit commit together before target or provider contact. Another authorized
 member can approve a retained request after its requester loses access. Historical
 local pending requests remain usable, with no fabricated requester attribution.
 PostgreSQL races verify one-winner approval and final revocation checks. This does
-not complete stored-data workflows, administration, or server acceptance.
+not complete administration or server acceptance.
 
 Lab grant and revocation mutations use the same paired workflow policy, with
 current `lab:authorize` permission held through the atomic policy/audit commit.
@@ -198,8 +198,17 @@ commit intermediate findings or relationships: result rows, artifact references,
 and the publication event become visible together. A failed check or evidence
 write rolls back unpublished results while retaining a failed run. Reporting
 preserves its independent consistent snapshot transaction, then checks current
-permission at publication and removes partial artifacts on failure. Sensitive
-edits, export auditing, administration, and full deployment acceptance remain open.
+permission at publication and removes partial artifacts on failure. Team
+administration, audit retention, and full deployment acceptance remain open.
+
+Workspace creation, scope mutations, and finding-status edits require current
+permission and commit actor attribution with the mutation. Scope mutations use
+workspace locking before identity locks, preserving duplicate and count bounds
+across workers. Scope evaluation commits authorization before optional DNS
+resolution. Exports recheck current `report:export` permission after artifact
+verification, then commit admission before returning a file response. This event
+does not prove delivery, and later revocation cannot retract an admitted download.
+Security events contain fixed reasons and opaque IDs, never user notes or targets.
 
 Session generations belong to one stable, random family. They become idle after
 30 minutes, update activity at most once every five minutes, and rotate the

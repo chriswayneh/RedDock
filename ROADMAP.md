@@ -185,15 +185,16 @@ the same owned database, recheck active membership and role, and require exact
 Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
 Sign-in, callback, logout, and session-renewal adapters are tested in an isolated
 HTTP harness and remain unregistered in the app. Frontend session handling,
-the remaining workflow actor checks, administration, and end-to-end team access
+administration, and end-to-end team access
 still need integration. Discovery now carries a durable requester receipt and
 rechecks current membership before execution and immediately before adapter contact.
 Validation and intelligence now record separate request and approval actors and
 recheck the approver's current permission before external contact. Lab grant and
 revocation changes also record the current actor and serialize workspace mutations.
 Detection, correlation, and report creation also record their actors and recheck
-current permission before publishing results. Sensitive edits, export audit,
-and team administration still need integration.
+current permission before publishing results. Workspace, scope, finding-status,
+and export actions now also record current actors. Team administration, audit
+retention, and end-to-end access integration remain open.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
@@ -317,7 +318,7 @@ These primitives are not an enabled authentication system:
   expiry. Logout rechecks the browser proof under family locks, so a retained
   predecessor can revoke a concurrently rotated family. Denials preserve cookies.
 - The next enablement checkpoint still needs frontend sign-in, callback, session
-  recovery, renewal, and logout handling; workflow actor propagation;
+  recovery, renewal, and logout handling;
   administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
   capacity planning; forced-interruption exercises; and end-to-end authenticated

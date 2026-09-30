@@ -1137,7 +1137,8 @@ def test_postgresql_migrations_and_crud(
             session.commit()
 
         _postgres_approval_races(monkeypatch)
-        _postgres_lab_races(monkeypatch)
+        lab_workspace, lab_actors, lab_policy = _postgres_lab_races(monkeypatch)
+        _postgres_scope_races(monkeypatch, lab_workspace, lab_actors, lab_policy)
         _postgres_stored_actor_rechecks(monkeypatch, tmp_path)
 
         # Exercise reporting against the real server: another connection
@@ -1187,6 +1188,7 @@ def test_postgresql_migrations_and_crud(
 
 
 def _postgres_stored_actor_rechecks(monkeypatch, tmp_path):
+    from app.authorization import AuthorizationDenied
     from app.correlation import runner as correlation
     from app.database import SessionLocal
     from app.detection import runner as detection
@@ -1240,6 +1242,76 @@ def _postgres_stored_actor_rechecks(monkeypatch, tmp_path):
                 )] == previous
         with SessionLocal.begin() as writer:
             writer.get(Membership, 1).status = "active"
+
+    with SessionLocal() as session:
+        report = reporting.start_report(session, dockyard_id, **LOCAL_WORKFLOW)
+        assert report.status == "completed", report.error
+        report_id = report.id
+    original_artifact = reporting.artifact_path
+
+    def revoke_after_verification(*args):
+        path = original_artifact(*args)
+        with SessionLocal.begin() as writer:
+            writer.get(Membership, 1).status = "disabled"
+        return path
+
+    with monkeypatch.context() as export_patch:
+        export_patch.setattr(reporting, "artifact_path", revoke_after_verification)
+        with SessionLocal() as session:
+            report = reporting.get_run(session, dockyard_id, report_id)
+            with pytest.raises(AuthorizationDenied):
+                reporting.authorized_artifact(session, report, "dockpack", **LOCAL_WORKFLOW)
+    with SessionLocal.begin() as writer:
+        writer.get(Membership, 1).status = "active"
+        assert writer.scalar(select(SecurityAuditEvent.id).where(
+            SecurityAuditEvent.action == "report.export",
+            SecurityAuditEvent.target_id == str(report_id),
+        )) is None
+
+
+def _postgres_scope_races(monkeypatch, dockyard_id, actors, policy):
+    from contextlib import nullcontext
+
+    from app import services
+    from app.database import SessionLocal
+    from app.dockguard import ScopeRejected
+    from app.models import ScopeEntry, SecurityAuditEvent
+    from app.schemas import ScopeEntryCreate
+
+    barrier = Barrier(2)
+
+    def add(item):
+        index, actor = item
+        barrier.wait(timeout=15)
+        with SessionLocal() as session:
+            try:
+                return services.add_scope_entry(
+                    session, dockyard_id,
+                    ScopeEntryCreate(rule="include", target=f"127.0.0.{index + 1}"),
+                    authorization=actor, policy=policy,
+                ).id
+            except ScopeRejected as error:
+                assert "at most 1 scope entries" in str(error)
+                return None
+
+    with monkeypatch.context() as race_patch:
+        settings = services.get_settings().model_copy(update={"max_scope_entries": 1})
+        race_patch.setattr(services, "get_settings", lambda: settings)
+        race_patch.setattr(services, "_SCOPE_MUTATION_LOCK", nullcontext())
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(add, enumerate(actors)))
+        assert sum(result is not None for result in results) == 1
+    with SessionLocal() as session:
+        entries = list(session.scalars(select(ScopeEntry).where(
+            ScopeEntry.dockyard_id == dockyard_id,
+        )))
+        assert len(entries) == 1
+        events = list(session.scalars(select(SecurityAuditEvent).where(
+            SecurityAuditEvent.organization_id == actors[0].organization_id,
+            SecurityAuditEvent.action == "scope.add",
+        )))
+        assert len(events) == 1
+        assert events[0].target_id == str(entries[0].id)
 
 
 def _postgres_lab_races(monkeypatch):
@@ -1329,6 +1401,7 @@ def _postgres_lab_races(monkeypatch):
                 }
     finally:
         get_settings.cache_clear()
+    return dockyard_id, actors, policy
 
 
 def _postgres_approval_races(monkeypatch):
