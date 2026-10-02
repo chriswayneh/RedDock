@@ -34,8 +34,8 @@ security, migration, documentation, and end-to-end acceptance gates pass.
 | --- | --- | --- | --- |
 | **Released checkpoint** | `v0.8.1` | Phase 8: Production polish | Local safety, reliability, and deployment foundations |
 | **Current target** | `v0.9.0` | Phase 8: Production polish | Finish guided first use, authenticated team access, operations, recovery, and deployment validation without weakening local mode |
-| Planned | `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
-| Planned | `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |
+| Planned — outside open-source safety contract; not an implementation task | `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
+| Planned — outside open-source safety contract; not an implementation task | `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |
 | Planned — outside open-source safety contract; not an implementation task | `v1.2.0` | Phase 11: Expanded safe assessment | Add bounded UDP discovery, sanitized HTTP response sampling, and a reviewed allowlist of non-intrusive service checks |
 | Planned — outside open-source safety contract; not an implementation task | `v1.3.0` | Phase 12: Credentialed checks | Add least-privilege, read-only check adapters with secret references, strict redaction, RBAC, and complete audit evidence |
 | Planned — outside open-source safety contract; not an implementation task | `v1.4.0` | Phase 13: Evidence-based validation | Add fixed, approval-gated validation packs that improve confidence without accepting arbitrary commands or exploit payloads |
@@ -420,6 +420,8 @@ that a product/version match proves vulnerability or exploitability.
 Completion means an operator can update, inspect, use, and remove the local
 catalogue while every report distinguishes an association, known exploitation,
 and a RedDock validation result.
+
+Phases 11–14 below are future direction. They are not in this build and are not implementation tasks.
 
 ## Phase 11: Expanded safe assessment
 

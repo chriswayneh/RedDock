@@ -16,7 +16,7 @@ findings, evidence-backed validation, and portable reports.
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/Phase%208%3A%20Production%20polish-in%20progress%20%C2%B7%20local%20single--operator-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), Phase 8 Production hardening checkpoint
+**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), the Phase 8 production-hardening checkpoint. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
 
 [Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
@@ -396,7 +396,7 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
+The current release is **v0.8.1**, the Phase 8 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
 
 ### Phase 8 progress
 
