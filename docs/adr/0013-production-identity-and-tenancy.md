@@ -288,8 +288,12 @@ The dormant client now publishes that change as a fixed same-origin notice with
 no proof, role, or identifier. Peer pages drop the in-memory proof and do not
 fetch or retry; only a later explicit recovery restores it. Confirmed logout
 notifies those pages to sign out locally. A forgotten page or a failed logout
-sends nothing. This client is not instantiated by the local UI. Sign-in screens
-and full authentication acceptance remain separate gates.
+sends nothing. A dormant callback helper sends only state and code, rejects any
+other callback fields, and keeps the recovered session only when its proof
+matches. A denied callback does not clear an existing page session, and the
+authorization code is not retried. This client is not instantiated by the local
+UI, and the helper is not called from it. Sign-in screens and full
+authentication acceptance remain separate gates.
 
 ## Ownership model
 

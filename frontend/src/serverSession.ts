@@ -114,6 +114,17 @@ export class ServerSessionClient {
     try { channel.close(); } catch { /* already closed */ }
   }
 
+  /** Accept a callback proof only when it matches the proof recovery already stored. */
+  confirmIssuedProof(csrf: string, expiresAt: string): void {
+    const matches = typeof csrf === "string" && PROOF.test(csrf)
+      && typeof expiresAt === "string" && this.#session?.expiresAt === expiresAt
+      && this.#csrf === csrf;
+    if (!matches) {
+      this.forget();
+      throw new ServerSessionError(null);
+    }
+  }
+
   #onNotice(value: unknown): void {
     const kind = tabNotice(value);
     if (!kind) return;
