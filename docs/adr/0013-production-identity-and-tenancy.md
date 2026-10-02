@@ -353,7 +353,8 @@ removing role change.
   CSRF delivery, no-store/no-referrer headers, denial cleanup, replay, and
   duplicate parameters/cookies. The same isolated app can mount the product route
   manifest: a callback session is allowed or denied from the current membership
-  role, and logout removes it. The callback returns JSON with a CSRF proof and
+  role, and logout removes it. An auditor can read audit history but cannot
+  create a dockyard; an admin can. The callback returns JSON with a CSRF proof and
   expiry; frontend handling still needs integration. The supported application
   does not register the authentication router. Both packaged Uvicorn
   entrypoints disable raw request access logs. The Compose proxy logs only fixed
