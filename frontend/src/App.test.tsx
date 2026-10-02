@@ -523,6 +523,61 @@ describe("RedDock application", () => {
     expect(screen.getByRole("button", { name: "Run discovery" })).toBeDisabled();
   });
 
+  it("completes the guided local self-assessment without starting a scan", async () => {
+    const calls = stubApi({
+      scope: [{ ...scopeEntry, id: 8, kind: "http_origin", value: "http://reddock-ingress:8080" }],
+    });
+    const normalFetch = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname === "/api/dockyards" && (init?.method ?? "GET") === "GET") {
+        return Promise.resolve(new Response(JSON.stringify([dockyard]), { status: 200 }));
+      }
+      return normalFetch(input, init);
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    const start = await screen.findByRole("button", { name: "Start local walkthrough" });
+    await waitFor(() => expect(start).toBeEnabled());
+    await user.click(start);
+    expect(await screen.findByText("Your assessment, step by step")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "My first local walkthrough" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Review scope" }));
+    expect(await screen.findByText("AUTHORIZED SCOPE")).toBeInTheDocument();
+    expect(screen.getByText("http://reddock-ingress:8080")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Assessment" }));
+    await user.click(await screen.findByRole("button", { name: "Open discovery" }));
+    await waitFor(() => {
+      expect(screen.getByLabelText("Target")).toHaveValue("http://reddock-ingress:8080");
+      expect(screen.getByLabelText("Adapter")).toHaveValue("http");
+      expect(screen.getByLabelText("Discovery profile")).toHaveValue("http_probe");
+    });
+    expect(screen.getByRole("button", { name: "Run discovery" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Assessment" }));
+    await user.click(await screen.findByRole("button", { name: "Open detection" }));
+    expect(await screen.findByRole("button", { name: "Run detection" })).toBeDisabled();
+    expect(screen.getByText("There is nothing to detect against yet. Run a scoped discovery first.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Assessment" }));
+    await user.click(await screen.findByRole("button", { name: "Review findings" }));
+    expect(await screen.findByText("No findings match this view. Run detection after discovery to produce them.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Assessment" }));
+    expect(screen.getByRole("link", { name: "Open reports" })).toHaveAttribute("href", "/reports?dockyard=2");
+    await user.click(screen.getByRole("button", { name: "Reports" }));
+    expect(await screen.findByText("Technical detail, executive context, one portable DockPack.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dockyard")).toHaveValue("2");
+    expect(screen.getByRole("button", { name: "Generate report set" })).toBeEnabled();
+
+    const posts = vi.mocked(fetch).mock.calls.filter(([, init]) => init?.method === "POST");
+    expect(posts.map(([input]) => String(input))).toEqual(["/api/dockyards", "/api/dockyards/2/scope"]);
+    expect(calls.discovery).not.toHaveBeenCalled();
+    expect(calls.detection).not.toHaveBeenCalled();
+  });
+
   it("preserves the walkthrough workspace if scope creation fails", async () => {
     stubApi();
     const normalFetch = vi.mocked(fetch).getMockImplementation()!;
