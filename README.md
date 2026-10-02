@@ -14,9 +14,9 @@ findings, evidence-backed validation, and portable reports.
 [![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml)
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/phase-8%20Production%20hardening-C1121F)](ROADMAP.md)
+[![Phase](https://img.shields.io/badge/Phase%208%3A%20Production%20polish-in%20progress%20%C2%B7%20local%20single--operator-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), Phase 8 Production hardening checkpoint
+**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), the Phase 8 production-hardening checkpoint. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
 
 [Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
@@ -30,9 +30,9 @@ RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light ver
 
 ### Where it is going
 
-Today's release does not yet test UDP, credentials, exploitability, response
-bodies, NSE scripts, brute force, payloads, or evasion, and it ships no CVE
-feed. Those are development targets, not permanent product limits:
+**Live limits of this build:** no UDP scanning, no NSE scripts, no brute force, no payloads, no evasion, and no server mode. Server mode fails startup. These limits apply to the build under review.
+
+[Phase 11](ROADMAP.md#phase-11-expanded-safe-assessment) through [Phase 14](ROADMAP.md#phase-14-controlled-adversary-simulation) on the [roadmap](ROADMAP.md#planned-releases) (planned releases v1.2.0 through v2.0.0) are future direction and are **not in this build**. The notes below are roadmap history, not work in this release:
 
 - **v1.1.0:** locally cached CVE, CISA KEV, and EPSS intelligence.
 - **v1.2.0:** bounded UDP discovery, sanitized HTTP response sampling, and
@@ -91,6 +91,8 @@ The dashboard now offers **Start local walkthrough**: a guided assessment of
 RedDock's own Compose proxy, with no automatic scanning. Findings and new reports
 show what was checked, what still needs detection, and what was not checked.
 These additions are not in the stable `v0.8.1` tag.
+
+Dormant OIDC, browser sessions, and team admin landed on master after the v0.8.1 tag, stay unregistered, and server mode still fails startup ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
 
 To try them in a separate folder, clone without `--branch v0.8.1 --depth 1`, then
 use the same Compose command above. Keep only one RedDock stack on port 8080.
@@ -394,7 +396,7 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-The current release is **v0.8.1, Phase 8 Production hardening checkpoint**. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
+The current release is **v0.8.1**, the Phase 8 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
 
 ### Phase 8 progress
 
