@@ -194,7 +194,11 @@ absolute expiry as JSON, with the bearer in its secure host-only cookie. Every
 trusted callback outcome clears the transaction cookie; failures preserve an
 existing session. Responses use no-store and no-referrer policies and generic
 errors, with Retry-After only for durable denial. There is no caller-selected
-redirect. The packaged image disables Uvicorn request access logs, and the
+redirect. An isolated harness can mount the product route manifest beside this
+dormant router. The callback session lists dockyards for an operator, denies
+audit history, loses raw-evidence access after the membership is downgraded,
+and loses that access after logout. The supported application does not
+register the router. The packaged image disables Uvicorn request access logs, and the
 Compose proxy emits fixed request categories and metrics without request paths,
 queries, headers, or client addresses. Frontend handling and future TLS-proxy
 acceptance remain integration gates. Server mode remains blocked.

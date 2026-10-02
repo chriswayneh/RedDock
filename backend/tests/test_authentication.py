@@ -708,3 +708,60 @@ def test_http_login_provider_and_limit_failures_are_generic(authentication_http_
     assert response.json() == {"detail": "Authentication failed"}
     assert "set-cookie" not in response.headers
     assert len(provider.calls) == provider_count
+
+
+def test_callback_session_obeys_route_manifest_outside_supported_app(authentication_setup):
+    """Callback access is checked on the product manifest only inside this harness."""
+    from app.api import router as product_router
+    from app.browser_security import CSRF_HEADER_NAME
+    from app.main import app as supported_app
+
+    database, config, _limiter, _provider, runtime, membership_id = authentication_setup
+    application = FastAPI()
+    binding = DatabaseRequestBinding("server", database.SessionLocal)
+    setattr(application.state, DATABASE_REQUEST_BINDING_STATE, binding)
+    setattr(
+        application.state, AUTHENTICATION_REQUEST_BINDING_STATE,
+        AuthenticationRequestBinding(binding, runtime),
+    )
+    application.include_router(build_authentication_router())
+    application.include_router(product_router)
+    application.add_middleware(
+        TrustedIngressMiddleware, public_origin=config.public_origin,
+        trusted_proxy_cidrs=("10.0.0.5/32",),
+    )
+    with TestClient(
+        application, base_url=config.public_origin, client=("10.0.0.5", 1234),
+        follow_redirects=False,
+    ) as client:
+        client.headers.update({
+            "X-Forwarded-For": "203.0.113.10",
+            "X-Forwarded-Host": "reddock.example",
+            "X-Forwarded-Proto": "https",
+        })
+        assert client.get("/api/dockyards").status_code == 401
+        state = _http_login(client)
+        issued = client.get("/api/auth/callback", params={"state": state, "code": "code"})
+        assert issued.status_code == 200
+        assert set(issued.json()) == {"csrf_token", "expires_at"}
+        assert client.get("/api/dockyards").json() == []
+        assert client.get("/api/dockyards/1/lab/audit").status_code == 403
+        missing = client.get("/api/dockyards/1/evidence")
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == "Dockyard not found"
+        with database.SessionLocal() as session:
+            session.get(Membership, membership_id).role = "viewer"
+            session.commit()
+        assert client.get("/api/dockyards").status_code == 200
+        denied = client.get("/api/dockyards/1/evidence")
+        assert denied.status_code == 403
+        assert denied.json()["detail"] == "Permission denied"
+        logout = client.post("/api/auth/logout", headers={
+            "Origin": config.public_origin,
+            CSRF_HEADER_NAME: issued.json()["csrf_token"],
+        })
+        assert logout.status_code == 204
+        assert client.get("/api/dockyards").status_code == 401
+    assert not any(
+        getattr(route, "path", "").startswith("/api/auth/") for route in supported_app.routes
+    )

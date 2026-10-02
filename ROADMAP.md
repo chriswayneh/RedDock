@@ -188,7 +188,11 @@ Protected request dependencies now resolve hash-only browser sessions through
 the same owned database, recheck active membership and role, and require exact
 Origin and CSRF proof for changes. Mutations use the isolated membership limiter.
 Sign-in, callback, logout, and session-renewal adapters are tested in an isolated
-HTTP harness and remain unregistered in the app. Frontend session handling,
+HTTP harness and remain unregistered in the app. That harness can mount the
+product route manifest beside the dormant router. A callback-issued operator
+session can list dockyards but not audit history; downgrading the membership to
+viewer removes raw-evidence access on the next request, and logout removes the
+session. Frontend session handling,
 administration, and end-to-end team access
 still need integration. Discovery now carries a durable requester receipt and
 rechecks current membership before execution and immediately before adapter contact.
@@ -326,8 +330,10 @@ These primitives are not an enabled authentication system:
   authentication/database pair. Login requires trusted HTTPS ingress and one
   exact Origin. Callback requires one state, code, and browser-binding cookie;
   it issues the secure bearer cookie and a no-store CSRF response. Failures are
-  generic, and trusted callback outcomes clear the transaction cookie. The
-  running app does not register this router.
+  generic, and trusted callback outcomes clear the transaction cookie. An
+  isolated harness mounts the product manifest beside this router and checks
+  operator, downgraded-viewer, and logged-out access. The running app does not
+  register this router.
 - Dormant renewal and logout adapters require exact Origin, CSRF, and durable
   membership admission before mutation. Renewal rechecks identity under the
   session lifecycle, rotates both proofs when due, and preserves absolute
