@@ -218,7 +218,11 @@ it rechecks the proof and revokes all generations atomically with the audit even
 Successful and already-revoked retained families return `204` and clear browser
 and login-transaction cookies. Invalid proofs, limit denials, or store failures
 do not clear cookies or claim logout succeeded. No provider-wide logout occurs.
-Frontend session recovery and multi-tab handling still need integration.
+A dormant same-origin notice tells other pages about proof rotation or
+confirmed logout without carrying a CSRF proof, role, or identifier. Peer
+rotation only drops the in-memory proof; the caller must recover explicitly,
+and the denied write is not replayed. The local UI still does not instantiate
+this client. Sign-in screens and authentication acceptance still need integration.
 
 The dormant primary database runtime is constructed directly from the validated
 server configuration. It owns the main PostgreSQL engine and session factory
