@@ -200,8 +200,11 @@ audit history, loses raw-evidence access after the membership is downgraded,
 and loses that access after logout. The supported application does not
 register the router. The packaged image disables Uvicorn request access logs, and the
 Compose proxy emits fixed request categories and metrics without request paths,
-queries, headers, or client addresses. Frontend handling and future TLS-proxy
-acceptance remain integration gates. Server mode remains blocked.
+queries, headers, or client addresses. A dormant browser helper can complete
+one callback by sending only state and code, then keeping the session only when
+its proof matches recovery. The local UI does not call that helper. A sign-in
+screen and future TLS-proxy acceptance remain integration gates. Server mode
+remains blocked.
 
 The same dormant router defines `POST /api/auth/renew` and `POST /api/auth/logout`.
 Both require trusted HTTPS ingress, the exact database/authentication pair, one

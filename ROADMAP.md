@@ -350,8 +350,11 @@ These primitives are not an enabled authentication system:
   proof rotation or confirmed logout with no CSRF material. Peer rotation
   discards the local proof until the caller explicitly recovers, and confirmed
   logout signs other pages out without a network call. The local UI does not
-  create this client; sign-in and administration screens still need integration.
-- The next enablement checkpoint still needs frontend sign-in, callback, session
+  create this client. A dormant callback helper sends only state and code to the
+  same-origin callback, then keeps the session only when that proof matches
+  recovery. The local UI does not call it. Sign-in and administration screens
+  still need integration.
+- The next enablement checkpoint still needs a sign-in screen, session
   recovery, renewal, and logout handling;
   administration; a
   packaged TLS proxy; metrics; PostgreSQL disaster recovery exercises; database
