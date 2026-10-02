@@ -1,4 +1,9 @@
-/** Dormant server transport. The local application does not instantiate this client. */
+/** Dormant server transport. The local application does not instantiate this client.
+ *  Other same-origin pages hear only a fixed rotation or confirmed-logout notice.
+ *  Notices carry no CSRF proof, role, or identifier. A peer rotation drops this
+ *  page's in-memory proof; the caller must recover explicitly, and a denied
+ *  write is never replayed. */
+export const SESSION_TAB_CHANNEL = "reddock-auth-tab-v1";
 export type ServerRole = "owner" | "admin" | "operator" | "auditor" | "viewer";
 export type ServerSession = Readonly<{
   role: ServerRole;
@@ -58,6 +63,13 @@ function failure(response: Response): ServerSessionError {
     retry && /^\d{1,5}$/.test(retry) ? Math.min(Number(retry), 86400) : null);
 }
 
+function tabNotice(value: unknown): "proof_stale" | "signed_out" | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  if (Object.keys(body).length !== 2 || body.v !== 1) return null;
+  return body.kind === "proof_stale" || body.kind === "signed_out" ? body.kind : null;
+}
+
 export class ServerSessionClient {
   #session: ServerSession | null = null;
   #csrf: string | null = null;
@@ -68,6 +80,18 @@ export class ServerSessionClient {
   #recovering: Promise<ServerSession | null> | null = null;
   #renewing: Promise<ServerSession> | null = null;
   #loggingOut: Promise<void> | null = null;
+  #channel: BroadcastChannel | null = null;
+
+  constructor() {
+    try {
+      const channel = new BroadcastChannel(SESSION_TAB_CHANNEL);
+      channel.onmessage = (event: MessageEvent) => this.#onNotice(event.data);
+      this.#channel = channel;
+    } catch {
+      // Without this browser API, a page can still recover explicitly after denial.
+      this.#channel = null;
+    }
+  }
 
   get session(): ServerSession | null { return this.#session; }
   get status(): SessionStatus { return this.#status; }
@@ -79,6 +103,30 @@ export class ServerSessionClient {
     this.#renewing = null;
     this.#loggingOut = null;
     this.#clear("unknown");
+  }
+
+  /** Stop listening. This does not revoke the server session or notify other pages. */
+  release(): void {
+    const channel = this.#channel;
+    this.#channel = null;
+    if (!channel) return;
+    channel.onmessage = null;
+    try { channel.close(); } catch { /* already closed */ }
+  }
+
+  #onNotice(value: unknown): void {
+    const kind = tabNotice(value);
+    if (!kind) return;
+    this.#epoch += 1;
+    this.#recovering = null;
+    this.#renewing = null;
+    this.#loggingOut = null;
+    this.#clear(kind === "signed_out" ? "signed_out" : "unknown");
+  }
+
+  #publish(kind: "proof_stale" | "signed_out"): void {
+    try { this.#channel?.postMessage({ v: 1, kind }); }
+    catch { /* a closed channel must not undo a completed server action */ }
   }
 
   #clear(status: SessionStatus): void {
@@ -165,6 +213,7 @@ export class ServerSessionClient {
           || (!body.rotated && body.csrf_token !== null)) throw new ServerSessionError(null);
         this.#csrf = body.rotated ? proof(body.csrf_token) : csrf;
         this.#revision += 1;
+        if (body.rotated) this.#publish("proof_stale");
         return session;
       } catch (error) {
         if (epoch === this.#epoch) this.#clear(error instanceof ServerSessionError && error.status === 401
@@ -191,6 +240,7 @@ export class ServerSessionClient {
         this.#checkEpoch(epoch);
         if (response.status !== 204) throw failure(response);
         this.#clear("signed_out");
+        this.#publish("signed_out");
       } catch (error) {
         // A network failure cannot confirm that the cookie was revoked.
         if (epoch === this.#epoch) this.#clear("unavailable");

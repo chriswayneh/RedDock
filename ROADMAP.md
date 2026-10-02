@@ -205,7 +205,12 @@ isolated harness. The administration UI, audit retention, and end-to-end access
 integration remain open; no team routes are registered in the running app.
 The dormant team audit endpoint restricts history to current owners, admins,
 and auditors, returns at most 100 structured events, and pages by event ID so
-new writes do not repeat previously reviewed events.
+new writes do not repeat previously reviewed events. Same-origin pages can now
+exchange one fixed rotation or confirmed-logout notice. The notice has no CSRF
+proof, role, or identifier. A peer rotation drops only that page's in-memory
+proof and waits for an explicit recovery; the denied write is not replayed.
+Confirmed logout marks the other pages signed out without another request.
+The local UI still does not create the session client.
 
 **This groundwork does not make RedDock a supported multi-user or internet-facing
 service.** Unsupported deployment modes remain blocked.
@@ -335,8 +340,11 @@ These primitives are not an enabled authentication system:
 - A dormant browser session client keeps server CSRF proofs only in page memory,
   coordinates recovery/renewal/logout with writes, and rejects stale responses
   after state is discarded. It sends protected requests only to same-origin API
-  paths and never automatically retries a write. The local UI does not create
-  this client; sign-in and administration screens still need integration.
+  paths and never automatically retries a write. A same-origin tab notice reports
+  proof rotation or confirmed logout with no CSRF material. Peer rotation
+  discards the local proof until the caller explicitly recovers, and confirmed
+  logout signs other pages out without a network call. The local UI does not
+  create this client; sign-in and administration screens still need integration.
 - The next enablement checkpoint still needs frontend sign-in, callback, session
   recovery, renewal, and logout handling;
   administration; a
