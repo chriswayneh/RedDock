@@ -765,3 +765,74 @@ def test_callback_session_obeys_route_manifest_outside_supported_app(authenticat
     assert not any(
         getattr(route, "path", "").startswith("/api/auth/") for route in supported_app.routes
     )
+
+
+def test_auditor_cannot_create_what_admin_can_in_isolated_harness(authentication_setup):
+    """Auditor and admin differ only inside this harness. Team routes stay unregistered."""
+    from app.api import router as product_router
+    from app.browser_security import CSRF_HEADER_NAME
+    from app.main import app as supported_app
+    from app.workflow_authorization import workflow_execution_policy
+    from app.workflow_requests import WORKFLOW_REQUEST_BINDING_STATE, WorkflowRequestBinding
+
+    database, config, _limiter, _provider, runtime, membership_id = authentication_setup
+    application = FastAPI()
+    binding = DatabaseRequestBinding("server", database.SessionLocal)
+    setattr(application.state, DATABASE_REQUEST_BINDING_STATE, binding)
+    setattr(
+        application.state, AUTHENTICATION_REQUEST_BINDING_STATE,
+        AuthenticationRequestBinding(binding, runtime),
+    )
+    setattr(
+        application.state, WORKFLOW_REQUEST_BINDING_STATE,
+        WorkflowRequestBinding(binding, workflow_execution_policy(config)),
+    )
+    application.include_router(build_authentication_router())
+    application.include_router(product_router)
+    application.add_middleware(
+        TrustedIngressMiddleware, public_origin=config.public_origin,
+        trusted_proxy_cidrs=("10.0.0.5/32",),
+    )
+    with database.SessionLocal() as session:
+        session.get(Membership, membership_id).role = "auditor"
+        session.commit()
+    with TestClient(
+        application, base_url=config.public_origin, client=("10.0.0.5", 1234),
+        follow_redirects=False,
+    ) as client:
+        client.headers.update({
+            "X-Forwarded-For": "203.0.113.10",
+            "X-Forwarded-Host": "reddock.example",
+            "X-Forwarded-Proto": "https",
+        })
+        state = _http_login(client)
+        issued = client.get("/api/auth/callback", params={"state": state, "code": "code"})
+        assert issued.status_code == 200
+        proof = {
+            "Origin": config.public_origin,
+            CSRF_HEADER_NAME: issued.json()["csrf_token"],
+        }
+        assert client.get("/api/dockyards/1/lab/audit").status_code == 404
+        denied = client.post("/api/dockyards", json={"name": "Audit review"}, headers=proof)
+        assert denied.status_code == 403
+        assert denied.json()["detail"] == "Permission denied"
+        assert client.get("/api/dockyards").json() == []
+        with database.SessionLocal() as session:
+            session.get(Membership, membership_id).role = "admin"
+            session.commit()
+        created = client.post("/api/dockyards", json={"name": "Audit review"}, headers=proof)
+        assert created.status_code == 201
+        dockyard_id = created.json()["id"]
+        assert client.get(f"/api/dockyards/{dockyard_id}/lab/audit").json() == []
+        with database.SessionLocal() as session:
+            session.get(Membership, membership_id).role = "auditor"
+            session.commit()
+        again = client.post("/api/dockyards", json={"name": "Second review"}, headers=proof)
+        assert again.status_code == 403
+        assert client.get("/api/dockyards").json() == [created.json()]
+        assert client.get(f"/api/dockyards/{dockyard_id}/lab/audit").status_code == 200
+        assert client.get(f"/api/dockyards/{dockyard_id}/evidence").json() == []
+    supported_paths = [getattr(route, "path", "") for route in supported_app.routes]
+    assert not any(
+        path.startswith("/api/auth/") or path.startswith("/api/team") for path in supported_paths
+    )

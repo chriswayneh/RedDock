@@ -197,8 +197,10 @@ errors, with Retry-After only for durable denial. There is no caller-selected
 redirect. An isolated harness can mount the product route manifest beside this
 dormant router. The callback session lists dockyards for an operator, denies
 audit history, loses raw-evidence access after the membership is downgraded,
-and loses that access after logout. The supported application does not
-register the router. The packaged image disables Uvicorn request access logs, and the
+and loses that access after logout. An auditor session can read audit history
+and raw evidence but cannot create a dockyard; an admin session can.
+The supported application does not register the router. The packaged image
+disables Uvicorn request access logs, and the
 Compose proxy emits fixed request categories and metrics without request paths,
 queries, headers, or client addresses. Frontend handling and future TLS-proxy
 acceptance remain integration gates. Server mode remains blocked.
