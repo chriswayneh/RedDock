@@ -215,7 +215,44 @@ cross-worker rate-limit and pool-isolation tests now exist. OIDC and session
 route integration, browser session resolution, TLS proxy configuration,
 metrics, executor lifecycle, disaster recovery drills, database capacity
 planning, and authenticated end-to-end tests remain
-mandatory. The current Compose files do not provision the limiter role, mount
+mandatory. The drill checklist below has not been run. The current Compose
+files do not provision the limiter role, mount
 its credentials, or enable server mode. Setting
 `REDDOCK_DEPLOYMENT_MODE=server` remains explicitly rejected; PostgreSQL
 configuration can never silently enable shared mode.
+
+## Disaster-recovery drill checklist
+
+**This drill has not been run.** Nothing in this repository records a backup
+time, a restore time, a recovered row count, or a capacity measurement. The
+optional Compose profile is a local validation setup, not a production
+deployment. Do not treat a completed checkbox as evidence until an operator
+runs the step and writes the result down outside this file.
+
+The shipped SQLite `.rdbackup` procedure does not cover PostgreSQL. Evidence
+stays on the `reddock-data` volume (`/var/lib/reddock/evidence`). The database
+cluster is the separate `reddock-postgres` volume
+(`/var/lib/postgresql/data`). The password file is not in either volume.
+`postgres-backend` is an internal network and PostgreSQL has no host port.
+Server mode stays off.
+
+These items are still open:
+
+- [ ] Take a PostgreSQL-native, transactionally consistent copy of
+  `reddock-postgres`. No `pg_dump` or base-backup command is shipped with
+  RedDock. Copying the volume while PostgreSQL is running is not that copy.
+- [ ] Take the matching `reddock-data` evidence separately. The two volumes are
+  not one atomic snapshot, so a database-only copy is not a full restore.
+- [ ] Keep `runtime/secrets/reddock-postgres-password` with the backup set
+  without committing it. A restore that lacks this file cannot start.
+- [ ] Restore onto new volumes, start the loopback profile only, and confirm
+  `/api/ready` without publishing PostgreSQL on a host port.
+- [ ] Leave `REDDOCK_DEPLOYMENT_MODE=server` unset. The drill must not be used
+  to turn server mode on.
+- [ ] Do not mark WAL archiving or point-in-time recovery done. This Compose
+  profile does not configure either one.
+- [ ] Do not mark database capacity planning done. The connection notes above
+  are design limits, not a measured plan for disk, memory, or process count.
+
+No date, operator, backup identity, or restore outcome is recorded here
+because the drill has not been run.
