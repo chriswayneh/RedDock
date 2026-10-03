@@ -232,6 +232,8 @@ service.** Unsupported deployment modes remain blocked.
 - **End-to-end and independent review:** test the complete experience and
   address review findings. Passing automated checks is not a security certification.
 
+How to work those gates today is in the [README](README.md#how-to-work-the-open-phase-8-gates). Team sign-in is the local no-login run; `REDDOCK_DEPLOYMENT_MODE=server` fails startup. The PostgreSQL checklist is the [disaster-recovery drill](docs/POSTGRESQL.md#disaster-recovery-drill-checklist), which has not been run and has no recorded result. Independent review reads [SECURITY.md](SECURITY.md#zero-trust-and-least-privilege-status) and the [threat model](docs/THREAT_MODEL.md). No outside review is recorded. Green checks are not that review.
+
 ### Technical details
 
 <details>
