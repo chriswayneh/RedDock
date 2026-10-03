@@ -28,7 +28,7 @@ findings, evidence-backed validation, and portable reports.
 
 ## What it checks today
 
-RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make one bodyless HTTP-origin probe. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
+RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
 
 ### Where it is going
 
@@ -134,7 +134,7 @@ These are concrete zero-trust controls, not a complete enterprise zero-trust arc
 | API explorer | Optional OpenAPI schema and Swagger UI, disabled by default |
 | Workspaces | Dockyards that own an explicit authorized scope |
 | Scope policy | DockGuard evaluates every target deterministically and fails closed |
-| Discovery | Nmap host and TCP service discovery, plus a single-request HTTP origin probe |
+| Discovery | Nmap host and TCP service discovery, plus a bodyless HTTP origin probe (HEAD, then GET only after 405 or 501) |
 | Inventory | Normalized assets and services that reconcile explicit state changes without guessing about unscanned ports |
 | Observations | Dated, adapter-attributed records of what was seen. Observations are not findings. |
 | Detection | Deterministic detectors that read stored observations and reach nothing |
