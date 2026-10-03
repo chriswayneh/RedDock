@@ -42,9 +42,14 @@ function proof(value: unknown): string {
   return value;
 }
 
+function exact(body: Record<string, unknown>, keys: readonly string[]): boolean {
+  return Object.keys(body).length === keys.length && keys.every((key) => Object.hasOwn(body, key));
+}
+
 function recovered(value: unknown): { session: ServerSession; csrf: string } {
   const body = object(value);
-  if (!ROLES.has(body.role as ServerRole) || !Array.isArray(body.permissions)
+  if (!exact(body, ["role", "permissions", "expires_at", "csrf_token"])
+    || !ROLES.has(body.role as ServerRole) || !Array.isArray(body.permissions)
     || body.permissions.length > 64 || body.permissions.some((item) => (
       typeof item !== "string" || !/^[a-z][a-z_:]{0,63}$/.test(item)
     )) || new Set(body.permissions).size !== body.permissions.length) {
@@ -220,7 +225,8 @@ export class ServerSessionClient {
         if (!response.ok) throw failure(response);
         const body = object(await response.json());
         this.#checkEpoch(epoch);
-        if (typeof body.rotated !== "boolean" || expiry(body.expires_at) !== session.expiresAt
+        if (!exact(body, ["rotated", "expires_at", "csrf_token"])
+          || typeof body.rotated !== "boolean" || expiry(body.expires_at) !== session.expiresAt
           || (!body.rotated && body.csrf_token !== null)) throw new ServerSessionError(null);
         this.#csrf = body.rotated ? proof(body.csrf_token) : csrf;
         this.#revision += 1;
