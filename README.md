@@ -40,6 +40,32 @@ Open [http://localhost:8080](http://localhost:8080). On the first start, copy th
 
 Phase 8 is still in progress. Working sign-in, SSO, and shared-user access are not available yet, and no authentication route is registered in the running app. The PostgreSQL disaster-recovery drill has not been run. End-to-end and independent review is still required. Passing automated checks is not a security certification.
 
+### How to work the open Phase 8 gates
+
+These gates are still open. The steps below are what a person can do today. They do not finish Phase 8.
+
+**Team sign-in.** There is no working login to turn on, and no SSO setup to follow. No authentication route is registered in the running app. Do not set `REDDOCK_DEPLOYMENT_MODE=server`: that value fails startup and is not the demo. Run the local no-login package in [Run it locally](#run-it-locally): clone tag `v0.8.1`, run `docker compose up --build`, open [http://localhost:8080](http://localhost:8080), copy the operator token from `docker compose logs reddock`, and select **Unlock changes**. That token is an accident boundary, not a user account. The same walkthrough is in [Start here](docs/GETTING_STARTED.md).
+
+**PostgreSQL disaster-recovery drill.** The drill has not been run. Nothing in this repository records a backup time, a restore time, a recovered row count, or a capacity measurement. The open checklist is [Disaster-recovery drill checklist](docs/POSTGRESQL.md#disaster-recovery-drill-checklist). In short:
+
+- Take a PostgreSQL-native, transactionally consistent copy of `reddock-postgres`. No `pg_dump` or base-backup command is shipped with RedDock. Copying the volume while PostgreSQL is running is not that copy.
+- Take the matching `reddock-data` evidence separately (`/var/lib/reddock/evidence`). The two volumes are not one atomic snapshot. The shipped SQLite `.rdbackup` procedure in [Backup and restore](docs/BACKUP_RESTORE.md) does not cover PostgreSQL.
+- Keep `runtime/secrets/reddock-postgres-password` with the backup set, and do not commit it. A restore that lacks this file cannot start.
+- Restore onto new volumes, start the loopback profile only, and confirm `/api/ready` without publishing PostgreSQL on a host port.
+- Leave `REDDOCK_DEPLOYMENT_MODE=server` unset. Do not mark WAL archiving, point-in-time recovery, or database capacity planning done. This Compose profile does not configure them.
+
+Write the result down outside this repository. A checkbox is not a recorded drill.
+
+**Independent review.** No outside review has been recorded. A reviewer uses the documents that already describe this build:
+
+- Walk the local package with [Start here](docs/GETTING_STARTED.md). That is the complete experience that runs today. It is not an authenticated team test.
+- Read [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status): loopback ingress, the operator token as an accident boundary rather than identity, deny-by-default permissions, DockGuard before target contact, unprivileged Compose limits, and unencrypted backups and DockPacks. Each row states the control and the limit that is still open.
+- Read the [threat model](docs/THREAT_MODEL.md). Its scenarios are design and review hypotheses, not findings.
+- Confirm server mode still fails startup, no authentication route is registered, and the PostgreSQL drill above has no recorded result.
+- Read [Automated review](ROADMAP.md#automated-review) for what CI, CodeQL, dependency checks, and the production smoke path actually run. A green run is supporting evidence. It is not proof that a deployment is secure, and it is not this review.
+
+Suspected security flaws go to [private vulnerability reporting](SECURITY.md#reporting-a-vulnerability), not a public issue.
+
 ## What it checks today
 
 RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
