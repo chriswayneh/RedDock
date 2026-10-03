@@ -197,7 +197,7 @@ it.each([
   { ...BODY, role: "superuser" }, { ...BODY, csrf_token: "short" },
   { ...BODY, permissions: ["script<script>"] }, { ...BODY, permissions: ["dockyard:read", "dockyard:read"] },
   { ...BODY, expires_at: "not a date" }, { ...BODY, expires_at: "2000-01-01T00:00:00Z" },
-  { ...BODY, permissions: Array(65).fill("dockyard:read") }, null,
+  { ...BODY, permissions: Array(65).fill("dockyard:read") }, { ...BODY, token: "not-a-proof" }, null,
 ])("fails closed for a malformed recovery payload %j", async (body) => {
   vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json(body));
   const client = page();
@@ -211,6 +211,7 @@ it.each([
   { rotated: false, csrf_token: NEXT_CSRF, expires_at: EXPIRES },
   { rotated: true, csrf_token: NEXT_CSRF, expires_at: "2099-01-01T00:00:00Z" },
   { rotated: "yes", csrf_token: NEXT_CSRF, expires_at: EXPIRES },
+  { rotated: false, csrf_token: null, expires_at: EXPIRES, token: "not-a-proof" },
 ])("discards authority when renewal has an invalid contract %j", async (body) => {
   vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(json(BODY)).mockResolvedValueOnce(json(body));
   const client = page();

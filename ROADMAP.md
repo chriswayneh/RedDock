@@ -346,8 +346,8 @@ These primitives are not an enabled authentication system:
   rechecks identity after durable admission, and neither touches idle activity
   nor rotates tokens. Responses never expose the bearer cookie or cache proofs.
 - A dormant browser session client keeps server CSRF proofs only in page memory,
-  coordinates recovery/renewal/logout with writes, and rejects stale responses
-  after state is discarded. It sends protected requests only to same-origin API
+  coordinates recovery/renewal/logout with writes, rejects unexpected response
+  fields, and rejects stale responses after state is discarded. It sends protected requests only to same-origin API
   paths and never automatically retries a write. A same-origin tab notice reports
   proof rotation or confirmed logout with no CSRF material. Peer rotation
   discards the local proof until the caller explicitly recovers, and confirmed
