@@ -136,8 +136,8 @@ masks both from object representations, stores only their hashes, and
 resolves a context only while the session, membership, user, and role remain
 valid. It also supports idempotent single-session logout, membership-wide
 revocation after access changes, an eight-session per-membership cap that evicts
-the oldest active record, and operator-cutoff cleanup. No route issues or accepts
-these tokens yet. Issuance and self-revocation commit their structured security
+the oldest active record, and operator-cutoff cleanup. The running application does not issue or accept
+these tokens. A dormant router can do so only in an isolated harness. Issuance and self-revocation commit their structured security
 events in the same database transaction.
 
 The browser boundary separately canonicalizes one exact HTTPS public origin,
@@ -147,8 +147,8 @@ session-cookie helper is fixed to `__Host-reddock_session`, an eight-hour
 `Max-Age`, `Secure`, `HttpOnly`, `SameSite=Lax`, `/`, and no `Domain`. A
 request verifier extracts exactly one unquoted bearer cookie and, for every
 unsafe method, exactly one Origin and CSRF header; both proofs must match the
-same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`; these
-helpers remain unused until the complete OIDC/session route boundary is ready.
+same valid database session. Local mode rejects `REDDOCK_PUBLIC_ORIGIN`. The dormant authentication
+router uses these helpers in an isolated harness. The supported application does not.
 
 The next dormant layer validates an all-or-none future server identity and
 ingress configuration without permitting `server` mode. It requires PostgreSQL,
@@ -164,8 +164,8 @@ profile claims or tokens, and resolves only an exact pre-provisioned
 issuer/subject membership. A future application process owns one provider
 instance for its lifespan, serializes concurrent discovery and JWKS cache fills,
 shares signing-key refresh backoff across its request threads, and closes the
-owned client at shutdown. No auth router is registered and the current request
-authorization still always selects the reserved local owner.
+owned client at shutdown. That client does not register a route. Supported local
+requests still use the reserved local owner. Configured protected routes do not.
 
 The dormant configured lifespan composes the provider, limiter, and the engine
 owned by its exact-config primary database runtime behind one process-owned
@@ -403,9 +403,11 @@ health checks use readiness, as does the end-to-end smoke test.
 
 The security-audit foundation records only typed actions/outcomes and bounded
 opaque identifiers. It accepts no free-form detail field, rejects an actor from
-another organization, and scopes every read by organization. The table and
-helpers are present for future authentication and administration flows, but no
-route exposes them yet.
+another organization, and scopes every read by organization. Rows are kept
+until an operator removes the database. This build does not purge them, and
+the running application does not export them. A dormant team audit route can
+return at most 100 events to a current owner, admin, or auditor in an isolated
+harness. That route is not registered in the running app.
 
 Reporting is passive and deterministic. It accepts an empty request, refuses a
 snapshot while source work is active, and reads only database-referenced

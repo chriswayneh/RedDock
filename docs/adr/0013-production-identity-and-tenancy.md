@@ -359,7 +359,8 @@ removing role change.
   manifest: a callback session is allowed or denied from the current membership
   role, and logout removes it. An auditor can read audit history but cannot
   create a dockyard; an admin can. The callback returns JSON with a CSRF proof and
-  expiry; frontend handling still needs integration. The supported application
+  expiry. A dormant browser helper can complete that callback and is not called
+  by the local UI. Sign-in still needs integration. The supported application
   does not register the authentication router. Both packaged Uvicorn
   entrypoints disable raw request access logs. The Compose proxy logs only fixed
   route/method categories, time, status, byte count, and duration. Request-level
