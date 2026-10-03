@@ -4,6 +4,8 @@
 
 RedDock helps you collect security observations, explain what they mean, and share the evidence. This guide runs a small demonstration against RedDock itself. You do not need to write code, scan your home network, or sign up for an AI service.
 
+**Live limits of this build:** no UDP scanning, no NSE scripts, no brute force, no payloads, no evasion, and no server mode. Server mode fails startup. Phase 8 is in progress, not done.
+
 By the end, you will have:
 
 - RedDock running only on your computer

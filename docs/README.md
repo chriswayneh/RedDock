@@ -6,7 +6,7 @@ You do not need to read the entire repository to try RedDock. Pick the path that
 
 | I want to… | Start with… |
 | --- | --- |
-| See what RedDock does | [Capabilities and current limits](../README.md#what-it-does) |
+| See what RedDock does | [Capabilities and current limits](../README.md#what-it-checks-today) |
 | Install it and try a local example | [First-run guide](GETTING_STARTED.md) |
 | See it before installing | [Screenshot tour](screenshots/README.md) |
 | Understand why the project exists | [Why I am building it](../README.md#why-i-am-building-it) |

@@ -8,6 +8,8 @@ RedDock is an open-source vulnerability discovery, validation, and evidence
 platform for authorized environments. It combines scoped scanning, explainable
 findings, evidence-backed validation, and portable reports.
 
+**Live limits of this build:** no UDP scanning, no NSE scripts, no brute force, no payloads, no evasion, and no server mode. Server mode fails startup.
+
 [![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
 [![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
