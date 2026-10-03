@@ -20,11 +20,25 @@ findings, evidence-backed validation, and portable reports.
 
 **Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), the Phase 8 production-hardening checkpoint. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
 
-[Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
+[Run it locally](#run-it-locally) · [Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 </div>
 
 ---
+
+## Run it locally
+
+There is no working user login. For an authorized local evaluation, start from the immutable reviewed tag:
+
+```bash
+git clone --branch v0.8.1 --depth 1 https://github.com/chriswayneh/RedDock.git
+cd RedDock
+docker compose up --build
+```
+
+Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. That token is an accident boundary, not identity, SSO, or shared-user access. Server mode fails startup.
+
+Phase 8 is still in progress. Working sign-in, SSO, and shared-user access are not available yet, and no authentication route is registered in the running app. The PostgreSQL disaster-recovery drill has not been run. End-to-end and independent review is still required. Passing automated checks is not a security certification.
 
 ## What it checks today
 
