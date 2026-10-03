@@ -343,9 +343,11 @@ removing role change.
 - A central reviewed policy/dependency layer owns route permissions.
 - Data-access helpers require authorization context and organization ID.
 - UI visibility improves usability; the API is always the enforcement point.
-- Tests cover every role/action pair, cross-organization ID swaps, disabled
-  memberships, revoked/expired sessions, OIDC issuer/subject confusion,
-  CSRF/origin failures, and approval-time role changes.
+- Tests cover the route permission manifest, negative viewer checks for
+  sensitive actions, cross-organization ID swaps, disabled memberships,
+  revoked/expired sessions, OIDC issuer/subject confusion, CSRF/origin
+  failures, and approval-time role changes. They do not yet exercise every
+  role against every route in the running application.
 - PostgreSQL race coverage confirms concurrent session issuance, touch,
   rotation, revocation, cleanup, and one-winner callback consumption while the
   lifecycle and coordinator remain disconnected from the running app's routes.
