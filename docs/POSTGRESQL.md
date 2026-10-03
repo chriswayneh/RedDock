@@ -117,14 +117,17 @@ The dormant configured lifespan also installs one immutable request binding.
 Its FastAPI request database dependencies use
 `PrimaryDatabaseRuntime.session`, and each yielded session is closed. A missing
 or malformed binding returns a generic `503` from the database dependency
-instead of using the ambient local database. Configured protected routes return
-`401` because browser identity is not connected; they do not inherit the local
-owner. Supported local and PostgreSQL Compose requests keep their explicit
-local-mode session binding.
+instead of using the ambient local database. A configured binding without the
+paired authentication capability returns `401` and does not open the database
+or inherit the local owner. When that capability is installed, protected
+routes resolve the browser session. Supported local and PostgreSQL Compose
+requests keep their explicit local-mode session binding and do not install
+the capability.
 
-Discovery passes the exact request session factory into its worker. This
-prevents database fallback, but the executor still needs coordinated drain or
-cancellation before the primary runtime can close safely.
+Discovery passes the exact request session factory into its worker. Each
+lifespan owns that pool and drains accepted work before closing the primary
+database. The close order is tested. Forced process termination still depends
+on restart recovery and is not a completed interruption exercise.
 
 ## Future server connection budget
 
@@ -206,17 +209,17 @@ Rotate the limiter password with a coordinated restart: stop every worker,
 replace the mounted password secret, update the PostgreSQL role, and restart all
 workers together. The HMAC key has its own full-stop rotation procedure above.
 Database-wide connection capacity, consistent HMAC-key distribution, TLS, and
-authenticated route integration, background executor drain and shutdown remain
-separate release gates.
+authenticated route integration in the running application remain separate
+release gates. Accepted discovery is already drained before database shutdown.
 
 This profile is a validation milestone, not the final production topology.
-Tenant ownership, the reviewed role-permission contract, backup tooling, and
-cross-worker rate-limit and pool-isolation tests now exist. OIDC and session
-route integration, browser session resolution, TLS proxy configuration,
-metrics, executor lifecycle, disaster recovery drills, database capacity
-planning, and authenticated end-to-end tests remain
-mandatory. The drill checklist below has not been run. The current Compose
-files do not provision the limiter role, mount
+Tenant ownership, the reviewed role-permission contract, backup tooling,
+cross-worker rate-limit and pool-isolation tests, dormant browser-session
+resolution, and draining accepted discovery before database close now exist.
+Sign-in in the running application, a TLS proxy, metrics, a PostgreSQL
+disaster-recovery drill, database capacity planning, and authenticated
+end-to-end tests remain mandatory. The drill checklist below has not been run.
+The current Compose files do not provision the limiter role, mount
 its credentials, or enable server mode. Setting
 `REDDOCK_DEPLOYMENT_MODE=server` remains explicitly rejected; PostgreSQL
 configuration can never silently enable shared mode.
