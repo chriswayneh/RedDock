@@ -9,11 +9,11 @@ description = "RedDock Core API"
 requires-python = ">=3.13"
 dependencies = [
   "alembic==1.20.0",
-  "cryptography==50.0.1",
-  "fastapi==0.141.1",
+  "cryptography==50.0.2",
+  "fastapi==0.142.2",
   "httpx==0.28.1",
   "joserfc==1.7.5",
-  "sqlalchemy==2.1.0",
+  "sqlalchemy==2.1.2",
   "uvicorn[standard]==0.54.0",
 ]
 
@@ -25,7 +25,7 @@ dev = [
   "pip-audit==2.10.1",
   "psycopg[binary]==3.3.6",
   "pytest==9.1.1",
-  "ruff==0.16.9",
+  "ruff==0.16.10",
 ]
 
 [tool.pytest.ini_options]
