@@ -26,6 +26,12 @@ findings, evidence-backed validation, and portable reports.
 
 ---
 
+## What this is
+
+In plain words: RedDock is a security check tool you run on your own computer against systems you are allowed to test. You give it a scope, it looks for live hosts and open TCP ports, checks HTTP security headers and TLS certificates, and saves what it saw as evidence. Each finding explains why it was raised, and you can export a report to share.
+
+What it shows: scoped scanning, explainable findings, evidence handling with SHA-256 hashes, and reports. It is a local single-operator tool. Phase 8 is still open, there is no user sign-in, and it is not production-ready. The quick start is [Run it locally](#run-it-locally) just below.
+
 ## Run it locally
 
 There is no working user login. For an authorized local evaluation, start from the immutable reviewed tag:
