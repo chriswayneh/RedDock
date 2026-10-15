@@ -349,7 +349,7 @@ code. See [Detector plugins](plugins/README.md).
 1. Create a Dockyard to represent an authorized engagement workspace.
 2. Define its authorized scope: included targets, and exclusions that always win.
 3. Enter a target and ask DockGuard for a decision. It answers `ALLOWED` or a specific denial with the reason and the scope entry that decided it.
-4. Run a safe discovery profile. The server re-evaluates DockGuard immediately before the adapter is invoked, so an out-of-scope target is never reached.
+4. Run a safe discovery profile. The server re-evaluates DockGuard immediately before the adapter is invoked, so an out-of-scope target is never reached. Scope is checked again before results are saved; if it was revoked during the scan, the run is denied and its results are discarded.
 5. Results normalize into assets, services, and observations, and the run's raw output, normalized result, and metadata are retained and hashed.
 6. Run detection. It contacts nothing: every registered detector reads what the Dockyard already recorded and returns findings, each naming the rule that produced it and the observations it was drawn from.
 7. For an eligible open HTTP security-header finding, request validation. This records intent only. Add an approval note to recheck DockGuard immediately before RedDock sends its fixed, bodyless HTTP probe; the raw response summary, normalized conclusion, metadata, and manifest are retained as a hash-linked evidence package.

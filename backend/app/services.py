@@ -73,6 +73,11 @@ def list_scope_entries(session: Session, dockyard_id: int) -> list[ScopeEntry]:
     return list(session.scalars(statement))
 
 
+def scope_mutation_lock() -> Lock:
+    """The lock every scope add/remove holds; held by readers that must not race them."""
+    return _SCOPE_MUTATION_LOCK
+
+
 def scope_rules(session: Session, dockyard_id: int) -> list[ScopeRule]:
     """The Dockyard scope in the form DockGuard evaluates."""
     return [
