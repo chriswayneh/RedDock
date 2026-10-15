@@ -74,7 +74,7 @@ Suspected security flaws go to [private vulnerability reporting](SECURITY.md#rep
 
 ## What it checks today
 
-RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services. A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports.
+RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services (TLS-wrapped services, recorded as `ssl/<name>`, are not treated as cleartext). A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports. IPv6 targets are scanned with Nmap's `-6`; one run scans one address family, so a hostname resolving to both IPv4 and IPv6 is refused.
 
 ### Where it is going
 

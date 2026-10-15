@@ -7,6 +7,7 @@ variable values are targets that `app.targets` has already normalized to a
 character set that cannot form an option.
 """
 
+import ipaddress
 import re
 import shutil
 import subprocess
@@ -134,16 +135,27 @@ class NmapAdapter(DiscoveryAdapter):
         else:
             raise AdapterError(f"Unknown nmap profile: {request.profile}")
 
-        if request.excluded_addresses:
-            _assert_scan_values(request.excluded_addresses)
-            arguments += ["--exclude", ",".join(request.excluded_addresses)]
-
         scan_targets = self.scan_targets(request)
         if request.profile == LAB_EXTENDED_SERVICE_DISCOVERY and (
             request.target.is_network or len(scan_targets) != 1
         ):
             raise AdapterError("Extended service discovery is limited to one host")
         _assert_scan_values(scan_targets)
+        families = {_address_family(value) for value in scan_targets}
+        if len(families) > 1:
+            raise AdapterError(
+                "Nmap scans one address family per run; IPv4 and IPv6 targets cannot be mixed"
+            )
+        if families == {6}:
+            arguments.append("-6")
+        if request.excluded_addresses:
+            _assert_scan_values(request.excluded_addresses)
+            excluded = [
+                value for value in request.excluded_addresses
+                if _address_family(value) in families
+            ]
+            if excluded:
+                arguments += ["--exclude", ",".join(excluded)]
         arguments += list(scan_targets)
         return arguments
 
@@ -404,6 +416,14 @@ def _expand_port_summary(raw: str) -> tuple[int, ...]:
     return tuple(ports)
 
 
+def _address_family(value: str) -> int:
+    """4 or 6 for an address or network; hostnames never reach nmap unresolved."""
+    try:
+        return ipaddress.ip_network(value, strict=False).version
+    except ValueError:
+        return 4
+
+
 def _identified_service(port: ElementTree.Element) -> dict[str, str]:
     """Return service details only when nmap probed for them.
 
@@ -414,11 +434,17 @@ def _identified_service(port: ElementTree.Element) -> dict[str, str]:
     service = port.find("service")
     if service is None or service.get("method") != "probed":
         return {}
-    return {
+    identified = {
         key: value
         for key in ("name", "product", "version")
         if (value := service.get(key))
     }
+    if service.get("tunnel") == "ssl" and "name" in identified:
+        # nmap reports TLS-wrapped services as tunnel="ssl"; keep that, using
+        # nmap's own "ssl/<name>" convention, so they are never mistaken for
+        # the cleartext protocol of the same name.
+        identified["name"] = f"ssl/{identified['name']}"
+    return identified
 
 
 def _describe(identified: dict[str, str]) -> str:

@@ -210,3 +210,43 @@ def test_execution_never_uses_a_shell(monkeypatch: pytest.MonkeyPatch):
     assert captured["shell"] is False
     assert captured["timeout"] == 30
     assert isinstance(captured["arguments"], list)
+
+
+def test_ipv6_target_passes_dash_six() -> None:
+    arguments = NmapAdapter().prepare(request("2001:db8::10"))
+    assert "-6" in arguments
+    assert arguments[-1] == "2001:db8::10"
+
+
+def test_ipv4_target_does_not_pass_dash_six() -> None:
+    assert "-6" not in NmapAdapter().prepare(request("192.0.2.10"))
+
+
+def test_mixed_family_resolution_is_refused() -> None:
+    with pytest.raises(AdapterError):
+        NmapAdapter().prepare(
+            request("app.example.test", resolved_addresses=("192.0.2.10", "2001:db8::10"))
+        )
+
+
+def test_exclusions_keep_only_the_scanned_family() -> None:
+    arguments = NmapAdapter().prepare(
+        request("2001:db8::/120", excluded_addresses=("192.0.2.1", "2001:db8::1"))
+    )
+    assert arguments[arguments.index("--exclude") + 1] == "2001:db8::1"
+
+
+def test_ssl_tunnel_is_kept_so_tls_services_are_not_cleartext():
+    adapter = NmapAdapter()
+    document = adapter.parse(b'''<nmaprun><host>
+      <status state="up"/><address addr="127.0.0.1" addrtype="ipv4"/>
+      <ports><port protocol="tcp" portid="992">
+        <state state="open" reason="syn-ack"/>
+        <service name="telnet" tunnel="ssl" method="probed"/>
+      </port><port protocol="tcp" portid="23">
+        <state state="open" reason="syn-ack"/>
+        <service name="telnet" method="probed"/>
+      </port></ports></host></nmaprun>''')
+    assets, _ = adapter.normalize(document, request())
+    names = {s.port: s.service_name for s in assets[0].services}
+    assert names == {992: "ssl/telnet", 23: "telnet"}
