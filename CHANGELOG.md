@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- A new service identification replaces the old product, version, and name together, so a version from one server is never attached to another product.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
