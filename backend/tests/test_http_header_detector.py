@@ -257,3 +257,9 @@ def test_a_meaningless_x_frame_options_value_is_reported(
     headers["content-security-policy"] = "default-src 'self'"
     recorder.http_endpoint("https://127.0.0.1:8443", headers=headers)
     assert "frame-protection-not-set" in rules(recorder)
+
+
+def test_a_wildcard_first_frame_ancestors_wins_over_a_later_none():
+    from app.detection.detectors.http_headers import framing_restricted
+
+    assert framing_restricted(None, "frame-ancestors *; frame-ancestors 'none'") is False
