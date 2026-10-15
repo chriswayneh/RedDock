@@ -121,3 +121,23 @@ def test_observations_accumulate_as_history(session: Session):
     # An observation states what was seen and carries no verdict.
     assert not hasattr(stored[0], "severity")
     assert stored[0].confidence == "observed"
+
+
+def test_a_new_identification_replaces_the_old_one_as_a_unit(session: Session):
+    asset = upsert_asset(session, make_dockyard(session), host(), FIRST)
+    upsert_service(
+        session, asset,
+        DiscoveredService("tcp", 80, "open", service_name="http", product="nginx",
+                          version="1.24.0"),
+        FIRST,
+    )
+    updated = upsert_service(
+        session, asset,
+        DiscoveredService("tcp", 80, "open", service_name="http", product="Apache httpd"),
+        LATER,
+    )
+    assert (updated.service_name, updated.product, updated.version) == (
+        "http", "Apache httpd", None
+    )
+    unidentified = upsert_service(session, asset, DiscoveredService("tcp", 80, "open"), LATER)
+    assert unidentified.product == "Apache httpd"
