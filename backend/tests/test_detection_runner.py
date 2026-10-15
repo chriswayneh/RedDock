@@ -771,3 +771,38 @@ def test_a_scope_key_lets_one_rule_fire_twice_for_one_service(
 
     assert run.status == "completed"
     assert len(findings_of(endpoint)) == 2
+
+
+def test_detection_admission_is_serialized(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """Two threads cannot both pass the overlap count before either inserts."""
+    import threading
+
+    recorder.session.commit()
+    inside = threading.Event()
+    release = threading.Event()
+    real_count = detection_runner.active_run_count
+
+    def slow_count(session, dockyard_id):
+        result = real_count(session, dockyard_id)
+        inside.set()
+        release.wait(2)
+        return result
+
+    monkeypatch.setattr(detection_runner, "active_run_count", slow_count)
+
+    def first():
+        detection_runner.create_run(
+            recorder.session, recorder.dockyard_id, **LOCAL_WORKFLOW,
+        )
+
+    runner = threading.Thread(target=first)
+    runner.start()
+    assert inside.wait(2)
+    # While the first admission is between count and insert, the lock is held.
+    assert not detection_runner._CREATE_LOCK.acquire(blocking=False)
+    release.set()
+    runner.join(5)
+    with pytest.raises(detection_runner.RunRejected):
+        detection_runner.create_run(recorder.session, recorder.dockyard_id, **LOCAL_WORKFLOW)
