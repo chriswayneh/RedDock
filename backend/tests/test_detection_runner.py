@@ -957,3 +957,50 @@ def test_a_response_whose_scheme_cannot_be_determined_resolves_nothing(
     assert {f.status for f in findings_of(recorder)} == {"open"}
 
 
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"headers_examined": _DROP}, {"headers_examined": []}],
+    ids=["no-examined-set", "empty-examined-set"],
+)
+def test_plaintext_http_stays_open_when_the_response_examined_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, overrides
+):
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("http://127.0.0.1:8080", headers={})
+    detect(recorder)
+    assert "plaintext-http" in {f.rule_id for f in findings_of(recorder) if f.status == "open"}
+
+    respond(recorder, asset, service, 200, {}, scheme="http", **overrides)
+    run = detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["plaintext-http"] == "open"
+    assert run.resolved_finding_count == 0
+
+
+def test_a_detector_whose_coverage_check_raises_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, caplog
+):
+    import logging
+
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    class BrokenCoverage(HttpSecurityHeaderDetector):
+        def unevaluated(self, context):
+            raise RuntimeError("coverage unavailable")
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    install(monkeypatch, BrokenCoverage())
+    respond(recorder, asset, service, 200, _SECURE)
+    with caplog.at_level(logging.WARNING):
+        run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+    assert any(
+        "coverage failed" in r.getMessage() and "coverage unavailable" in r.getMessage()
+        for r in caplog.records
+    )
