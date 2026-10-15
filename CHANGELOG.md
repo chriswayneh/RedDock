@@ -8,6 +8,8 @@ when a version is published.
 ### Fixed
 
 - A new service identification replaces the old product, version, and name together, so a version from one server is never attached to another product.
+- Nmap now receives `-6` for IPv6 targets; a run whose resolved addresses mix IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
+- Nmap services reported with tunnel="ssl" are recorded as `ssl/<name>`, so TLS-wrapped Telnet or FTP is no longer reported as cleartext.
 
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
