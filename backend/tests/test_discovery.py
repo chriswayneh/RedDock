@@ -671,3 +671,71 @@ def test_an_error_after_the_final_commit_leaves_the_run_completed(
     run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{run_id}").json()
     assert run["status"] == "completed"
     assert run["error"] in (None, "")
+
+
+def _run_with_hook(client, dockyard_id, adapter, monkeypatch, during_run):
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
+    )
+    accepted = start(client, dockyard_id, "127.0.0.1")
+    run_id = accepted.json()["id"]
+    from app.database import SessionLocal
+
+    real_run = adapter.run
+
+    def run_then_change_scope(request):
+        result = real_run(request)
+        during_run()
+        return result
+
+    monkeypatch.setattr(adapter, "run", run_then_change_scope)
+    discovery_runner.execute_run(
+        run_id, SessionLocal, discovery_receipt(SessionLocal, run_id), LOCAL_WORKFLOW_POLICY,
+    )
+    return client.get(f"/api/dockyards/{dockyard_id}/discoveries/{run_id}").json()
+
+
+def test_an_exclusion_added_during_execution_denies_the_run_and_saves_nothing(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    add_scope(dockyard_id, "127.0.0.1")
+    run = _run_with_hook(
+        client, dockyard_id, adapter, monkeypatch,
+        lambda: add_scope(dockyard_id, "127.0.0.1", rule="exclude"),
+    )
+    assert run["status"] == "denied"
+    assert "Scope changed" in run["decision_reason"]
+    assert (run["asset_count"], run["service_count"], run["observation_count"]) in (
+        (0, 0, 0), (None, None, None)
+    )
+    from app.database import SessionLocal
+    from app.models import EvidenceRecord
+
+    with SessionLocal() as session:
+        assert session.scalar(
+            select(func.count()).select_from(EvidenceRecord)
+            .where(EvidenceRecord.discovery_run_id == run["id"])
+        ) == 0
+    assets = client.get(f"/api/dockyards/{dockyard_id}/assets").json()
+    assert assets == [] or assets.get("items") == []
+
+
+def test_results_are_persisted_while_holding_the_scope_mutation_lock(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.services import scope_mutation_lock
+
+    held = []
+    real_persist = discovery_runner._persist
+
+    def persist(*args, **kwargs):
+        held.append(scope_mutation_lock().locked())
+        return real_persist(*args, **kwargs)
+
+    monkeypatch.setattr(discovery_runner, "_persist", persist)
+    add_scope(dockyard_id, "127.0.0.1")
+    run = _run_with_hook(client, dockyard_id, adapter, monkeypatch, lambda: None)
+    assert run["status"] == "completed"
+    assert held == [True]

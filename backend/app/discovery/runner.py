@@ -458,8 +458,10 @@ def _perform(
         session, run, request_event_id, policy, final=True,
     ):
         return
-    # Commit the final identity decision before contact, releasing identity locks.
-    # Revocation after this boundary does not cancel an already admitted operation.
+    # Commit the final authorization before contact. A scope change made while
+    # the tool runs does not stop it, but scope is evaluated again before any
+    # result is saved (see the scope re-check below), so results for a target
+    # that is no longer in scope are discarded.
     session.commit()
     result = adapter.run(request)
     observed_at = datetime.now(UTC)
@@ -479,7 +481,6 @@ def _perform(
         if not recheck.allowed or not set(recheck.excluded_addresses) <= set(
             evaluation.excluded_addresses
         ):
-            session.rollback()
             run.decision = str(recheck.decision) if not recheck.allowed else run.decision
             run.decision_reason = (
                 "Scope changed during execution; results were discarded"
