@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- Nmap now receives `-6` for IPv6 targets; a run whose resolved addresses mix IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
