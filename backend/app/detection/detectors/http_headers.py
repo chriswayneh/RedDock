@@ -43,6 +43,28 @@ LOCATION = "location"
 
 _NOSNIFF = "nosniff"
 _FRAME_ANCESTORS = "frame-ancestors"
+_RESTRICTIVE_FRAME_OPTIONS = frozenset({"deny", "sameorigin"})
+
+
+def framing_restricted(frame_options: str | None, policy: str | None) -> bool:
+    """True only when a header value actually restricts framing.
+
+    X-Frame-Options must be DENY or SAMEORIGIN; any other value is ignored by
+    browsers. A CSP counts only through a real frame-ancestors directive with
+    a source list other than a bare wildcard (the word appearing elsewhere in
+    the policy, e.g. inside a report URI, does not count).
+    """
+    if frame_options is not None and frame_options.strip().lower() in _RESTRICTIVE_FRAME_OPTIONS:
+        return True
+    if policy is None:
+        return False
+    for directive in policy.split(";"):
+        tokens = directive.strip().lower().split()
+        if tokens and tokens[0] == _FRAME_ANCESTORS:
+            sources = tokens[1:]
+            # Browsers honor only the first occurrence of a directive.
+            return bool(sources) and sources != ["*"]
+    return False
 
 
 class HttpSecurityHeaderDetector(Detector):
@@ -228,11 +250,11 @@ class HttpSecurityHeaderDetector(Detector):
         status: int,
         origin: str,
     ) -> DetectedFinding | None:
-        if FRAME_OPTIONS in headers:
-            return None
+        frame_options = headers.get(FRAME_OPTIONS)
         policy = headers.get(CONTENT_SECURITY_POLICY)
-        if policy is not None and _FRAME_ANCESTORS in policy[0].lower():
-            # Content-Security-Policy frame-ancestors supersedes X-Frame-Options.
+        if framing_restricted(
+            frame_options[0] if frame_options else None, policy[0] if policy else None
+        ):
             return None
         return self._finding(
             response,

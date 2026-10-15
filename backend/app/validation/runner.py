@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.authorization import AuthorizationContext, Permission
 from app.config import get_settings
+from app.detection.detectors.http_headers import framing_restricted
 from app.discovery.base import AdapterRequest
 from app.discovery.http_probe import HttpProbeAdapter
 from app.dockguard import Evaluation, evaluate, system_resolver
@@ -348,9 +349,9 @@ def _judge(
         valid = headers.get("x-content-type-options", "").strip().lower() == "nosniff"
         return _presence_result(valid, "X-Content-Type-Options: nosniff")
     if rule_id == "frame-protection-not-set":
-        protected = "x-frame-options" in headers or "frame-ancestors" in headers.get(
-            "content-security-policy", ""
-        ).lower()
+        protected = framing_restricted(
+            headers.get("x-frame-options"), headers.get("content-security-policy")
+        )
         return _presence_result(protected, "a framing restriction")
     raise ValidationRejected("This finding has no Phase 3 non-destructive validation profile")
 
