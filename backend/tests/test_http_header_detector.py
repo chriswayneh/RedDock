@@ -242,6 +242,7 @@ def test_the_detector_is_registered_and_declares_what_it_reads():
         (None, "frame-ancestors *", False),
         (None, "frame-ancestors", False),
         (None, "default-src 'self'; report-uri /frame-ancestors", False),
+        (None, "default-src 'self' frame-ancestors", False),
         (None, "script-src 'self' frame-ancestors.example", False),
     ],
 )
