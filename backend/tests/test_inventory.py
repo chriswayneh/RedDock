@@ -155,3 +155,33 @@ def test_a_version_only_identification_clears_name_and_product(session: Session)
         session, asset, DiscoveredService("tcp", 80, "open", version="2.0"), LATER
     )
     assert (updated.service_name, updated.product, updated.version) == (None, None, "2.0")
+
+
+def test_a_name_only_identification_clears_product_and_version(session: Session):
+    asset = upsert_asset(session, make_dockyard(session), host(), FIRST)
+    upsert_service(
+        session, asset,
+        DiscoveredService("tcp", 22, "open", service_name="http", product="nginx",
+                          version="1.24"),
+        FIRST,
+    )
+    updated = upsert_service(
+        session, asset, DiscoveredService("tcp", 22, "open", service_name="ssh"), LATER
+    )
+    assert (updated.service_name, updated.product, updated.version) == ("ssh", None, None)
+
+
+def test_a_product_only_identification_clears_name_and_version(session: Session):
+    asset = upsert_asset(session, make_dockyard(session), host(), FIRST)
+    upsert_service(
+        session, asset,
+        DiscoveredService("tcp", 80, "open", service_name="http", product="nginx",
+                          version="1.24"),
+        FIRST,
+    )
+    updated = upsert_service(
+        session, asset, DiscoveredService("tcp", 80, "open", product="Apache httpd"), LATER
+    )
+    assert (updated.service_name, updated.product, updated.version) == (
+        None, "Apache httpd", None
+    )
