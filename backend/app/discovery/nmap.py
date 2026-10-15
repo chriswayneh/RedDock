@@ -414,11 +414,17 @@ def _identified_service(port: ElementTree.Element) -> dict[str, str]:
     service = port.find("service")
     if service is None or service.get("method") != "probed":
         return {}
-    return {
+    identified = {
         key: value
         for key in ("name", "product", "version")
         if (value := service.get(key))
     }
+    if service.get("tunnel") == "ssl" and "name" in identified:
+        # nmap reports TLS-wrapped services as tunnel="ssl"; keep that, using
+        # nmap's own "ssl/<name>" convention, so they are never mistaken for
+        # the cleartext protocol of the same name.
+        identified["name"] = f"ssl/{identified['name']}"
+    return identified
 
 
 def _describe(identified: dict[str, str]) -> str:
