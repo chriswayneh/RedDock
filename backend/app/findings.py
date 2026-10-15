@@ -148,6 +148,7 @@ def resolve_absent(
     detector_id: str,
     reproduced: set[str],
     resolved_at: datetime,
+    unevaluated: frozenset[tuple[int | None, int | None, str]] = frozenset(),
 ) -> list[Finding]:
     """Resolve the open findings this detector no longer reproduces.
 
@@ -166,6 +167,9 @@ def resolve_absent(
     resolved = []
     for finding in candidates:
         if finding.fingerprint in reproduced or finding.status == str(FindingStatus.RESOLVED):
+            continue
+        if (finding.asset_id, finding.service_id, finding.rule_id) in unevaluated:
+            # Not reproduced because it was not looked at, not because it is fixed.
             continue
         finding.status = str(FindingStatus.RESOLVED)
         finding.resolved_at = resolved_at

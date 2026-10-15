@@ -773,6 +773,64 @@ def test_a_scope_key_lets_one_rule_fire_twice_for_one_service(
     assert len(findings_of(endpoint)) == 2
 
 
+def test_a_server_error_does_not_resolve_content_header_findings(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """An outage is not remediation: a 500 says nothing about content headers."""
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    assert {f.rule_id for f in findings_of(recorder) if f.status == "open"} >= {
+        "content-security-policy-not-set", "frame-protection-not-set",
+    }
+
+    respond(recorder, asset, service, 500, {})
+    run = detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert run.resolved_finding_count == 0
+    assert set(statuses.values()) == {"open"}
+
+    secure = {
+        "strict-transport-security": "max-age=63072000",
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'self'; frame-ancestors 'none'",
+        "x-frame-options": "DENY",
+    }
+    respond(recorder, asset, service, 200, secure)
+    detect(recorder)
+    assert {f.status for f in findings_of(recorder)} == {"resolved"}
+
+
+def respond(
+    recorder: Recorder, asset, service, status, headers: dict[str, str], **overrides
+) -> None:
+    """A later response from the same endpoint; overrides replace or drop detail keys."""
+    from tests.phase1 import EXAMINED_HEADERS
+
+    run = recorder.discovery_run()
+    detail = {
+        "status": status, "address": "127.0.0.1", "scheme": "https",
+        "headers_examined": EXAMINED_HEADERS, "headers_present": sorted(headers),
+    }
+    for key, value in overrides.items():
+        if value is _DROP:
+            detail.pop(key, None)
+        else:
+            detail[key] = value
+    recorder.observation(
+        run, "http_response", f"returned HTTP {status}", asset=asset, service=service,
+        detail=detail,
+    )
+    for name, value in headers.items():
+        recorder.observation(
+            run, "http_header", f"{name}: {value}", asset=asset, service=service,
+            detail={"header": name, "value": value}, confidence="reported",
+        )
+    recorder.session.commit()
+
+
 def test_detection_admission_is_serialized(
     client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
 ):
@@ -806,3 +864,143 @@ def test_detection_admission_is_serialized(
     runner.join(5)
     with pytest.raises(detection_runner.RunRejected):
         detection_runner.create_run(recorder.session, recorder.dockyard_id, **LOCAL_WORKFLOW)
+
+
+_DROP = object()
+_SECURE = {
+    "strict-transport-security": "max-age=63072000",
+    "x-content-type-options": "nosniff",
+    "content-security-policy": "default-src 'self'; frame-ancestors 'none'",
+    "x-frame-options": "DENY",
+}
+
+
+def _insecure_endpoint(recorder: Recorder, monkeypatch: pytest.MonkeyPatch):
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    assert "content-security-policy-not-set" in {
+        f.rule_id for f in findings_of(recorder) if f.status == "open"
+    }
+    return asset, service
+
+
+def test_a_200_that_did_not_examine_csp_keeps_the_csp_finding_open(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.phase1 import EXAMINED_HEADERS
+
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    without_csp = {k: v for k, v in _SECURE.items() if k != "content-security-policy"}
+    respond(
+        recorder, asset, service, 200, without_csp,
+        headers_examined=[h for h in EXAMINED_HEADERS if h != "content-security-policy"],
+    )
+    detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["content-security-policy-not-set"] == "open"
+    assert statuses["frame-protection-not-set"] == "resolved"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"headers_examined": _DROP}, {"headers_examined": []}],
+    ids=["no-examined-set", "empty-examined-set"],
+)
+def test_a_response_without_examined_headers_or_scheme_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, overrides
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, 200, _SECURE, **overrides)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
+@pytest.mark.parametrize("status", ["200", None, 200.0], ids=["str", "none", "float"])
+def test_a_non_integer_status_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, status
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, status, _SECURE)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
+@pytest.mark.parametrize("status", [301, 302])
+def test_a_redirect_does_not_resolve_content_header_findings(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, status
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, status, {})
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["content-security-policy-not-set"] == "open"
+    assert statuses["frame-protection-not-set"] == "open"
+
+
+def test_a_response_whose_scheme_cannot_be_determined_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """The scheme falls back to the origin URL, so force the undetermined case."""
+    from app.detection.detectors import http_headers
+
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, 200, _SECURE, scheme=_DROP)
+    monkeypatch.setattr(http_headers, "_scheme", lambda _context, _response: None)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"headers_examined": _DROP}, {"headers_examined": []}],
+    ids=["no-examined-set", "empty-examined-set"],
+)
+def test_plaintext_http_stays_open_when_the_response_examined_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, overrides
+):
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("http://127.0.0.1:8080", headers={})
+    detect(recorder)
+    assert "plaintext-http" in {f.rule_id for f in findings_of(recorder) if f.status == "open"}
+
+    respond(recorder, asset, service, 200, {}, scheme="http", **overrides)
+    run = detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["plaintext-http"] == "open"
+    assert run.resolved_finding_count == 0
+
+
+def test_a_detector_whose_coverage_check_raises_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, caplog
+):
+    import logging
+
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    class BrokenCoverage(HttpSecurityHeaderDetector):
+        def unevaluated(self, context):
+            raise RuntimeError("coverage unavailable")
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    install(monkeypatch, BrokenCoverage())
+    respond(recorder, asset, service, 200, _SECURE)
+    with caplog.at_level(logging.WARNING):
+        run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+    assert any(
+        "coverage failed" in r.getMessage() and "coverage unavailable" in r.getMessage()
+        for r in caplog.records
+    )

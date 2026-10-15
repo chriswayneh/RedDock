@@ -67,6 +67,20 @@ def framing_restricted(frame_options: str | None, policy: str | None) -> bool:
     return False
 
 
+_CONTENT_RULES = (
+    "content-type-options-not-nosniff",
+    "content-security-policy-not-set",
+    "frame-protection-not-set",
+)
+_ALL_RULES = ("plaintext-http", "hsts-not-set", *_CONTENT_RULES)
+_HEADER_RULES = {
+    HSTS: "hsts-not-set",
+    CONTENT_TYPE_OPTIONS: "content-type-options-not-nosniff",
+    CONTENT_SECURITY_POLICY: "content-security-policy-not-set",
+    FRAME_OPTIONS: "frame-protection-not-set",
+}
+
+
 class HttpSecurityHeaderDetector(Detector):
     id = "http.security_headers"
     version = "1.0.0"
@@ -82,6 +96,35 @@ class HttpSecurityHeaderDetector(Detector):
         for response in _latest_responses(context):
             findings.extend(self._for_response(context, response))
         return tuple(findings)
+
+    def unevaluated(
+        self, context: DetectionContext
+    ) -> frozenset[tuple[int | None, int | None, str]]:
+        """Rules the latest response for an endpoint gave no basis to judge.
+
+        A 5xx or redirect, or a response recorded without an examined set, is
+        not evidence that a missing header was added. Endpoints with no
+        response at all are not listed: discovery no longer seeing them is the
+        existing (unchanged) resolution path.
+        """
+        skipped: set[tuple[int | None, int | None, str]] = set()
+        for response in _latest_responses(context):
+            key = (response.asset_id, response.service_id)
+            examined = _examined(response)
+            status = response.detail.get("status")
+            if (
+                not examined
+                or _scheme(context, response) is None
+                or not isinstance(status, int)
+            ):
+                skipped.update((*key, rule) for rule in _ALL_RULES)
+                continue
+            for header, rule in _HEADER_RULES.items():
+                if header not in examined:
+                    skipped.add((*key, rule))
+            if not _is_content_response(status):
+                skipped.update((*key, rule) for rule in _CONTENT_RULES)
+        return frozenset(skipped)
 
     def _for_response(
         self, context: DetectionContext, response: ObservationView
