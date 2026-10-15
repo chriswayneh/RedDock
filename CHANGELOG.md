@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- Framing protection now requires X-Frame-Options DENY or SAMEORIGIN, or a real CSP `frame-ancestors` directive that is not a bare `*`, in both detection and validation.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
