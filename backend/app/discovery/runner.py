@@ -36,7 +36,7 @@ from app.evidence import EVIDENCE_SCHEMA, EvidenceStore
 from app.inventory import record_observation, upsert_asset, upsert_service
 from app.models import DiscoveryRun, Dockyard, EvidenceRecord
 from app.security_audit import SecurityAction, SecurityOutcome, append_security_event
-from app.services import scope_rules
+from app.services import scope_mutation_lock, scope_rules
 from app.targets import Target, TargetKind, normalize_target
 from app.workflow_authorization import (
     WorkflowExecutionPolicy,
@@ -440,14 +440,36 @@ def _perform(
     if evaluation.resolved_addresses:
         observations.insert(0, _resolution_observation(run, evaluation))
 
-    store = EvidenceStore()
-    counts = _persist(session, run, adapter, result, observations, observed_at, store)
-    _store_evidence(session, run, adapter, result, observations, evaluation, counts, store)
+    # Scope can be revoked while the tool runs. Re-check it at the commit
+    # boundary, holding the scope mutation lock so no change can land between
+    # this decision and the commit. The addresses are pinned to the ones that
+    # were scanned: no new DNS lookup, and a result is never re-attributed.
+    with scope_mutation_lock():
+        recheck = evaluate(
+            run.requested_target, scope_rules(session, run.dockyard_id),
+            resolver=lambda _host: evaluation.resolved_addresses,
+        )
+        if not recheck.allowed or not set(recheck.excluded_addresses) <= set(
+            evaluation.excluded_addresses
+        ):
+            session.rollback()
+            run.decision = str(recheck.decision) if not recheck.allowed else run.decision
+            run.decision_reason = (
+                "Scope changed during execution; results were discarded"
+            )
+            run.status = str(RunStatus.DENIED)
+            run.completed_at = datetime.now(UTC)
+            session.commit()
+            return
 
-    run.status = str(RunStatus.COMPLETED)
-    run.completed_at = datetime.now(UTC)
-    run.asset_count, run.service_count, run.observation_count = counts
-    session.commit()
+        store = EvidenceStore()
+        counts = _persist(session, run, adapter, result, observations, observed_at, store)
+        _store_evidence(session, run, adapter, result, observations, evaluation, counts, store)
+
+        run.status = str(RunStatus.COMPLETED)
+        run.completed_at = datetime.now(UTC)
+        run.asset_count, run.service_count, run.observation_count = counts
+        session.commit()
 
 
 def _single_host_denial(

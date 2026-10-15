@@ -566,3 +566,35 @@ def test_interrupted_runs_are_marked_rather_than_left_active(
     ).json()
     assert run["status"] == "failed"
     assert "restart" in run["error"]
+
+
+def test_scope_revoked_during_execution_discards_the_results(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
+    )
+    entry = add_scope(dockyard_id, "127.0.0.1")
+    accepted = start(client, dockyard_id, "127.0.0.1")
+    run_id = accepted.json()["id"]
+    from app.database import SessionLocal
+
+    real_run = adapter.run
+
+    def run_then_revoke(request):
+        result = real_run(request)
+        # The operator removes the scope while the tool is still running.
+        client.delete(f"/api/dockyards/{dockyard_id}/scope/{entry['id']}")
+        return result
+
+    monkeypatch.setattr(adapter, "run", run_then_revoke)
+    discovery_runner.execute_run(
+        run_id, SessionLocal, discovery_receipt(SessionLocal, run_id), LOCAL_WORKFLOW_POLICY,
+    )
+
+    run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{run_id}").json()
+    assert run["status"] == "denied"
+    assert "Scope changed" in run["decision_reason"]
+    assets = client.get(f"/api/dockyards/{dockyard_id}/assets").json()
+    assert assets == [] or assets.get("items") == []
