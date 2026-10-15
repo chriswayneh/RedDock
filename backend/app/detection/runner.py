@@ -22,6 +22,7 @@ Two rules hold every path through here together:
 import json
 import logging
 import re
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -51,6 +52,7 @@ from app.security_audit import SecurityAction, SecurityOutcome, append_security_
 from app.workflow_authorization import WorkflowExecutionPolicy, require_workflow_actor
 
 logger = logging.getLogger("reddock.detection")
+_CREATE_LOCK = threading.Lock()
 
 ACTIVE_STATUSES = (str(DetectionRunStatus.PENDING), str(DetectionRunStatus.RUNNING))
 
@@ -85,6 +87,17 @@ def create_run(
     authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
 ) -> DetectionRun:
     """Persist a pending detection run, refusing to overlap with another."""
+    # The supported deployment is one Uvicorn process. Serializing the
+    # count-then-insert (which commits) makes the no-overlap rule exact across
+    # request threads, matching discovery and intelligence admission.
+    with _CREATE_LOCK:
+        return _create_run(session, dockyard_id, authorization=authorization, policy=policy)
+
+
+def _create_run(
+    session: Session, dockyard_id: int, *,
+    authorization: AuthorizationContext, policy: WorkflowExecutionPolicy,
+) -> DetectionRun:
     actor = require_workflow_actor(
         session, policy, authorization, dockyard_id, Permission.WORKFLOW_RUN,
     )

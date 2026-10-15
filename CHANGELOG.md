@@ -8,6 +8,9 @@ when a version is published.
 ### Fixed
 
 - A server error, redirect, or response that did not examine a header no longer resolves earlier HTTP security-header findings; only a response that actually evaluated the rule can resolve it.
+- Detection run admission is serialized, so two concurrent requests can no longer both start a run for one Dockyard.
+- Nmap now receives `-6` for IPv6 targets; a run whose resolved addresses mix IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
+- Nmap services reported with tunnel="ssl" are recorded as `ssl/<name>`, so TLS-wrapped Telnet or FTP is no longer reported as cleartext.
 
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
