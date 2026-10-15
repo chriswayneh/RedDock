@@ -673,11 +673,12 @@ def test_an_error_after_the_final_commit_leaves_the_run_completed(
     assert run["error"] in (None, "")
 
 
-def _run_with_hook(client, dockyard_id, adapter, monkeypatch, during_run):
+def _run_with_hook(client, dockyard_id, adapter, monkeypatch, during_run, target="127.0.0.1"):
     monkeypatch.setattr(
         discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
     )
-    accepted = start(client, dockyard_id, "127.0.0.1")
+    accepted = start(client, dockyard_id, target)
+    assert accepted.status_code == 202, accepted.text
     run_id = accepted.json()["id"]
     from app.database import SessionLocal
 
@@ -739,3 +740,66 @@ def test_results_are_persisted_while_holding_the_scope_mutation_lock(
     run = _run_with_hook(client, dockyard_id, adapter, monkeypatch, lambda: None)
     assert run["status"] == "completed"
     assert held == [True]
+
+
+def test_an_exclusion_inside_a_scanned_range_denies_the_run_and_saves_nothing(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        adapter, "supported_kinds", (TargetKind.IPV4, TargetKind.IPV4_NETWORK, TargetKind.HOSTNAME)
+    )
+    add_scope(dockyard_id, "127.0.0.0/30")
+    run = _run_with_hook(
+        client, dockyard_id, adapter, monkeypatch,
+        lambda: add_scope(dockyard_id, "127.0.0.2", rule="exclude"),
+        target="127.0.0.0/30",
+    )
+    assert run["status"] == "denied"
+    assert "Scope changed" in run["decision_reason"]
+    from app.database import SessionLocal
+    from app.models import EvidenceRecord
+
+    with SessionLocal() as session:
+        assert session.scalar(
+            select(func.count()).select_from(EvidenceRecord)
+            .where(EvidenceRecord.discovery_run_id == run["id"])
+        ) == 0
+    assets = client.get(f"/api/dockyards/{dockyard_id}/assets").json()
+    assert assets == [] or assets.get("items") == []
+
+
+def test_the_scope_recheck_uses_the_scanned_addresses_not_a_fresh_lookup(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """DNS changing mid-run must not re-attribute or deny the results."""
+    from app import api as api_module
+    from app import dockguard
+
+    add_scope(dockyard_id, "lab.example.test")
+    add_scope(dockyard_id, "127.0.0.1")
+    answers = {"current": ("127.0.0.1",)}
+    lookups = []
+
+    def resolver(hostname):
+        lookups.append(hostname)
+        return answers["current"]
+
+    for module in (dockguard, discovery_runner, api_module):
+        if hasattr(module, "system_resolver"):
+            monkeypatch.setattr(module, "system_resolver", resolver)
+
+    def dns_moves():
+        # DNS now points somewhere else, and that address is excluded. Only a
+        # fresh lookup at the re-check would see it; the scanned address is
+        # still in scope, so the pinned re-check must keep the results.
+        answers["current"] = ("10.9.9.9",)
+        add_scope(dockyard_id, "10.9.9.9", rule="exclude")
+
+    run = _run_with_hook(
+        client, dockyard_id, adapter, monkeypatch, dns_moves, target="lab.example.test"
+    )
+    assert run["status"] == "completed", run
+    assert [tuple(r.resolved_addresses) for r in adapter.requests] == [("127.0.0.1",)]
+    assert lookups, "the run should have resolved the hostname once before scanning"
