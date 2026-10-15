@@ -566,3 +566,76 @@ def test_interrupted_runs_are_marked_rather_than_left_active(
     ).json()
     assert run["status"] == "failed"
     assert "restart" in run["error"]
+
+
+def test_a_session_failure_before_the_claim_fails_the_run_instead_of_raising(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
+    )
+    add_scope(dockyard_id, "127.0.0.1")
+    accepted = start(client, dockyard_id, "127.0.0.1")
+    assert accepted.status_code == 202
+    run_id = accepted.json()["id"]
+    from app.database import SessionLocal
+
+    receipt = discovery_receipt(SessionLocal, run_id)
+    calls = {"count": 0}
+
+    def flaky_factory():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("database briefly unavailable")
+        return SessionLocal()
+
+    discovery_runner.execute_run(run_id, flaky_factory, receipt, LOCAL_WORKFLOW_POLICY)
+
+    run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{run_id}").json()
+    assert run["status"] == "failed"
+    assert adapter.requests == []
+
+
+def test_an_error_after_the_final_commit_leaves_the_run_completed(
+    client: TestClient, dockyard_id: int, add_scope, adapter: StubAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        discovery_runner, "submit_run", lambda _run_id, _session_factory, _runtime, _receipt: None
+    )
+    add_scope(dockyard_id, "127.0.0.1")
+    accepted = start(client, dockyard_id, "127.0.0.1")
+    assert accepted.status_code == 202
+    run_id = accepted.json()["id"]
+    from app.database import SessionLocal
+    from app.models import DiscoveryRun
+
+    receipt = discovery_receipt(SessionLocal, run_id)
+    raised = {"count": 0}
+
+    def status() -> str:
+        with SessionLocal() as probe:
+            return probe.get(DiscoveryRun, run_id).status
+
+    def factory_whose_close_fails_after_completion():
+        session = SessionLocal()
+        real_close = session.close
+
+        def close():
+            real_close()
+            if status() == "completed":
+                raised["count"] += 1
+                raise RuntimeError("connection reset while closing")
+
+        session.close = close
+        return session
+
+    discovery_runner.execute_run(
+        run_id, factory_whose_close_fails_after_completion, receipt, LOCAL_WORKFLOW_POLICY
+    )
+
+    assert raised["count"] >= 1
+    run = client.get(f"/api/dockyards/{dockyard_id}/discoveries/{run_id}").json()
+    assert run["status"] == "completed"
+    assert run["error"] in (None, "")
