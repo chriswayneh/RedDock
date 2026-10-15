@@ -93,9 +93,13 @@ def upsert_service(
         service.service_name = None
         service.product = None
         service.version = None
-    service.service_name = discovered.service_name or service.service_name
-    service.product = discovered.product or service.product
-    service.version = discovered.version or service.version
+    if discovered.service_name or discovered.product or discovered.version:
+        # An identification is one observation: never splice a new product
+        # onto an old version (or vice versa). No identification at all is
+        # no new evidence, so the prior identification stands.
+        service.service_name = discovered.service_name
+        service.product = discovered.product
+        service.version = discovered.version
     session.flush()
     return service
 
