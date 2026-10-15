@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- Nmap services reported with tunnel="ssl" are recorded as `ssl/<name>`, so TLS-wrapped Telnet or FTP is no longer reported as cleartext.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
