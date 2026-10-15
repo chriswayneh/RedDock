@@ -803,17 +803,25 @@ def test_a_server_error_does_not_resolve_content_header_findings(
     assert {f.status for f in findings_of(recorder)} == {"resolved"}
 
 
-def respond(recorder: Recorder, asset, service, status: int, headers: dict[str, str]) -> None:
-    """A later response from the same endpoint."""
+def respond(
+    recorder: Recorder, asset, service, status, headers: dict[str, str], **overrides
+) -> None:
+    """A later response from the same endpoint; overrides replace or drop detail keys."""
     from tests.phase1 import EXAMINED_HEADERS
 
     run = recorder.discovery_run()
+    detail = {
+        "status": status, "address": "127.0.0.1", "scheme": "https",
+        "headers_examined": EXAMINED_HEADERS, "headers_present": sorted(headers),
+    }
+    for key, value in overrides.items():
+        if value is _DROP:
+            detail.pop(key, None)
+        else:
+            detail[key] = value
     recorder.observation(
         run, "http_response", f"returned HTTP {status}", asset=asset, service=service,
-        detail={
-            "status": status, "address": "127.0.0.1", "scheme": "https",
-            "headers_examined": EXAMINED_HEADERS, "headers_present": sorted(headers),
-        },
+        detail=detail,
     )
     for name, value in headers.items():
         recorder.observation(
@@ -856,3 +864,94 @@ def test_detection_admission_is_serialized(
     runner.join(5)
     with pytest.raises(detection_runner.RunRejected):
         detection_runner.create_run(recorder.session, recorder.dockyard_id, **LOCAL_WORKFLOW)
+
+
+_DROP = object()
+_SECURE = {
+    "strict-transport-security": "max-age=63072000",
+    "x-content-type-options": "nosniff",
+    "content-security-policy": "default-src 'self'; frame-ancestors 'none'",
+    "x-frame-options": "DENY",
+}
+
+
+def _insecure_endpoint(recorder: Recorder, monkeypatch: pytest.MonkeyPatch):
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    assert "content-security-policy-not-set" in {
+        f.rule_id for f in findings_of(recorder) if f.status == "open"
+    }
+    return asset, service
+
+
+def test_a_200_that_did_not_examine_csp_keeps_the_csp_finding_open(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    from tests.phase1 import EXAMINED_HEADERS
+
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    without_csp = {k: v for k, v in _SECURE.items() if k != "content-security-policy"}
+    respond(
+        recorder, asset, service, 200, without_csp,
+        headers_examined=[h for h in EXAMINED_HEADERS if h != "content-security-policy"],
+    )
+    detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["content-security-policy-not-set"] == "open"
+    assert statuses["frame-protection-not-set"] == "resolved"
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [{"headers_examined": _DROP}, {"headers_examined": []}],
+    ids=["no-examined-set", "empty-examined-set"],
+)
+def test_a_response_without_examined_headers_or_scheme_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, overrides
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, 200, _SECURE, **overrides)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
+@pytest.mark.parametrize("status", ["200", None, 200.0], ids=["str", "none", "float"])
+def test_a_non_integer_status_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, status
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, status, _SECURE)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
+@pytest.mark.parametrize("status", [301, 302])
+def test_a_redirect_does_not_resolve_content_header_findings(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch, status
+):
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, status, {})
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert statuses["content-security-policy-not-set"] == "open"
+    assert statuses["frame-protection-not-set"] == "open"
+
+
+def test_a_response_whose_scheme_cannot_be_determined_resolves_nothing(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """The scheme falls back to the origin URL, so force the undetermined case."""
+    from app.detection.detectors import http_headers
+
+    asset, service = _insecure_endpoint(recorder, monkeypatch)
+    respond(recorder, asset, service, 200, _SECURE, scheme=_DROP)
+    monkeypatch.setattr(http_headers, "_scheme", lambda _context, _response: None)
+    run = detect(recorder)
+    assert run.resolved_finding_count == 0
+    assert {f.status for f in findings_of(recorder)} == {"open"}
