@@ -5,9 +5,10 @@ header detector that reports every absent header on every response is easy to
 write and useless to read.
 """
 
+import pytest
 from fastapi.testclient import TestClient
 
-from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+from app.detection.detectors.http_headers import HttpSecurityHeaderDetector, framing_restricted
 from app.detection.registry import available_detectors
 from tests.phase1 import Recorder
 
@@ -227,3 +228,39 @@ def test_every_finding_cites_the_response_it_was_drawn_from(
 def test_the_detector_is_registered_and_declares_what_it_reads():
     detector = next(item for item in available_detectors() if item.id == "http.security_headers")
     assert detector.consumes == ("http_response", "http_header")
+
+
+@pytest.mark.parametrize(
+    ("frame_options", "policy", "restricted"),
+    [
+        ("DENY", None, True),
+        (" sameorigin ", None, True),
+        ("ALLOWALL", None, False),
+        ("", None, False),
+        (None, "default-src 'self'; frame-ancestors 'none'", True),
+        (None, "frame-ancestors 'self' https://a.example", True),
+        (None, "frame-ancestors *", False),
+        (None, "frame-ancestors", False),
+        (None, "default-src 'self'; report-uri /frame-ancestors", False),
+        (None, "default-src 'self' frame-ancestors", False),
+        (None, "script-src 'self' frame-ancestors.example", False),
+    ],
+)
+def test_framing_restriction_parses_values_and_directives(frame_options, policy, restricted):
+    assert framing_restricted(frame_options, policy) is restricted
+
+
+def test_a_meaningless_x_frame_options_value_is_reported(
+    client: TestClient, recorder: Recorder
+):
+    headers = dict(SECURE_HEADERS)
+    headers["x-frame-options"] = "ALLOWALL"
+    headers["content-security-policy"] = "default-src 'self'"
+    recorder.http_endpoint("https://127.0.0.1:8443", headers=headers)
+    assert "frame-protection-not-set" in rules(recorder)
+
+
+def test_a_wildcard_first_frame_ancestors_wins_over_a_later_none():
+    from app.detection.detectors.http_headers import framing_restricted
+
+    assert framing_restricted(None, "frame-ancestors *; frame-ancestors 'none'") is False

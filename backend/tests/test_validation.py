@@ -250,3 +250,34 @@ def test_a_non_http_finding_has_no_validation_profile(
 
     assert response.status_code == 409
     assert "no Phase 3" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"x-frame-options": "ALLOWALL"},
+        {"content-security-policy": "default-src 'self'; report-uri /frame-ancestors"},
+        {"content-security-policy": "frame-ancestors *"},
+    ],
+    ids=["xfo-allowall", "report-uri-mentions-frame-ancestors", "wildcard"],
+)
+def test_validation_judge_does_not_accept_ineffective_framing_headers(headers):
+    from app.targets import normalize_target
+    from app.validation import runner as validation_runner
+
+    outcome, _confidence, summary = validation_runner._judge(
+        "frame-protection-not-set", normalize_target("https://127.0.0.1:8443"), 200, headers
+    )
+    assert outcome == validation_runner.CONFIRMED
+    assert "still does not carry" in summary
+
+
+def test_validation_judge_accepts_a_real_framing_restriction():
+    from app.targets import normalize_target
+    from app.validation import runner as validation_runner
+
+    outcome, _confidence, _summary = validation_runner._judge(
+        "frame-protection-not-set", normalize_target("https://127.0.0.1:8443"), 200,
+        {"x-frame-options": "SAMEORIGIN"},
+    )
+    assert outcome == validation_runner.NOT_REPRODUCED
