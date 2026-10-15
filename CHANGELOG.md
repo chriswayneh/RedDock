@@ -8,6 +8,7 @@ when a version is published.
 ### Fixed
 
 - Discovery re-checks scope, under the scope mutation lock, before committing results; if scope was revoked or narrowed during the scan the run is denied and its results are discarded.
+- A new service identification replaces the old product, version, and name together, so a version from one server is never attached to another product.
 - A discovery run that fails before it is claimed (for example a database session error) is now marked failed instead of staying pending and occupying capacity.
 - Detection run admission is serialized, so two concurrent requests can no longer both start a run for one Dockyard.
 - Nmap now receives `-6` for IPv6 targets; a run whose resolved addresses mix IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
