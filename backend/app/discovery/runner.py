@@ -292,6 +292,33 @@ def execute_run(
     request_event_id: int, policy: WorkflowExecutionPolicy,
 ) -> None:
     """Run one allowed discovery to completion. Never raises."""
+    try:
+        _execute_run(run_id, session_factory, request_event_id, policy)
+    except Exception:  # session setup, the initial read or _fail itself
+        logger.exception("Discovery run %s could not be executed", run_id)
+        _fail_detached(run_id, session_factory)
+
+
+def _fail_detached(run_id: int, session_factory: SessionFactory) -> None:
+    """Best effort: release a run this worker could not finish from a fresh session."""
+    try:
+        with session_factory() as session:
+            session.execute(update(DiscoveryRun).where(
+                DiscoveryRun.id == run_id, DiscoveryRun.status.in_(ACTIVE_STATUSES),
+            ).values(
+                status=str(RunStatus.FAILED),
+                error="Discovery failed unexpectedly; see the RedDock container log",
+                completed_at=datetime.now(UTC),
+            ))
+            session.commit()
+    except Exception:  # the database itself is unavailable; restart recovery handles it
+        logger.exception("Discovery run %s could not be marked failed", run_id)
+
+
+def _execute_run(
+    run_id: int, session_factory: SessionFactory,
+    request_event_id: int, policy: WorkflowExecutionPolicy,
+) -> None:
     with session_factory() as session:
         run = session.get(DiscoveryRun, run_id)
         if run is None or run.status != str(RunStatus.PENDING):
