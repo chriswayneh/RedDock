@@ -280,3 +280,13 @@ class Detector(ABC):
     @abstractmethod
     def detect(self, context: DetectionContext) -> tuple[DetectedFinding, ...]:
         """Inspect the snapshot and return zero or more findings."""
+
+    def unevaluated(
+        self, context: DetectionContext
+    ) -> frozenset[tuple[int | None, int | None, str]]:
+        """(asset_id, service_id, rule_id) this run could not evaluate.
+
+        A rule that was not evaluated is not evidence of remediation, so the
+        runner leaves its earlier findings open rather than resolving them.
+        """
+        return frozenset()

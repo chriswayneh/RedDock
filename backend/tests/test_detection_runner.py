@@ -771,3 +771,53 @@ def test_a_scope_key_lets_one_rule_fire_twice_for_one_service(
 
     assert run.status == "completed"
     assert len(findings_of(endpoint)) == 2
+
+
+def test_a_server_error_does_not_resolve_content_header_findings(
+    client: TestClient, recorder: Recorder, monkeypatch: pytest.MonkeyPatch
+):
+    """An outage is not remediation: a 500 says nothing about content headers."""
+    from app.detection.detectors.http_headers import HttpSecurityHeaderDetector
+
+    install(monkeypatch, HttpSecurityHeaderDetector())
+    asset, service, _ = recorder.http_endpoint("https://127.0.0.1:8443", headers={})
+    detect(recorder)
+    assert {f.rule_id for f in findings_of(recorder) if f.status == "open"} >= {
+        "content-security-policy-not-set", "frame-protection-not-set",
+    }
+
+    respond(recorder, asset, service, 500, {})
+    run = detect(recorder)
+    statuses = {f.rule_id: f.status for f in findings_of(recorder)}
+    assert run.resolved_finding_count == 0
+    assert set(statuses.values()) == {"open"}
+
+    secure = {
+        "strict-transport-security": "max-age=63072000",
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'self'; frame-ancestors 'none'",
+        "x-frame-options": "DENY",
+    }
+    respond(recorder, asset, service, 200, secure)
+    detect(recorder)
+    assert {f.status for f in findings_of(recorder)} == {"resolved"}
+
+
+def respond(recorder: Recorder, asset, service, status: int, headers: dict[str, str]) -> None:
+    """A later response from the same endpoint."""
+    from tests.phase1 import EXAMINED_HEADERS
+
+    run = recorder.discovery_run()
+    recorder.observation(
+        run, "http_response", f"returned HTTP {status}", asset=asset, service=service,
+        detail={
+            "status": status, "address": "127.0.0.1", "scheme": "https",
+            "headers_examined": EXAMINED_HEADERS, "headers_present": sorted(headers),
+        },
+    )
+    for name, value in headers.items():
+        recorder.observation(
+            run, "http_header", f"{name}: {value}", asset=asset, service=service,
+            detail={"header": name, "value": value}, confidence="reported",
+        )
+    recorder.session.commit()

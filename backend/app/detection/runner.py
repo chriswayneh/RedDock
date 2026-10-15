@@ -202,7 +202,7 @@ def _perform(
 
     outcomes = [_run_detector(detector, context) for detector in registry.available_detectors()]
     stored, new_count, reproduced = _store(session, run, context, observations, outcomes)
-    resolved = _resolve(session, run, outcomes, reproduced)
+    resolved = _resolve(session, run, outcomes, reproduced, context)
 
     run.status = _status(outcomes)
     run.error = _error(outcomes)
@@ -425,11 +425,17 @@ def _resolve(
     run: DetectionRun,
     outcomes: list[_DetectorOutcome],
     reproduced: dict[str, set[str]],
+    context: DetectionContext,
 ) -> list[dict[str, str]]:
-    """Close out what a successful detector no longer reproduces."""
+    """Close out what a successful detector evaluated and no longer reproduces."""
     resolved: list[dict[str, str]] = []
     for outcome in outcomes:
         if not outcome.ok:
+            continue
+        try:
+            unevaluated = frozenset(outcome.detector.unevaluated(context))
+        except Exception as error:  # cannot tell what was covered: resolve nothing
+            logger.warning("Detector %s coverage failed: %s", outcome.detector.id, error)
             continue
         for finding in resolve_absent(
             session,
@@ -437,6 +443,7 @@ def _resolve(
             detector_id=outcome.detector.id,
             reproduced=reproduced.get(outcome.detector.id, set()),
             resolved_at=datetime.now(UTC),
+            unevaluated=unevaluated,
         ):
             resolved.append(
                 {
