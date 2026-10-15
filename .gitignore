@@ -29,3 +29,6 @@ backups/
 Thumbs.db
 .vscode/
 .idea/
+
+# Internal agent handoff notes never belong in the repository.
+HANDOFF-*.md
