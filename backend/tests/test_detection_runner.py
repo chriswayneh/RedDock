@@ -955,3 +955,5 @@ def test_a_response_whose_scheme_cannot_be_determined_resolves_nothing(
     run = detect(recorder)
     assert run.resolved_finding_count == 0
     assert {f.status for f in findings_of(recorder)} == {"open"}
+
+
