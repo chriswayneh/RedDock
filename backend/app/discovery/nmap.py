@@ -7,6 +7,7 @@ variable values are targets that `app.targets` has already normalized to a
 character set that cannot form an option.
 """
 
+import ipaddress
 import re
 import shutil
 import subprocess
@@ -134,16 +135,27 @@ class NmapAdapter(DiscoveryAdapter):
         else:
             raise AdapterError(f"Unknown nmap profile: {request.profile}")
 
-        if request.excluded_addresses:
-            _assert_scan_values(request.excluded_addresses)
-            arguments += ["--exclude", ",".join(request.excluded_addresses)]
-
         scan_targets = self.scan_targets(request)
         if request.profile == LAB_EXTENDED_SERVICE_DISCOVERY and (
             request.target.is_network or len(scan_targets) != 1
         ):
             raise AdapterError("Extended service discovery is limited to one host")
         _assert_scan_values(scan_targets)
+        families = {_address_family(value) for value in scan_targets}
+        if len(families) > 1:
+            raise AdapterError(
+                "Nmap scans one address family per run; IPv4 and IPv6 targets cannot be mixed"
+            )
+        if families == {6}:
+            arguments.append("-6")
+        if request.excluded_addresses:
+            _assert_scan_values(request.excluded_addresses)
+            excluded = [
+                value for value in request.excluded_addresses
+                if _address_family(value) in families
+            ]
+            if excluded:
+                arguments += ["--exclude", ",".join(excluded)]
         arguments += list(scan_targets)
         return arguments
 
@@ -402,6 +414,14 @@ def _expand_port_summary(raw: str) -> tuple[int, ...]:
             if len(ports) > _MAX_SUMMARY_PORTS:
                 raise AdapterError("Nmap port summary exceeds the configured scan bound")
     return tuple(ports)
+
+
+def _address_family(value: str) -> int:
+    """4 or 6 for an address or network; hostnames never reach nmap unresolved."""
+    try:
+        return ipaddress.ip_network(value, strict=False).version
+    except ValueError:
+        return 4
 
 
 def _identified_service(port: ElementTree.Element) -> dict[str, str]:
