@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- Discovery re-checks scope, under the scope mutation lock, before committing results; if scope was revoked or narrowed during the scan the run is denied and its results are discarded.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
