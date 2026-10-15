@@ -3,6 +3,12 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
+## [Unreleased]
+
+### Fixed
+
+- A server error, redirect, or response that did not examine a header no longer resolves earlier HTTP security-header findings; only a response that actually evaluated the rule can resolve it.
+
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
 ### Added
