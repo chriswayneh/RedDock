@@ -18,7 +18,7 @@ findings, evidence-backed validation, and portable reports.
 [![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
 [![Phase](https://img.shields.io/badge/Phase%208%3A%20Production%20polish-in%20progress%20%C2%B7%20local%20single--operator-C1121F)](ROADMAP.md)
 
-**Current release:** [v0.8.1](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.1), the Phase 8 production-hardening checkpoint. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
+**Current release:** [v0.8.2](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.2), a Phase 8 maintenance release with detection and discovery fixes. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
 
 [Run it locally](#run-it-locally) · [Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
@@ -37,7 +37,7 @@ What it shows: scoped scanning, explainable findings, evidence handling with SHA
 There is no working user login. For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
-git clone --branch v0.8.1 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
@@ -50,7 +50,7 @@ Phase 8 is still in progress. Working sign-in, SSO, and shared-user access are n
 
 These gates are still open. The steps below are what a person can do today. They do not finish Phase 8.
 
-**Team sign-in.** There is no working login to turn on, and no SSO setup to follow. No authentication route is registered in the running app. Do not set `REDDOCK_DEPLOYMENT_MODE=server`: that value fails startup and is not the demo. Run the local no-login package in [Run it locally](#run-it-locally): clone tag `v0.8.1`, run `docker compose up --build`, open [http://localhost:8080](http://localhost:8080), copy the operator token from `docker compose logs reddock`, and select **Unlock changes**. That token is an accident boundary, not a user account. The same walkthrough is in [Start here](docs/GETTING_STARTED.md).
+**Team sign-in.** There is no working login to turn on, and no SSO setup to follow. No authentication route is registered in the running app. Do not set `REDDOCK_DEPLOYMENT_MODE=server`: that value fails startup and is not the demo. Run the local no-login package in [Run it locally](#run-it-locally): clone tag `v0.8.2`, run `docker compose up --build`, open [http://localhost:8080](http://localhost:8080), copy the operator token from `docker compose logs reddock`, and select **Unlock changes**. That token is an accident boundary, not a user account. The same walkthrough is in [Start here](docs/GETTING_STARTED.md).
 
 **PostgreSQL disaster-recovery drill.** The drill has not been run. Nothing in this repository records a backup time, a restore time, a recovered row count, or a capacity measurement. The open checklist is [Disaster-recovery drill checklist](docs/POSTGRESQL.md#disaster-recovery-drill-checklist). In short:
 
@@ -124,7 +124,7 @@ require target evidence and a supported validation result.
 For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
-git clone --branch v0.8.1 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
@@ -133,17 +133,17 @@ Open [http://localhost:8080](http://localhost:8080). On the first start, copy th
 
 See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local demonstration, shutdown instructions, and troubleshooting. Contributors can use `master`, which may contain unfinished work newer than the stable tag.
 
-### New on master
+### New since v0.8.1
 
-The dashboard now offers **Start local walkthrough**: a guided assessment of
+The dashboard offers **Start local walkthrough**: a guided assessment of
 RedDock's own Compose proxy, with no automatic scanning. Findings and new reports
 show what was checked, what still needs detection, and what was not checked.
-These additions are not in the stable `v0.8.1` tag.
+These additions are included in the `v0.8.2` tag and were not in `v0.8.1`.
 
-Dormant OIDC, browser sessions, and team admin landed on master after the v0.8.1 tag, stay unregistered, and server mode still fails startup ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
+Dormant OIDC, browser sessions, and team admin are in the source since v0.8.2 but stay unregistered, and server mode still fails startup ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
 
-To try them in a separate folder, clone without `--branch v0.8.1 --depth 1`, then
-use the same Compose command above. Keep only one RedDock stack on port 8080.
+The quick start above already uses `v0.8.2`, so you get them by default. Keep only
+one RedDock stack on port 8080.
 
 ### Why I am building it
 
@@ -444,7 +444,7 @@ docs/          Architecture decisions and project documentation
 
 ## Project Status
 
-The current release is **v0.8.1**, the Phase 8 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
+The current release is **v0.8.2**, a Phase 8 maintenance release on top of the v0.8.1 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
 
 ### Phase 8 progress
 

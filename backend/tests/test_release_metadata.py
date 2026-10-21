@@ -14,7 +14,7 @@ SPEC.loader.exec_module(verify_release)
 
 
 def test_current_release_metadata_agrees() -> None:
-    phase = verify_release.verify_files(REPOSITORY, "0.8.1")
+    phase = verify_release.verify_files(REPOSITORY, "0.8.2")
 
     assert phase == "Phase 8: Production hardening checkpoint"
 

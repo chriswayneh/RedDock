@@ -375,7 +375,7 @@ class Settings(BaseModel):
     """Runtime settings kept intentionally small for the local foundation."""
 
     app_name: str = "RedDock"
-    version: str = "0.8.1"
+    version: str = "0.8.2"
     phase: str = "Phase 8: Production hardening checkpoint"
     deployment_mode: Literal["local"] = "local"
     api_docs_enabled: bool = False

@@ -25,12 +25,12 @@ By the end, you will have:
 For an authorized local evaluation, open PowerShell on Windows or Terminal on macOS/Linux. Paste these stable-release commands one at a time and press Enter after each:
 
 ```bash
-git clone --branch v0.8.1 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
 
-The first command downloads the reviewed `v0.8.1` tag. The second enters its folder. The third builds and starts it.
+The first command downloads the reviewed `v0.8.2` tag. The second enters its folder. The third builds and starts it.
 
 Leave that terminal open. Startup is complete when the output says the application is running and the health check has settled. Then open [RedDock in your browser](http://localhost:8080). An empty dashboard is expected: the app does not scan anything until you ask it to, and it does not come populated with someone else's data.
 
@@ -52,13 +52,13 @@ not supported while sign-in is unfinished.
 
 ## 2. Create a demonstration workspace
 
-**Using master?** Select **Start local walkthrough** on the dashboard after
+**Using v0.8.2 or master?** Select **Start local walkthrough** on the dashboard after
 unlocking changes. It creates the workspace and one exact include rule, then
 opens the **Assessment** guide. Follow its buttons through the steps below.
 The Discovery tab prefills the local HTTP target and profile, but you must still
-check DockGuard and start the run yourself. This shortcut is newer than v0.8.1.
+check DockGuard and start the run yourself. This shortcut arrived in v0.8.2.
 
-**Using the stable v0.8.1 tag?** Create the same workspace manually:
+**Using v0.8.1 or older?** Create the same workspace manually:
 
 1. Open **Dockyards** and create a Dockyard named `My first local demo`. A Dockyard is simply a workspace for one assessment.
 2. Open that workspace's **Scope** tab. Add an **include** entry for exactly `http://reddock-ingress:8080`.

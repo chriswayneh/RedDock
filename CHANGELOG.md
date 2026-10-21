@@ -3,18 +3,30 @@
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
 
-## [Unreleased]
+## [0.8.2] - 2026-10-21 - Phase 8 maintenance fixes
 
 ### Fixed
 
-- Framing protection now requires X-Frame-Options DENY or SAMEORIGIN, or a real CSP `frame-ancestors` directive that is not a bare `*`, in both detection and validation.
-- A server error, redirect, or response that did not examine a header no longer resolves earlier HTTP security-header findings; only a response that actually evaluated the rule can resolve it.
-- Discovery re-checks scope, under the scope mutation lock, before committing results; if scope was revoked or narrowed during the scan the run is denied and its results are discarded.
-- A new service identification replaces the old product, version, and name together, so a version from one server is never attached to another product.
-- A discovery run that fails before it is claimed (for example a database session error) is now marked failed instead of staying pending and occupying capacity.
-- Detection run admission is serialized, so two concurrent requests can no longer both start a run for one Dockyard.
-- Nmap now receives `-6` for IPv6 targets; a run whose resolved addresses mix IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
-- Nmap services reported with tunnel="ssl" are recorded as `ssl/<name>`, so TLS-wrapped Telnet or FTP is no longer reported as cleartext.
+- HTTP security-header findings are no longer resolved by a response that could
+  not evaluate them. A server error, a redirect, or a response that did not
+  examine the header leaves the earlier finding open; an outage is not a fix.
+- Framing protection now requires X-Frame-Options `DENY` or `SAMEORIGIN`, or a
+  real Content-Security-Policy `frame-ancestors` directive other than a bare
+  `*`. Detection and validation use the same check.
+- A new service identification replaces the stored name, product, and version
+  together, so a version reported by one server is never attached to another
+  product.
+- Nmap services reported with `tunnel="ssl"` are recorded as `ssl/<name>`, so
+  TLS-wrapped Telnet or FTP is no longer reported as cleartext.
+- IPv6 targets are scanned with Nmap's `-6`. A run whose resolved addresses mix
+  IPv4 and IPv6 is refused, and exclusions are limited to the scanned family.
+- Discovery checks scope again before saving results. If scope was revoked or
+  narrowed during the scan, the run is denied and its results are discarded.
+- A discovery run that fails before it starts, for example on a database
+  session error, is marked failed instead of staying pending and holding
+  capacity.
+- Detection run admission is serialized, so two concurrent requests can no
+  longer both start a run for the same Dockyard.
 
 ## [0.8.1] - 2026-09-14 - Phase 8 Production hardening checkpoint
 
