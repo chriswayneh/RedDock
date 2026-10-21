@@ -5,6 +5,28 @@ when a version is published.
 
 ## [0.8.2] - 2026-10-21 - Phase 8 maintenance fixes
 
+### Added
+
+- A guided local walkthrough. **Start local walkthrough** creates one workspace
+  scoped to RedDock's own Compose proxy and leads through scope, discovery,
+  detection, findings, and reports. Nothing scans automatically.
+- Check coverage. Findings, the assessment guide, and new reports separate
+  reviewed observations from those awaiting detection and checks not performed.
+  Coverage is not proof of security.
+- Report schema 3. New report snapshots include check coverage; existing report
+  downloads remain available.
+
+### Changed
+
+- Orderly discovery shutdown. Each application owns its worker pool and finishes
+  accepted discovery work before closing its database. Compose allows up to 12
+  minutes; a forced interruption is recorded on restart.
+- Private request logs. Packaged Uvicorn access logs are disabled, and the
+  Compose proxy records fixed categories and metrics without raw URLs, headers,
+  or client addresses.
+- Dormant OIDC sign-in, browser session, and team admin code is in the source
+  but is not registered or enabled. Server mode still fails startup.
+
 ### Fixed
 
 - HTTP security-header findings are no longer resolved by a response that could
