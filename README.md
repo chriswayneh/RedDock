@@ -2,38 +2,31 @@
 
 # RedDock
 
+[![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.13-blue.svg)](pyproject.toml)
+
 **Find. Validate. Prove.**
 
 RedDock is an open-source vulnerability discovery, validation, and evidence
 platform for authorized environments. It combines scoped scanning, explainable
 findings, evidence-backed validation, and portable reports.
 
-**Live limits of this build:** no UDP scanning, no NSE scripts, no brute force, no payloads, no evasion, and no server mode. Server mode fails startup.
-
-[![Release](https://img.shields.io/github/v/tag/chriswayneh/RedDock?label=release&color=C1121F)](https://github.com/chriswayneh/RedDock/tags)
-[![Docker Compose](https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![CI](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml/badge.svg?branch=master)](https://github.com/chriswayneh/RedDock/actions/workflows/codeql.yml)
-[![License](https://img.shields.io/github/license/chriswayneh/RedDock)](LICENSE)
-[![Phase](https://img.shields.io/badge/Phase%208%3A%20Production%20polish-in%20progress%20%C2%B7%20local%20single--operator-C1121F)](ROADMAP.md)
+**Live limits of this build:** local, single-operator use with non-invasive scan profiles only. No UDP scanning and no NSE scripts.
 
 **Current release:** [v0.8.2](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.2), a Phase 8 maintenance release with detection and discovery fixes. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
-
-[Run it locally](#run-it-locally) · [Start Here](docs/GETTING_STARTED.md) · [What It Checks](#what-it-checks-today) · [Screenshots](#screenshots) · [Security](SECURITY.md) · [Documentation](docs/README.md) · [Roadmap](ROADMAP.md)
 
 </div>
 
 ---
 
-## What this is
-
 In plain words: RedDock is a security check tool you run on your own computer against systems you are allowed to test. You give it a scope, it looks for live hosts and open TCP ports, checks HTTP security headers and TLS certificates, and saves what it saw as evidence. Each finding explains why it was raised, and you can export a report to share.
 
 What it shows: scoped scanning, explainable findings, evidence handling with SHA-256 hashes, and reports. It is a local single-operator tool. Phase 8 is still open, there is no user sign-in, and it is not production-ready. The quick start is [Run it locally](#run-it-locally) just below.
 
-## Run it locally
+## Quick start
 
+### Run it locally
 There is no working user login. For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
@@ -42,11 +35,11 @@ cd RedDock
 docker compose up --build
 ```
 
-Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. That token is an accident boundary, not identity, SSO, or shared-user access. Server mode fails startup.
+Open [http://localhost:8080](http://localhost:8080). On the first start, copy the generated operator token from `docker compose logs reddock`, enter it in the browser, and select **Unlock changes**. That token is an accident boundary, not identity, SSO, or shared-user access.
 
 Phase 8 is still in progress. Working sign-in, SSO, and shared-user access are not available yet, and no authentication route is registered in the running app. The PostgreSQL disaster-recovery drill has not been run. End-to-end and independent review is still required. Passing automated checks is not a security certification.
 
-### How to work the open Phase 8 gates
+#### How to work the open Phase 8 gates
 
 These gates are still open. The steps below are what a person can do today. They do not finish Phase 8.
 
@@ -67,60 +60,12 @@ Write the result down outside this repository. A checkbox is not a recorded dril
 - Walk the local package with [Start here](docs/GETTING_STARTED.md). That is the complete experience that runs today. It is not an authenticated team test.
 - Read [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status): loopback ingress, the operator token as an accident boundary rather than identity, deny-by-default permissions, DockGuard before target contact, unprivileged Compose limits, and unencrypted backups and DockPacks. Each row states the control and the limit that is still open.
 - Read the [threat model](docs/THREAT_MODEL.md). Its scenarios are design and review hypotheses, not findings.
-- Confirm server mode still fails startup, no authentication route is registered, and the PostgreSQL drill above has no recorded result.
+- Confirm no authentication route is registered and the PostgreSQL drill above has no recorded result.
 - Read [Automated review](ROADMAP.md#automated-review) for what CI, CodeQL, dependency checks, and the production smoke path actually run. A green run is supporting evidence. It is not proof that a deployment is secure, and it is not this review.
 
 Suspected security flaws go to [private vulnerability reporting](SECURITY.md#reporting-a-vulnerability), not a public issue.
 
-## What it checks today
-
-RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services (TLS-wrapped services, recorded as `ssl/<name>`, are not treated as cleartext). A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports. IPv6 targets are scanned with Nmap's `-6`; one run scans one address family, so a hostname resolving to both IPv4 and IPv6 is refused.
-
-### Where it is going
-
-**Live limits of this build:** no UDP scanning, no NSE scripts, no brute force, no payloads, no evasion, and no server mode. Server mode fails startup. These limits apply to the build under review.
-
-[Phase 11](ROADMAP.md#phase-11-expanded-safe-assessment) through [Phase 14](ROADMAP.md#phase-14-controlled-adversary-simulation) on the [roadmap](ROADMAP.md#planned-releases) (planned releases v1.2.0 through v2.0.0) are future direction and are **not in this build**. The notes below are roadmap history, not work in this release:
-
-- **v1.1.0:** locally cached CVE, CISA KEV, and EPSS intelligence.
-- **v1.2.0:** bounded UDP discovery, sanitized HTTP response sampling, and
-  reviewed non-intrusive service checks.
-- **v1.3.0:** least-privilege credentialed checks with strict secret isolation.
-- **v1.4.0:** evidence-based exploitability validation for supported findings.
-- **v2.0.0:** a separately installed commercial pack for authorized credential
-  auditing, exploit validation, controlled payloads, and evasion exercises.
-
-The complete [versioned roadmap](ROADMAP.md#planned-releases) explains the
-security and completion gates for each release. A catalogue match will remain
-an association rather than proof that a service is affected; stronger claims
-require target evidence and a supported validation result.
-
-### Current boundary
-
-- **Local only.** The supported Compose package publishes one host-loopback port. Do not expose it to a LAN, public tunnel, proxy, or the internet.
-- **No user login.** The local package uses an operator token to protect changes, but that token is an accident boundary, not identity, SSO, or shared-user access.
-- **Not a certification.** Findings describe what narrow checks observed and concluded. A clean result does not prove a target is secure.
-- **AI has no tools.** AI is optional and receives only a packet the operator reviews and approves. It cannot scan, change findings, or apply remediation.
-
-## What you get
-
-| Question | RedDock's answer |
-| --- | --- |
-| What did it check? | Authorized scope, completed discovery runs, and retained observations show which focused checks ran. |
-| What did it find? | Rule-based findings keep severity separate from confidence and link back to what was observed. |
-| What supports the result? | SHA-256-hashed evidence and named detector rules provide a traceable record. |
-| What can I save or share? | Technical and plain-language reports, plus an unencrypted DockPack containing verified supporting files. |
-
-<div align="center">
-
-<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings list showing severity and status filters, complete counts, and readable first-seen and last-seen dates" width="900"></a>
-
-<sub>Each finding explains the conclusion, its severity and confidence, and the evidence behind it.</sub>
-
-</div>
-
-## Start the stable release
-
+### Start the stable release
 For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
@@ -133,19 +78,19 @@ Open [http://localhost:8080](http://localhost:8080). On the first start, copy th
 
 See the [step-by-step first-run guide](docs/GETTING_STARTED.md) for the local demonstration, shutdown instructions, and troubleshooting. Contributors can use `master`, which may contain unfinished work newer than the stable tag.
 
-### New since v0.8.1
+#### New since v0.8.1
 
 The dashboard offers **Start local walkthrough**: a guided assessment of
 RedDock's own Compose proxy, with no automatic scanning. Findings and new reports
 show what was checked, what still needs detection, and what was not checked.
 These additions are included in the `v0.8.2` tag and were not in `v0.8.1`.
 
-Dormant OIDC, browser sessions, and team admin are in the source since v0.8.2 but stay unregistered, and server mode still fails startup ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
+Dormant OIDC, browser sessions, and team admin are in the source since v0.8.2 but stay unregistered ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
 
 The quick start above already uses `v0.8.2`, so you get them by default. Keep only
 one RedDock stack on port 8080.
 
-### Why I am building it
+#### Why I am building it
 
 I want one transparent platform that helps find vulnerabilities and keeps the
 scope, conclusion, and supporting evidence together. These questions guide how
@@ -161,50 +106,54 @@ I build it:
 
 I keep the source, tests, architecture notes, and tradeoffs visible so anyone interested can see how the project evolves. Passing automated checks is useful evidence, not a security certification.
 
-## Zero trust and least privilege
+## Features
 
-RedDock treats browser input, target output, model output, stored paths, and archives as untrusted. DockGuard checks scope immediately before target contact, tools receive fixed arguments without a shell, and stored-data features receive no target capability. The Compose application listens on a Unix socket shared only with its loopback ingress proxy; optional Ollama and PostgreSQL services do not receive that socket. Containers run with bounded resources, read-only root filesystems where supported, dropped capabilities, and `no-new-privileges`.
+### What it checks today
+RedDock can perform host discovery, scan Nmap's top 100 TCP ports with light version detection, or make a bodyless HTTP-origin probe that sends HEAD and, only after 405 or 501, one follow-up GET. The response body is not read. Its built-in rules review selected HTTP security headers, TLS certificate verification results, and identified Telnet or FTP services (TLS-wrapped services, recorded as `ssl/<name>`, are not treated as cleartext). A separately gated lab profile expands one host to Nmap's top 1,000 TCP ports. IPv6 targets are scanned with Nmap's `-6`; one run scans one address family, so a hostname resolving to both IPv4 and IPv6 is refused.
 
-Local access does not authorize a target: the configured engagement scope and applicable approval gates still decide whether an operation may proceed. The operator, host, Docker daemon, and deployment configuration remain trusted. The operator token is not a multi-user identity system.
+#### Where it is going
 
-These are concrete zero-trust controls, not a complete enterprise zero-trust architecture or a claim that RedDock is ready for shared or internet-facing use. See the [security model](SECURITY.md#zero-trust-and-least-privilege-status) and [threat model](docs/THREAT_MODEL.md).
+**Live limits of this build:** local, single-operator use with non-invasive scan profiles only. No UDP scanning and no NSE scripts. These limits apply to the build under review.
 
-### Technical capability reference
+Later phases on the [roadmap](ROADMAP.md#planned-releases) (planned releases v1.2.0 through v2.0.0) are future direction and are **not in this build**. The notes below are roadmap history, not work in this release:
 
-<details>
-<summary>Expand the implementation details</summary>
+- **v1.1.0:** locally cached CVE, CISA KEV, and EPSS intelligence.
+- **v1.2.0:** bounded UDP discovery, sanitized HTTP response sampling, and
+  reviewed non-intrusive service checks.
+- **v1.3.0:** least-privilege credentialed checks with strict secret isolation.
 
-| Capability | Current implementation |
+The complete [versioned roadmap](ROADMAP.md#planned-releases) explains the
+security and completion gates for each release. A catalogue match will remain
+an association rather than proof that a service is affected; stronger claims
+require target evidence and a supported validation result.
+
+#### Current boundary
+
+- **Local only.** The supported Compose package publishes one host-loopback port. Do not expose it to a LAN, public tunnel, proxy, or the internet.
+- **No user login.** The local package uses an operator token to protect changes, but that token is an accident boundary, not identity, SSO, or shared-user access.
+- **Not a certification.** Findings describe what narrow checks observed and concluded. A clean result does not prove a target is secure.
+- **AI has no tools.** AI is optional and receives only a packet the operator reviews and approves. It cannot scan, change findings, or apply remediation.
+
+### What you get
+| Question | RedDock's answer |
 | --- | --- |
-| Runtime | One Dockerized application that serves the UI and API on the same origin |
-| API explorer | Optional OpenAPI schema and Swagger UI, disabled by default |
-| Workspaces | Dockyards that own an explicit authorized scope |
-| Scope policy | DockGuard evaluates every target deterministically and fails closed |
-| Discovery | Nmap host and TCP service discovery, plus a bodyless HTTP origin probe (HEAD, then GET only after 405 or 501) |
-| Inventory | Normalized assets and services that reconcile explicit state changes without guessing about unscanned ports |
-| Observations | Dated, adapter-attributed records of what was seen. Observations are not findings. |
-| Detection | Deterministic detectors that read stored observations and reach nothing |
-| Findings | Normalized conclusions with separate severity and confidence, deduplicated by fingerprint |
-| Lifecycle | Findings resolve rather than disappear, and operator decisions survive later runs |
-| Validation | A separately approved, fixed HTTP-origin recheck for eligible open header findings |
-| Correlation | Evidence-linked asset/finding relationships and fixed CWE classifications |
-| RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
-| Intelligence | Optional, approval-gated model advice over an exact packet the operator reviews first |
-| Local AI | Qwen3.5 4B through Ollama is the recommended default; any compatible provider remains configurable |
-| Reporting | Deterministic technical and executive reports over one bounded retained snapshot, including lab-policy history |
-| DockPack | Portable ZIP export with a member manifest and verified source evidence |
-| CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
-| Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |
-| Persistence | SQLite by default or PostgreSQL 17 on an internal backend network; evidence retained in a named Docker volume |
-| Safety | Non-invasive profiles only; no scripting, brute force, evasion, or exploitation |
-| Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
-| Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
+| What did it check? | Authorized scope, completed discovery runs, and retained observations show which focused checks ran. |
+| What did it find? | Rule-based findings keep severity separate from confidence and link back to what was observed. |
+| What supports the result? | SHA-256-hashed evidence and named detector rules provide a traceable record. |
+| What can I save or share? | Technical and plain-language reports, plus an unencrypted DockPack containing verified supporting files. |
 
-</details>
+<div align="center">
 
-## Screenshots
+<a href="docs/screenshots/findings.png"><img src="docs/screenshots/findings.png" alt="RedDock findings list showing severity and status filters, complete counts, and readable first-seen and last-seen dates" width="900"></a>
 
-### Guided assessment on master
+<sub>Each finding explains the conclusion, its severity and confidence, and the evidence behind it.</sub>
+
+</div>
+
+## Usage
+
+### Screenshots
+#### Guided assessment on master
 
 [Open the local walkthrough](docs/screenshots/assessment-guide.jpg) or
 [inspect the check coverage](docs/screenshots/assessment-coverage.jpg). These
@@ -224,7 +173,7 @@ views are newer than the stable tag; the release gallery follows below.
 
 <a href="docs/screenshots/redpath.png"><img src="docs/screenshots/redpath.png" alt="RedDock RedPath view showing an evidence-linked asset and finding graph, relationship details, SHA-256 provenance, and fixed CWE mappings" width="900"></a>
 
-<sub>See how results connect. Click a relationship to inspect its supporting evidence. A connection is not proof of an exploitable attack path.</sub>
+<sub>See how results connect. Click a relationship to inspect its supporting evidence. A connection is not proof of an attack path.</sub>
 
 <br><br>
 
@@ -282,8 +231,7 @@ views are newer than the stable tag; the release gallery follows below.
 
 </div>
 
-## Running and packaging choices
-
+### Running and packaging choices
 New to command-line tools? Use the [step-by-step first-run guide](docs/GETTING_STARTED.md), including the current development-build warning, operator unlock, local demo, plain-English glossary, and troubleshooting.
 
 Process liveness is at [http://localhost:8080/api/health](http://localhost:8080/api/health), and database-backed readiness is at [http://localhost:8080/api/ready](http://localhost:8080/api/ready). Swagger and the OpenAPI download are disabled by default. Developers can [enable the local API explorer](docs/GETTING_STARTED.md#optional-api-explorer).
@@ -296,7 +244,7 @@ evidence and are not encrypted.
 
 > **Use Compose, and do not publish port 8080 beyond loopback.** The ingress proxy binds `127.0.0.1:8080`, and only that proxy receives the application's Unix socket. The local operator token protects changes but is not user authentication and does not protect safe reads. Publishing the raw image or proxy, sharing the socket volume, or attaching another service to the ingress boundary is not supported.
 
-### Optional intelligence provider
+#### Optional intelligence provider
 
 RedDock ships in two supported Compose shapes:
 
@@ -321,7 +269,7 @@ See [Local and configurable AI](docs/LOCAL_AI.md) for provider overrides,
 data-boundary rules, storage, first-run behavior, and the approval flow.
 On systems with Make, `make up` and `make up-ai` are equivalent shortcuts.
 
-### Optional PostgreSQL
+#### Optional PostgreSQL
 
 Place a strong password in the ignored file `runtime/secrets/reddock-postgres-password`, then run:
 
@@ -332,11 +280,11 @@ docker compose -f compose.yaml -f compose.postgres.yaml up --build
 This keeps the ingress proxy on `127.0.0.1:8080`, adds a pinned PostgreSQL 17
 service on an internal backend network with no host port, and mounts the password into both containers as a
 Compose secret. It validates the database path for Phase 8; it does not enable
-the future authenticated server mode. The PostgreSQL and Ollama overlays can be
+shared multi-user deployment. The PostgreSQL and Ollama overlays can be
 combined. See [Optional PostgreSQL](docs/POSTGRESQL.md) for safe password entry,
 storage, shutdown, and external-orchestrator settings.
 
-### Optional Phase 7 controls
+#### Optional Phase 7 controls
 
 Lab capabilities require both a deployment-owner switch and a short-lived
 per-Dockyard authorization; the API cannot enable the deployment switch. See
@@ -344,8 +292,40 @@ per-Dockyard authorization; the API cannot enable the deployment switch. See
 installed only as bounded, data-only JSON manifests, never as executable plugin
 code. See [Detector plugins](plugins/README.md).
 
-## How It Works
+### Repository Structure
+```text
+backend/       FastAPI API, DockGuard, adapters, detectors, intelligence, reporting, evidence, and SQL persistence
+frontend/      React and TypeScript dashboard
+scripts/       Local end-to-end smoke test
+docs/          Architecture decisions and project documentation
+.github/       Continuous-integration workflow
+```
 
+### Documentation
+| Document | Purpose |
+| --- | --- |
+| [Start here](docs/GETTING_STARTED.md) | Install, try a local assessment, understand the results, and stop without losing data |
+| [Documentation guide](docs/README.md) | Choose a reading path for trying, operating, or developing RedDock |
+| [Architecture](ARCHITECTURE.md) | Current system boundaries and future design seams |
+| [Security](SECURITY.md) | Authorized-use policy and product safety model |
+| [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |
+| [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
+| [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
+| [PostgreSQL](docs/POSTGRESQL.md) | Internal Compose backend, secret handling, and current deployment boundary |
+| [SQLite backup and restore](docs/BACKUP_RESTORE.md) | Offline verified backups, rollback-safe restore, and interrupted-restore recovery |
+| [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
+| [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
+| [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
+| [Changelog](CHANGELOG.md) | Release history |
+| [DockPack format](docs/DOCKPACK.md) | Portable report and evidence package layout and verification |
+| [Nmap corresponding source](docs/NMAP_SOURCE_OFFER.md) | Locate the exact Nmap source archives carried in security-updated images |
+
+### Development Approach
+I use Claude Code and OpenAI Codex for implementation and review assistance. The repository source, tests, documented controls, and my review determine what ships. Contribution attribution details live in [CONTRIBUTING.md](CONTRIBUTING.md#attribution).
+
+## Architecture
+
+### How It Works
 1. Create a Dockyard to represent an authorized engagement workspace.
 2. Define its authorized scope: included targets, and exclusions that always win.
 3. Enter a target and ask DockGuard for a decision. It answers `ALLOWED` or a specific denial with the reason and the scope entry that decided it.
@@ -359,8 +339,6 @@ code. See [Detector plugins](plugins/README.md).
 11. In an isolated authorized lab, optionally enable the deployment gate and create a short-lived Dockyard grant before using the fixed extended service-discovery profile. Every authorization and decision remains in the lab audit ledger.
 
 Run the same discovery again and RedDock updates what it already knows rather than duplicating it, while every observation is kept as history. Run detection again and the same issue stays one finding whose `last_seen` moves, while an issue that is no longer reproduced is marked resolved rather than quietly removed. A response that could not evaluate a rule (for example an HTTP 5xx or redirect for content-level headers) leaves the earlier finding open: an outage is not a fix.
-
-## Architecture
 
 ```mermaid
 flowchart TB
@@ -400,8 +378,74 @@ Discovery and the tightly bounded validation recheck are the only paths that tou
 
 The production image builds the React application and serves it from the same FastAPI process that exposes `/api`. In Compose, that process listens only on a Unix socket. A small unprivileged ingress proxy owns the host-loopback TCP port and is the only service given the socket. Optional PostgreSQL and Ollama services use separate internal backend networks and receive no API socket. Discovery runs on a small bounded thread pool inside the application and detection runs inline. See [ARCHITECTURE.md](ARCHITECTURE.md) for the scope model, adapter and detector boundaries, and trust boundaries.
 
-## Security by Design
+## Built with
 
+**Languages** (GitHub language stats, checked 2026-10-21): Python 85.2%, TypeScript 14.2%, Dockerfile 0.1%, Makefile 0.1%
+
+**AI tools:**
+
+- Grok Bot (confirmed by Chris, 2026-10-21)
+- Cursor cloud agents (confirmed by Chris, 2026-10-21)
+- OpenAI Codex (commit co-author trailers)
+
+Commits made with AI help carry a `Co-authored-by` trailer from now on. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned phases and [CHANGELOG.md](CHANGELOG.md) for released versions.
+
+### Project Status
+The current release is **v0.8.2**, a Phase 8 maintenance release on top of the v0.8.1 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
+
+#### Phase 8 progress
+
+Phase 8 remains in development. Current work improves the local operator boundary, first-run guidance, check coverage, and orderly discovery shutdown. Dormant team-access foundations connect sessions to protected request checks and test sign-in, callback, renewal, and logout HTTP adapters in isolation. Queued discovery records its requester and rechecks current access before adapter contact. No authentication route is registered in the running app. Shared-user deployment remains unsupported. See the [roadmap](ROADMAP.md#phase-8-production-polish) for completed checkpoints and remaining gates.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for supported versions and how to report a vulnerability privately.
+
+### Zero trust and least privilege
+RedDock treats browser input, target output, model output, stored paths, and archives as untrusted. DockGuard checks scope immediately before target contact, tools receive fixed arguments without a shell, and stored-data features receive no target capability. The Compose application listens on a Unix socket shared only with its loopback ingress proxy; optional Ollama and PostgreSQL services do not receive that socket. Containers run with bounded resources, read-only root filesystems where supported, dropped capabilities, and `no-new-privileges`.
+
+Local access does not authorize a target: the configured engagement scope and applicable approval gates still decide whether an operation may proceed. The operator, host, Docker daemon, and deployment configuration remain trusted. The operator token is not a multi-user identity system.
+
+These are concrete zero-trust controls, not a complete enterprise zero-trust architecture or a claim that RedDock is ready for shared or internet-facing use. See the [security model](SECURITY.md#zero-trust-and-least-privilege-status) and [threat model](docs/THREAT_MODEL.md).
+
+#### Technical capability reference
+
+<details>
+<summary>Expand the implementation details</summary>
+
+| Capability | Current implementation |
+| --- | --- |
+| Runtime | One Dockerized application that serves the UI and API on the same origin |
+| API explorer | Optional OpenAPI schema and Swagger UI, disabled by default |
+| Workspaces | Dockyards that own an explicit authorized scope |
+| Scope policy | DockGuard evaluates every target deterministically and fails closed |
+| Discovery | Nmap host and TCP service discovery, plus a bodyless HTTP origin probe (HEAD, then GET only after 405 or 501) |
+| Inventory | Normalized assets and services that reconcile explicit state changes without guessing about unscanned ports |
+| Observations | Dated, adapter-attributed records of what was seen. Observations are not findings. |
+| Detection | Deterministic detectors that read stored observations and reach nothing |
+| Findings | Normalized conclusions with separate severity and confidence, deduplicated by fingerprint |
+| Lifecycle | Findings resolve rather than disappear, and operator decisions survive later runs |
+| Validation | A separately approved, fixed HTTP-origin recheck for eligible open header findings |
+| Correlation | Evidence-linked asset/finding relationships and fixed CWE classifications |
+| RedPath | A graph where every edge explains its basis and names its supporting SHA-256 evidence |
+| Intelligence | Optional, approval-gated model advice over an exact packet the operator reviews first |
+| Local AI | Qwen3.5 4B through Ollama is the recommended default; any compatible provider remains configurable |
+| Reporting | Deterministic technical and executive reports over one bounded retained snapshot, including lab-policy history |
+| DockPack | Portable ZIP export with a member manifest and verified source evidence |
+| CVE enrichment | A boundary with an optional local catalogue; an association, never a verdict |
+| Evidence | SHA-256-hashed run artifacts, validation packages, intelligence provenance, and reporting manifests |
+| Persistence | SQLite by default or PostgreSQL 17 on an internal backend network; evidence retained in a named Docker volume |
+| Safety | Non-invasive profiles only, with no scripting |
+| Lab controls | Deployment opt-in plus a separate, short-lived per-Dockyard authorization and audit ledger |
+| Extensions | Data-only detector manifests with strict schema checks and content-addressed provenance |
+
+</details>
+
+### Security by Design
 - **Scope is explicit.** DockGuard checks every target when a run is requested and again immediately before contact. Anything it cannot place inside the allowed scope is denied.
 - **Checks stay narrow.** RedDock builds fixed tool arguments internally, uses no shell, rejects dangerously broad scope, and places time limits on active work.
 - **Evidence and conclusions stay separate.** Observations record what a check saw. Findings explain what a named rule concluded and must link back to supporting observations and hashes.
@@ -412,51 +456,12 @@ The production image builds the React application and serves it from the same Fa
 
 Read [SECURITY.md](SECURITY.md) for the authorized-use policy and the full control list.
 
-## Repository Structure
-
-```text
-backend/       FastAPI API, DockGuard, adapters, detectors, intelligence, reporting, evidence, and SQL persistence
-frontend/      React and TypeScript dashboard
-scripts/       Local end-to-end smoke test
-docs/          Architecture decisions and project documentation
-.github/       Continuous-integration workflow
-```
-
-## Documentation
-
-| Document | Purpose |
-| --- | --- |
-| [Start here](docs/GETTING_STARTED.md) | Install, try a local assessment, understand the results, and stop without losing data |
-| [Documentation guide](docs/README.md) | Choose a reading path for trying, operating, or developing RedDock |
-| [Architecture](ARCHITECTURE.md) | Current system boundaries and future design seams |
-| [Security](SECURITY.md) | Authorized-use policy and product safety model |
-| [Threat model](docs/THREAT_MODEL.md) | Current trust boundaries, attacker stories, and Phase 8 security objectives |
-| [Roadmap](ROADMAP.md) | Phased delivery plan and clear separation of planned work |
-| [Local AI](docs/LOCAL_AI.md) | Recommended Ollama model and compatible-provider configuration |
-| [PostgreSQL](docs/POSTGRESQL.md) | Internal Compose backend, secret handling, and current deployment boundary |
-| [SQLite backup and restore](docs/BACKUP_RESTORE.md) | Offline verified backups, rollback-safe restore, and interrupted-restore recovery |
-| [Lab mode](docs/LAB_MODE.md) | Independent gates, fixed capability, and audit behaviour |
-| [Detector plugins](plugins/README.md) | Data-only extension schema, install path, limits, and trust model |
-| [Contributing](CONTRIBUTING.md) | Local checks and contribution guidelines |
-| [Changelog](CHANGELOG.md) | Release history |
-| [DockPack format](docs/DOCKPACK.md) | Portable report and evidence package layout and verification |
-| [Nmap corresponding source](docs/NMAP_SOURCE_OFFER.md) | Locate the exact Nmap source archives carried in security-updated images |
-
-## Project Status
-
-The current release is **v0.8.2**, a Phase 8 maintenance release on top of the v0.8.1 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
-
-### Phase 8 progress
-
-Phase 8 remains in development. Current work improves the local operator boundary, first-run guidance, check coverage, and orderly discovery shutdown. Dormant team-access foundations connect sessions to protected request checks and test sign-in, callback, renewal, and logout HTTP adapters in isolation. Queued discovery records its requester and rechecks current access before adapter contact. No authentication route is registered in the running app. Server mode and shared-user deployment remain unsupported. See the [roadmap](ROADMAP.md#phase-8-production-polish) for completed checkpoints and remaining gates.
-
-## Contributing and Security
-
+### Contributing and Security
 RedDock is MIT-licensed and owner-directed. Bug reports and design discussion are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) before starting implementation work. Report potential vulnerabilities through [SECURITY.md](SECURITY.md) or GitHub Private Vulnerability Reporting, not a public issue.
 
-## Development Approach
+## Contributing
 
-I use Claude Code and OpenAI Codex for implementation and review assistance. The repository source, tests, documented controls, and my review determine what ships. Contribution attribution details live in [CONTRIBUTING.md](CONTRIBUTING.md#attribution).
+See [CONTRIBUTING.md](CONTRIBUTING.md), including how to credit AI tools in commits.
 
 ## License
 
@@ -464,15 +469,8 @@ Licensed under the MIT License. Use it, fork it, modify it, or build something o
 
 ---
 
-If this project helped you, a ⭐ is appreciated.
+If this project helped you, a star is appreciated.
 
-## Built With
+## Acknowledgments
 
-[Python](https://www.python.org/) · [FastAPI](https://fastapi.tiangolo.com/) · [Pydantic](https://docs.pydantic.dev/) · [SQLAlchemy](https://www.sqlalchemy.org/) · [SQLite](https://www.sqlite.org/) · [PostgreSQL](https://www.postgresql.org/) · [Nmap](https://nmap.org/) · [React](https://react.dev/) · [TypeScript](https://www.typescriptlang.org/) · [Vite](https://vite.dev/) · [Docker](https://www.docker.com/) · [GitHub Actions](https://github.com/features/actions)
-
-<br>
-
-<p align="center">
-  <strong>Discover. Validate. Prove.</strong><br>
-  <sub>Controlled security validation, built one verified phase at a time.</sub>
-</p>
+README layout adapted from [Best-README-Template](https://github.com/othneildrew/Best-README-Template) by Othneil Drew.
