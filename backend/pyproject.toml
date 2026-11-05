@@ -12,7 +12,7 @@ dependencies = [
   "cryptography==50.0.2",
   "fastapi==0.143.0",
   "httpx==0.28.1",
-  "joserfc==1.7.5",
+  "joserfc==1.7.6",
   "sqlalchemy==2.1.4",
   "uvicorn[standard]==0.54.0",
 ]

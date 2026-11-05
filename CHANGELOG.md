@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Security: bump `joserfc` 1.7.5 → 1.7.6 (CVE-2026-119284) so pip-audit passes.
 - Docs: README terminal demo GIF (`docs/assets/demo.gif`) recorded from v0.8.2 local mode against loopback DockGuard checks only, with `docs/demo.md`, `scripts/demo_api.sh`, and `scripts/record-demo.sh`.
 
 Released changes to RedDock are documented here. Work in progress is added only
