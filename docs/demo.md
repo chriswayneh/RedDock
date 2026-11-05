@@ -1,13 +1,13 @@
 # Terminal demo
 
-The README GIF replays actual API output from **RedDock v0.8.2** running in
+The README GIF replays actual API output from **RedDock v0.8.3** running in
 local mode on loopback (2026-11-05, America/Chicago). It exercises DockGuard
 and settings only: no discovery, no Nmap, no NSE, no UDP, no brute force, and
 no `REDDOCK_DEPLOYMENT_MODE=server`. Timing is adjusted for README readability.
 
 ## What it shows
 
-1. `GET /api/version` and `GET /api/settings` — version `0.8.2`, deployment
+1. `GET /api/version` and `GET /api/settings` — version `0.8.3`, deployment
    mode `local`, intelligence off.
 2. Create a fictional Dockyard named `Local demo workspace`.
 3. Authorize scope for `127.0.0.1` and evaluate it — DockGuard returns
@@ -23,7 +23,7 @@ environment variable off-camera and never appears in the animation.
 ### Option A — Compose (documented release path)
 
 ```bash
-git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.3 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 # in another terminal:
@@ -33,7 +33,7 @@ export REDDOCK_BASE=http://127.0.0.1:8080
 
 ### Option B — Local uvicorn (no Docker)
 
-From a checkout of the `v0.8.2` tag, with Python 3.13:
+From a checkout of the `v0.8.3` tag, with Python 3.13:
 
 ```bash
 cd backend
