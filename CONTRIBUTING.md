@@ -34,7 +34,8 @@ Backend checks:
 ```bash
 cd backend
 python -m pip install --require-hashes -r requirements-dev.txt
-python -m pip install --no-deps -e .
+python -m pip install --require-hashes -r requirements-build.txt
+python -m pip install --no-deps --no-build-isolation -e .
 pip-audit --progress-spinner off .
 ruff check app tests ../scripts/verify_release.py
 pytest

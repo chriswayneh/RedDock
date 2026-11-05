@@ -23,7 +23,8 @@ jobs:
       - name: Install hash-locked dependencies
         run: |
           pip install --require-hashes -r requirements-dev.txt
-          pip install --no-deps -e .
+          pip install --require-hashes -r requirements-build.txt
+          pip install --no-deps --no-build-isolation -e .
       - run: pip-audit --progress-spinner off .
       - run: ruff check app tests ../scripts/verify_release.py ../scripts/smoke_test.py
       - run: pytest
@@ -403,7 +404,8 @@ jobs:
       - name: Install hash-locked dependencies
         run: |
           pip install --require-hashes -r requirements-dev.txt
-          pip install --no-deps -e .
+          pip install --require-hashes -r requirements-build.txt
+          pip install --no-deps --no-build-isolation -e .
       - name: Prove migrations, rate-limit concurrency, and CRUD against PostgreSQL
         env:
           REDDOCK_TEST_POSTGRES_URL: postgresql+psycopg://reddock:integration-only@127.0.0.1:5432/reddock

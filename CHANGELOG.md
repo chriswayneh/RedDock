@@ -11,8 +11,11 @@ when a version is published.
 
 - Bump `joserfc` from 1.7.5 to 1.7.6 (CVE-2026-119284).
 - Add hash-locked `backend/requirements.txt` and `backend/requirements-dev.txt`
-  generated from `pyproject.toml`. CI and the Docker image install dependencies
-  with `--require-hashes`, then install the local package with `--no-deps`.
+  generated from `pyproject.toml`, plus `backend/requirements-build.txt` for
+  setuptools/wheel. CI and the Docker image install dependencies with
+  `--require-hashes` (Docker sets `PIP_REQUIRE_HASHES=1`), then install the
+  local package with `--no-deps --no-build-isolation` so PEP 517 cannot fetch
+  unhashed build tools.
 
 ### Added
 
