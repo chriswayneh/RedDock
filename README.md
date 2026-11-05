@@ -24,6 +24,12 @@ In plain words: RedDock is a security check tool you run on your own computer ag
 
 What it shows: scoped scanning, explainable findings, evidence handling with SHA-256 hashes, and reports. It is a local single-operator tool. Phase 8 is still open, there is no user sign-in, and it is not production-ready. The quick start is [Run it locally](#run-it-locally) just below.
 
+## Demo
+
+<p align="center"><img src="docs/assets/demo.gif" alt="RedDock v0.8.2 demo: local settings, DockGuard allows 127.0.0.1 and refuses 0.0.0.0/0 and cloud metadata" width="100%"></p>
+
+The GIF replays real v0.8.2 local-mode API output: DockGuard scope checks only (no discovery, NSE, UDP, brute force, or server mode). [Run the demo](docs/demo.md).
+
 ## Quick start
 
 ### Run it locally
