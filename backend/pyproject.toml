@@ -8,12 +8,12 @@ version = "0.8.3"
 description = "RedDock Core API"
 requires-python = ">=3.13"
 dependencies = [
-  "alembic==1.20.0",
+  "alembic==1.20.1",
   "cryptography==50.0.2",
-  "fastapi==0.143.0",
+  "fastapi==0.162.0",
   "httpx==0.28.1",
-  "joserfc==1.7.6",
-  "sqlalchemy==2.1.4",
+  "joserfc==1.7.7",
+  "sqlalchemy==2.1.6",
   "uvicorn[standard]==0.54.0",
 ]
 
@@ -24,8 +24,8 @@ postgres = [
 dev = [
   "pip-audit==2.10.1",
   "psycopg[binary]==3.3.6",
-  "pytest==9.1.1",
-  "ruff==0.17.0",
+  "pytest==9.2.0",
+  "ruff==0.17.3",
 ]
 
 [tool.pytest.ini_options]
