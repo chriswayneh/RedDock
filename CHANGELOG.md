@@ -1,5 +1,8 @@
 # Changelog
 
+Released changes to RedDock are documented here. Work in progress is added only
+when a version is published.
+
 ## Unreleased
 
 ## [0.8.3] - 2026-11-05 - Security patch
@@ -24,9 +27,6 @@
 - Install and clone snippets, README, roadmap, and demo docs now point at
   `v0.8.3`.
 
-
-Released changes to RedDock are documented here. Work in progress is added only
-when a version is published.
 
 ## [0.8.2] - 2026-10-21 - Phase 8 maintenance fixes
 
