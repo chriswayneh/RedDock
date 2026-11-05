@@ -26,7 +26,7 @@ What it shows: scoped scanning, explainable findings, evidence handling with SHA
 
 ## Demo
 
-<p align="center"><img src="docs/assets/demo.gif" alt="RedDock v0.8.3 demo: local settings, DockGuard allows 127.0.0.1 and refuses 0.0.0.0/0 and cloud metadata" width="100%"></p>
+<p align="center"><img src="docs/assets/demo.gif" alt="RedDock v0.8.2 demo: local settings, DockGuard allows 127.0.0.1 and refuses 0.0.0.0/0 and cloud metadata" width="100%"></p>
 
 The GIF replays real local-mode API output (recorded on v0.8.2; still valid for v0.8.3): DockGuard scope checks only (no discovery, NSE, UDP, brute force, or server mode). [Run the demo](docs/demo.md).
 

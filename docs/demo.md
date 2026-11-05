@@ -1,14 +1,15 @@
 # Terminal demo
 
-The README GIF replays actual API output from **RedDock v0.8.3** running in
-local mode on loopback (2026-11-05, America/Chicago). It exercises DockGuard
-and settings only: no discovery, no Nmap, no NSE, no UDP, no brute force, and
-no `REDDOCK_DEPLOYMENT_MODE=server`. Timing is adjusted for README readability.
+The README GIF was recorded on **RedDock v0.8.2** (still valid for v0.8.3)
+running in local mode on loopback (2026-11-05, America/Chicago). It exercises
+DockGuard and settings only: no discovery, no Nmap, no NSE, no UDP, no brute
+force, and no `REDDOCK_DEPLOYMENT_MODE=server`. Timing is adjusted for README
+readability. Running v0.8.3 prints version `0.8.3` live; the GIF shows `0.8.2`.
 
 ## What it shows
 
-1. `GET /api/version` and `GET /api/settings` — version `0.8.3`, deployment
-   mode `local`, intelligence off.
+1. `GET /api/version` and `GET /api/settings` — version `0.8.2` (as recorded;
+   live v0.8.3 prints `0.8.3`), deployment mode `local`, intelligence off.
 2. Create a fictional Dockyard named `Local demo workspace`.
 3. Authorize scope for `127.0.0.1` and evaluate it — DockGuard returns
    `allowed`.
