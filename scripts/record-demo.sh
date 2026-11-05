@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STAGE="${TMPDIR:-/tmp}/reddock-demo-record-$$"
+STAGE="$(mktemp -d)"
 
 cleanup() { rm -rf "$STAGE"; }
 trap cleanup EXIT
@@ -15,7 +15,6 @@ command -v vhs >/dev/null || { echo "vhs is required" >&2; exit 1; }
 command -v ttyd >/dev/null || { echo "ttyd is required by vhs" >&2; exit 1; }
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 
-mkdir -p "$STAGE"
 cp "$ROOT/scripts/demo.tape" "$STAGE/demo.tape"
 cp "$ROOT/scripts/demo_api.sh" "$STAGE/demo_api.sh"
 chmod +x "$STAGE/demo_api.sh"

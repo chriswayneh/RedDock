@@ -39,14 +39,15 @@ From a checkout of the `v0.8.2` tag, with Python 3.13:
 cd backend
 python3.13 -m venv .venv
 .venv/bin/pip install -e .
-mkdir -p /tmp/reddock-demo-data
-export REDDOCK_DATABASE_URL=sqlite:////tmp/reddock-demo-data/reddock.db
-export REDDOCK_EVIDENCE_DIR=/tmp/reddock-demo-data/evidence
-export REDDOCK_OPERATOR_TOKEN_FILE=/tmp/reddock-demo-data/operator-token
+DEMO_DATA="$(mktemp -d)"
+chmod 700 "$DEMO_DATA"
+export REDDOCK_DATABASE_URL="sqlite:///$DEMO_DATA/reddock.db"
+export REDDOCK_EVIDENCE_DIR="$DEMO_DATA/evidence"
+export REDDOCK_OPERATOR_TOKEN_FILE="$DEMO_DATA/operator-token"
 export REDDOCK_DEPLOYMENT_MODE=local
 .venv/bin/uvicorn app.main:create_app --factory --host 127.0.0.1 --port 18080
-# in another terminal:
-export TOKEN="$(cat /tmp/reddock-demo-data/operator-token)"
+# in another terminal (reuse the same DEMO_DATA path):
+export TOKEN="$(cat "$DEMO_DATA/operator-token")"
 export REDDOCK_BASE=http://127.0.0.1:18080
 ```
 
