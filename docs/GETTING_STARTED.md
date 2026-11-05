@@ -25,12 +25,12 @@ By the end, you will have:
 For an authorized local evaluation, open PowerShell on Windows or Terminal on macOS/Linux. Paste these stable-release commands one at a time and press Enter after each:
 
 ```bash
-git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.3 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
 
-The first command downloads the reviewed `v0.8.2` tag. The second enters its folder. The third builds and starts it.
+The first command downloads the reviewed `v0.8.3` tag. The second enters its folder. The third builds and starts it.
 
 Leave that terminal open. Startup is complete when the output says the application is running and the health check has settled. Then open [RedDock in your browser](http://localhost:8080). An empty dashboard is expected: the app does not scan anything until you ask it to, and it does not come populated with someone else's data.
 
@@ -52,7 +52,7 @@ not supported while sign-in is unfinished.
 
 ## 2. Create a demonstration workspace
 
-**Using v0.8.2 or master?** Select **Start local walkthrough** on the dashboard after
+**Using v0.8.3 or master?** Select **Start local walkthrough** on the dashboard after
 unlocking changes. It creates the workspace and one exact include rule, then
 opens the **Assessment** guide. Follow its buttons through the steps below.
 The Discovery tab prefills the local HTTP target and profile, but you must still

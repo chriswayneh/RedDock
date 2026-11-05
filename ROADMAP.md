@@ -6,7 +6,7 @@
 | --- | --- |
 | **Now** | **Phase 8: Production polish** |
 | **Status** | **In progress** |
-| **Latest release** | [`v0.8.2`](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.2), a Phase 8 maintenance release |
+| **Latest release** | [`v0.8.3`](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.3), a Phase 8 security patch (`joserfc` CVE-2026-119284) |
 | **Phase 8 target** | `v0.9.0` |
 
 RedDock already runs locally. It can define allowed targets, discover services,
@@ -32,7 +32,8 @@ security, migration, documentation, and end-to-end acceptance gates pass.
 
 | Status | Version | Phase | Outcome |
 | --- | --- | --- | --- |
-| **Released checkpoint** | `v0.8.2` | Phase 8: Production polish | Local safety, reliability, and deployment foundations, plus detection and discovery fixes |
+| **Released checkpoint** | `v0.8.3` | Phase 8: Production polish | Security patch for `joserfc` (CVE-2026-119284) on top of the v0.8.2 maintenance release |
+| | `v0.8.2` | Phase 8: Production polish | Local safety, reliability, and deployment foundations, plus detection and discovery fixes |
 | **Current target** | `v0.9.0` | Phase 8: Production polish | Finish guided first use, authenticated team access, operations, recovery, and deployment validation without weakening local mode |
 | Planned — outside open-source safety contract; not an implementation task | `v1.0.0` | Phase 9: Stable operating baseline | Publish the first stable support and compatibility contract after independent review and upgrade testing |
 | Planned — outside open-source safety contract; not an implementation task | `v1.1.0` | Phase 10: Vulnerability intelligence | Add locally cached, provenance-rich CVE, CISA KEV, and EPSS enrichment while keeping every match an association rather than a verdict |

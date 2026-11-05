@@ -1,12 +1,35 @@
 # Changelog
 
-## Unreleased
-
-- Security: bump `joserfc` 1.7.5 → 1.7.6 (CVE-2026-119284) so pip-audit passes.
-- Docs: README terminal demo GIF (`docs/assets/demo.gif`) recorded from v0.8.2 local mode against loopback DockGuard checks only, with `docs/demo.md`, `scripts/demo_api.sh`, and `scripts/record-demo.sh`.
-
 Released changes to RedDock are documented here. Work in progress is added only
 when a version is published.
+
+## Unreleased
+
+## [0.8.3] - 2026-11-05 - Security patch
+
+### Security
+
+- Bump `joserfc` from 1.7.5 to 1.7.6 (CVE-2026-119284).
+- Add hash-locked `backend/requirements.txt` and `backend/requirements-dev.txt`
+  generated from `pyproject.toml`, plus `backend/requirements-build.txt` for
+  setuptools/wheel. CI and the Docker image install dependencies with
+  `--require-hashes` (Docker sets `PIP_REQUIRE_HASHES=1`), then install the
+  local package with `--no-deps --no-build-isolation` so PEP 517 cannot fetch
+  unhashed build tools.
+
+### Added
+
+- Docs: README terminal demo GIF (`docs/assets/demo.gif`) recorded from local
+  mode against loopback DockGuard checks only, with `docs/demo.md`,
+  `scripts/demo_api.sh`, and `scripts/record-demo.sh`. Demo scripts refuse a
+  non-loopback `REDDOCK_BASE`, require a numeric Dockyard id, and build JSON
+  bodies with `json.dumps`.
+
+### Changed
+
+- Install and clone snippets, README, roadmap, and demo docs now point at
+  `v0.8.3`.
+
 
 ## [0.8.2] - 2026-10-21 - Phase 8 maintenance fixes
 

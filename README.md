@@ -14,7 +14,7 @@ findings, evidence-backed validation, and portable reports.
 
 **Live limits of this build:** local, single-operator use with non-invasive scan profiles only. No UDP scanning and no NSE scripts.
 
-**Current release:** [v0.8.2](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.2), a Phase 8 maintenance release with detection and discovery fixes. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
+**Current release:** [v0.8.3](https://github.com/chriswayneh/RedDock/releases/tag/v0.8.3), a Phase 8 security patch that bumps `joserfc` for CVE-2026-119284. Phase 8 is production polish and still in progress: a local single-operator tool, not production-ready.
 
 </div>
 
@@ -28,7 +28,7 @@ What it shows: scoped scanning, explainable findings, evidence handling with SHA
 
 <p align="center"><img src="docs/assets/demo.gif" alt="RedDock v0.8.2 demo: local settings, DockGuard allows 127.0.0.1 and refuses 0.0.0.0/0 and cloud metadata" width="100%"></p>
 
-The GIF replays real v0.8.2 local-mode API output: DockGuard scope checks only (no discovery, NSE, UDP, brute force, or server mode). [Run the demo](docs/demo.md).
+The GIF replays real local-mode API output (recorded on v0.8.2; still valid for v0.8.3): DockGuard scope checks only (no discovery, NSE, UDP, brute force, or server mode). [Run the demo](docs/demo.md).
 
 ## Quick start
 
@@ -36,7 +36,7 @@ The GIF replays real v0.8.2 local-mode API output: DockGuard scope checks only (
 There is no working user login. For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
-git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.3 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
@@ -49,7 +49,7 @@ Phase 8 is still in progress. Working sign-in, SSO, and shared-user access are n
 
 These gates are still open. The steps below are what a person can do today. They do not finish Phase 8.
 
-**Team sign-in.** There is no working login to turn on, and no SSO setup to follow. No authentication route is registered in the running app. Do not set `REDDOCK_DEPLOYMENT_MODE=server`: that value fails startup and is not the demo. Run the local no-login package in [Run it locally](#run-it-locally): clone tag `v0.8.2`, run `docker compose up --build`, open [http://localhost:8080](http://localhost:8080), copy the operator token from `docker compose logs reddock`, and select **Unlock changes**. That token is an accident boundary, not a user account. The same walkthrough is in [Start here](docs/GETTING_STARTED.md).
+**Team sign-in.** There is no working login to turn on, and no SSO setup to follow. No authentication route is registered in the running app. Do not set `REDDOCK_DEPLOYMENT_MODE=server`: that value fails startup and is not the demo. Run the local no-login package in [Run it locally](#run-it-locally): clone tag `v0.8.3`, run `docker compose up --build`, open [http://localhost:8080](http://localhost:8080), copy the operator token from `docker compose logs reddock`, and select **Unlock changes**. That token is an accident boundary, not a user account. The same walkthrough is in [Start here](docs/GETTING_STARTED.md).
 
 **PostgreSQL disaster-recovery drill.** The drill has not been run. Nothing in this repository records a backup time, a restore time, a recovered row count, or a capacity measurement. The open checklist is [Disaster-recovery drill checklist](docs/POSTGRESQL.md#disaster-recovery-drill-checklist). In short:
 
@@ -75,7 +75,7 @@ Suspected security flaws go to [private vulnerability reporting](SECURITY.md#rep
 For an authorized local evaluation, start from the immutable reviewed tag:
 
 ```bash
-git clone --branch v0.8.2 --depth 1 https://github.com/chriswayneh/RedDock.git
+git clone --branch v0.8.3 --depth 1 https://github.com/chriswayneh/RedDock.git
 cd RedDock
 docker compose up --build
 ```
@@ -93,7 +93,7 @@ These additions are included in the `v0.8.2` tag and were not in `v0.8.1`.
 
 Dormant OIDC, browser sessions, and team admin are in the source since v0.8.2 but stay unregistered ([Foundations built but not enabled](ROADMAP.md#foundations-built-but-not-enabled); Identity row in [Zero trust and least privilege status](SECURITY.md#zero-trust-and-least-privilege-status)).
 
-The quick start above already uses `v0.8.2`, so you get them by default. Keep only
+The quick start above already uses `v0.8.3`, so you get them by default. Keep only
 one RedDock stack on port 8080.
 
 #### Why I am building it
@@ -401,7 +401,7 @@ Commits made with AI help carry a `Co-authored-by` trailer from now on. See [CON
 See [ROADMAP.md](ROADMAP.md) for planned phases and [CHANGELOG.md](CHANGELOG.md) for released versions.
 
 ### Project Status
-The current release is **v0.8.2**, a Phase 8 maintenance release on top of the v0.8.1 production-hardening checkpoint. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
+The current release is **v0.8.3**, a Phase 8 security patch on top of the v0.8.2 maintenance release. Phase 8 (production polish) is still in progress: RedDock remains a local single-operator tool and is not production-ready. Its local workflow covers scoped discovery through reports and DockPack exports, plus separately gated lab controls, data-only detector extensions, and the hardened local boundary described above. See the [changelog](CHANGELOG.md) for release-by-release history.
 
 #### Phase 8 progress
 
