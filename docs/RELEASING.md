@@ -27,12 +27,22 @@ native AMD64 and ARM64 hosts.
 1. Change the version in `backend/pyproject.toml`, `backend/app/config.py`,
    `frontend/package.json`, and both root version fields in
    `frontend/package-lock.json`.
-2. Move the completed changelog entries into a versioned section.
-3. Update README and roadmap release status and links.
-4. Run the full checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
-5. Merge the reviewed release-preparation pull request into `master` and confirm
+2. If backend dependencies changed, regenerate the hash-locked lockfiles:
+
+   ```bash
+   cd backend
+   uv pip compile --generate-hashes --python-version 3.13 --extra postgres -o requirements.txt pyproject.toml
+   uv pip compile --generate-hashes --python-version 3.13 --extra dev -o requirements-dev.txt pyproject.toml
+   ```
+
+   CI and the Docker image install these with `--require-hashes`, then install
+   the local package with `--no-deps`.
+3. Move the completed changelog entries into a versioned section.
+4. Update README and roadmap release status and links.
+5. Run the full checks in [CONTRIBUTING.md](../CONTRIBUTING.md).
+6. Merge the reviewed release-preparation pull request into `master` and confirm
    all required GitHub checks pass.
-6. Create one annotated `vMAJOR.MINOR.PATCH` tag on that exact merge commit and
+7. Create one annotated `vMAJOR.MINOR.PATCH` tag on that exact merge commit and
    push only that tag to `origin`.
 
 Do not retag, force-push, or publish from a feature branch. If verification

@@ -34,10 +34,12 @@ RUN groupadd --system --gid 999 reddock \
     && useradd --system --uid 999 --gid 999 --home-dir /app reddock \
     && mkdir -p /var/lib/reddock/evidence /run/reddock-api /app/static \
     && chown -R reddock:reddock /var/lib/reddock /run/reddock-api /app
-COPY backend/pyproject.toml backend/README.md ./
+COPY backend/requirements.txt backend/pyproject.toml backend/README.md ./
 COPY backend/app ./app
 COPY LICENSE THIRD_PARTY_NOTICES.md docs/NMAP_SOURCE_OFFER.md /usr/share/doc/reddock/
-RUN pip install --no-cache-dir ".[postgres]"
+# Install the hash-locked dependency set first, then the local package with --no-deps
+# (the local source is not a hashed index artifact).
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt     && pip install --no-cache-dir --no-deps .
 COPY --from=frontend-build /build/frontend/dist /app/static
 RUN chown -R reddock:reddock /app
 USER reddock
